@@ -289,7 +289,17 @@ function extractTextFromPdf(fileId) {
 function getOrCreateFolder(folderName) {
   try {
     const folders = DriveApp.getFoldersByName(folderName);
-    return folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+    if (folders.hasNext()) {
+      return folders.next();
+    }
+
+    const files = DriveApp.getFilesByName(folderName);
+    if (files.hasNext()) {
+      Logger.log(`Error: A file (not a folder) with the name "${folderName}" already exists.`);
+      return null;
+    }
+
+    return DriveApp.createFolder(folderName);
   } catch (e) {
     Logger.log(`Error creating folder "${folderName}": ${e.toString()}`);
     return null;
