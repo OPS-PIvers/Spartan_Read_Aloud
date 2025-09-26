@@ -18,7 +18,74 @@ const COL = {
   STUDENT_EMAILS: 7
 };
 
+// --- TRIGGER & MENU --- 
+
+/**
+ * Adds a custom menu to the spreadsheet UI.
+ */
+function onOpen() {
+  SpreadsheetApp.getUi()
+      .createMenu('Spartan Read Aloud')
+      .addItem('Run All Steps', 'runAllSteps')
+      .addToUi();
+}
+
+/**
+ * Runs all the processing steps in sequence.
+ */
+function runAllSteps() {
+  step0_addNewPdfs();
+  step1_AnalyzePdfsAndCountChunks();
+  step2_GenerateMissingAudioAndFinalize();
+}
+
 // --- MAIN CONTROL FUNCTIONS ---
+
+/**
+ * STEP 0: Finds new PDFs in the designated Drive folder and adds them to the sheet.
+ */
+function step0_addNewPdfs() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+  if (!sheet) {
+    Logger.log('ERROR: "Assessment Database" sheet not found.');
+    return;
+  }
+
+  const mainAudioFolder = getOrCreateFolder(AUDIO_DRIVE_FOLDER_NAME);
+  if (!mainAudioFolder) return;
+
+  const pdfSourceFolderName = "Assessment PDFs";
+  const pdfFolders = mainAudioFolder.getFoldersByName(pdfSourceFolderName);
+  if (!pdfFolders.hasNext()) {
+    Logger.log(`ERROR: Source folder "${pdfSourceFolderName}" not found inside "${AUDIO_DRIVE_FOLDER_NAME}".`);
+    return;
+  }
+  const pdfFolder = pdfFolders.next();
+
+  // Get existing URLs to prevent duplicates
+  const data = sheet.getDataRange().getValues();
+  const existingUrls = new Set(data.map(row => row[COL.PDF_URL]));
+
+  const files = pdfFolder.getFilesByType(MimeType.PDF);
+  let addedCount = 0;
+  while (files.hasNext()) {
+    const file = files.next();
+    const fileUrl = file.getUrl();
+    if (!existingUrls.has(fileUrl)) {
+      sheet.appendRow([fileUrl]);
+      Logger.log(`Added new PDF: ${file.getName()}`);
+      addedCount++;
+    }
+  }
+
+  if (addedCount > 0) {
+    SpreadsheetApp.flush();
+    Logger.log(`Step 0 finished. Added ${addedCount} new PDFs.`);
+  } else {
+    Logger.log('Step 0 finished. No new PDFs found.');
+  }
+}
+
 
 /**
  * STEP 1: Analyzes new PDFs to count their text chunks.
@@ -155,7 +222,8 @@ function step2_GenerateMissingAudioAndFinalize() {
            const audioFile = audioFileObjects[j];
            audioDataForSheet.push({
              text: chunkText,
-             audioUrl: `https://drive.google.com/uc?id=${audioFile.getId()}&export=media`
+             audioUrl: `https://drive.google.com/uc?id=${audioFile.getId()}&export=media`,
+             audioFilename: audioFile.getName()
            });
         }
         sheet.getRange(i + 1, COL.AUDIO_JSON + 1).setValue(JSON.stringify(audioDataForSheet, null, 2));
@@ -242,6 +310,22 @@ function doGet(e) {
   return HtmlService.createHtmlOutputFromFile('index.html')
     .setTitle('Orono Schools Assessment Reader')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+}
+
+/**
+ * Gets the base64 encoded data for an audio file.
+ * @param {string} fileId The ID of the audio file.
+ * @returns {string|null} The base64 encoded data or null on failure.
+ */
+function getAudioDataAsBase64(fileId) {
+  try {
+    const file = DriveApp.getFileById(fileId);
+    const blob = file.getBlob();
+    return Utilities.base64Encode(blob.getBytes());
+  } catch (e) {
+    Logger.log(`Failed to get audio data for file ID ${fileId}. Error: ${e.toString()}`);
+    return null;
+  }
 }
 
 function getAssessmentPdf(email, password) {
