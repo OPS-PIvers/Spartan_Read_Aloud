@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f0f2f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #333;
+    }
+
+    #login-container {
+      background-color: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    #login-container h2 {
+      margin-top: 0;
+      margin-bottom: 20px;
+      color: #1a73e8;
+    }
+    
+    #login-error {
+      color: #d93025;
+      margin-bottom: 15px;
+      min-height: 1.2em;
+      text-align: left;
+    }
+
+    input[type="email"],
+    input[type="password"] {
+      width: calc(100% - 22px);
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+
+    button {
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      width: 100%;
+    }
+
+    button:hover {
+      background-color: #155ab6;
+    }
+      button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    #viewer-container {
+      width: 100%;
+      max-width: 850px;
+      display: none;
+      position: relative; 
+    }
+    
+    #status {
+      margin: 20px 0;
+      font-size: 1.1em;
+      color: #555;
+      min-height: 25px;
+    }
+
+    #pdf-container {
+      border: 1px solid #ddd;
+      background-color: white;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      position: relative; 
+      cursor: pointer; /* Indicate the whole area is interactive */
+    }
+    
+    #pdf-container canvas {
+      display: block;
+      margin: 0 auto 10px auto;
+      max-width: 100%;
+      height: auto;
+    }
+
+    #highlight-box {
+      position: absolute;
+      background-color: rgba(26, 115, 232, 0.2);
+      border: 1px solid rgba(26, 115, 232, 0.5);
+      pointer-events: none;
+      display: none;
+      z-index: 10;
+    }
+
+    .audio-icon {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%231a73e8"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"></path></svg>');
+      background-size: contain;
+      background-repeat: no-repeat;
+      z-index: 20;
+    }
+
+  </style>
+</head>
+
+<body>
+  <h1>Assessment Reader</h1>
+
+  <div id="login-container">
+    <h2>Student Login</h2>
+    <div id="login-error"></div>
+    <input type="email" id="email-input" placeholder="Enter your school email" autocomplete="email">
+    <input type="password" id="password-input" placeholder="Enter the assessment password">
+    <button id="load-button" onclick="loadAssessment()">Load Assessment</button>
+  </div>
+
+  <div id="viewer-container">
+    <div id="status"></div>
+    <div id="pdf-container">
+      <!-- Canvases will be added here -->
+    </div>
+  </div>
+
+  <script>
+    const emailInput = document.getElementById('email-input');
+    const passwordInput = document.getElementById('password-input');
+    const loadButton = document.getElementById('load-button');
+    const statusDiv = document.getElementById('status');
+    const pdfContainer = document.getElementById('pdf-container');
+    const loginContainer = document.getElementById('login-container');
+    const viewerContainer = document.getElementById('viewer-container');
+    const loginErrorDiv = document.getElementById('login-error');
+    
+    let processedChunks = [];
+    let globalAudioPlayer = new Audio();
+    let currentlyPlayingChunk = null;
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+
+    function loadAssessment() {
+      loginErrorDiv.textContent = '';
+      if (!emailInput.value || !passwordInput.value) {
+        loginErrorDiv.textContent = 'Please enter both your email and the password.';
+        return;
+      }
+      statusDiv.textContent = 'Loading assessment...';
+      viewerContainer.style.display = 'block';
+      loginContainer.style.display = 'none';
+      loadButton.disabled = true;
+
+      google.script.run
+        .withSuccessHandler(onPdfLoaded)
+        .withFailureHandler(onPdfLoadError)
+        .getAssessmentPdf(emailInput.value, passwordInput.value);
+    }
+
+    function onPdfLoaded(result) {
+      if (result.error) {
+        onPdfLoadError(result.error);
+        return;
+      }
+      statusDiv.textContent = 'Click the speaker icon to hear the text read.';
+      const serverChunks = result.audioChunks;
+      const pdfData = atob(result.pdfData);
+      
+      const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+      loadingTask.promise.then(pdfDocument => {
+        
+        pdfContainer.innerHTML = ''; // Clear container
+        for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'page-' + pagenum;
+            pdfContainer.appendChild(canvas);
+        }
+        const highlightBox = document.createElement('div');
+        highlightBox.id = 'highlight-box';
+        pdfContainer.appendChild(highlightBox);
+
+        const pagePromises = [];
+        for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+          pagePromises.push(processPage(pdfDocument, pageNum));
+        }
+        Promise.all(pagePromises).then(() => {
+            console.log("All pages rendered.");
+            processTextAndLayout(pdfDocument, serverChunks);
+        });
+      }).catch(onPdfLoadError);
+    }
+
+    function processPage(pdfDocument, pageNum) {
+      return pdfDocument.getPage(pageNum).then(page => {
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.getElementById('page-' + pageNum);
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport
+        };
+        return page.render(renderContext).promise;
+      });
+    }
+
+    function onPdfLoadError(error) {
+      statusDiv.textContent = '';
+      viewerContainer.style.display = 'none';
+      loginContainer.style.display = 'block';
+      loadButton.disabled = false;
+      loginErrorDiv.textContent = 'Error: ' + error;
+    }
+
+    async function processTextAndLayout(pdf, serverChunks) {
+        console.log('Processing PDF layout...');
+        const allTextItems = [];
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const textContent = await page.getTextContent();
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.getElementById('page-' + pageNum);
+
+            for (const item of textContent.items) {
+                const tx = item.transform;
+                allTextItems.push({
+                    text: item.str,
+                    rect: {
+                        left: canvas.offsetLeft + tx[4],
+                        top: canvas.offsetTop + (viewport.height - tx[5] - item.height),
+                        right: canvas.offsetLeft + tx[4] + item.width,
+                        bottom: canvas.offsetTop + (viewport.height - tx[5])
+                    }
+                });
+            }
+        }
+
+        const clientTextString = allTextItems.map(item => item.text).join('').replace(/\s+/g, ' ');
+
+        processedChunks = serverChunks.map(serverChunk => {
+            const normalizedServerText = serverChunk.text.replace(/\s+/g, ' ');
+            const startIndex = clientTextString.indexOf(normalizedServerText);
+
+            if (startIndex === -1) {
+                console.warn("Could not map server chunk to visual text:", normalizedServerText.substring(0, 50) + "...");
+                return { ...serverChunk, boundingBox: null };
+            }
+
+            const endIndex = startIndex + normalizedServerText.length;
+            
+            let currentPos = 0;
+            const chunkItems = [];
+            for(const item of allTextItems) {
+                const itemTextNormalized = item.text.replace(/\s+/g, ' ');
+                if (currentPos >= startIndex && currentPos < endIndex) {
+                    chunkItems.push(item);
+                }
+                currentPos += itemTextNormalized.length;
+                if (currentPos >= endIndex) break;
+            }
+
+            if (chunkItems.length === 0) {
+                return { ...serverChunk, boundingBox: null };
+            }
+
+            const box = {
+                left: Math.min(...chunkItems.map(item => item.rect.left)),
+                top: Math.min(...chunkItems.map(item => item.rect.top)),
+                right: Math.max(...chunkItems.map(item => item.rect.right)),
+                bottom: Math.max(...chunkItems.map(item => item.rect.bottom)),
+            };
+
+            return { ...serverChunk, boundingBox: box };
+        });
+
+        createAudioIcons();
+
+        const successfulChunks = processedChunks.filter(c => c.boundingBox).length;
+        if (successfulChunks !== serverChunks.length) {
+            console.error(`Layout Mismatch: Successfully mapped ${successfulChunks} out of ${serverChunks.length} chunks.`);
+        }
+
+        console.log('Layout processing complete. Ready for interaction.');
+    }
+
+    function createAudioIcons() {
+        for (const chunk of processedChunks) {
+            if (chunk.boundingBox) {
+                const icon = document.createElement('div');
+                icon.className = 'audio-icon';
+                icon.style.top = `${chunk.boundingBox.top}px`;
+                icon.style.left = `${chunk.boundingBox.left - 30}px`; // Position to the left of the text
+                icon.onclick = () => playAudio(chunk);
+                pdfContainer.appendChild(icon);
+            }
+        }
+    }
+
+    function playAudio(chunk) {
+        if (currentlyPlayingChunk === chunk) {
+            if (globalAudioPlayer.paused) {
+                globalAudioPlayer.play();
+                document.getElementById('highlight-box').style.display = 'block';
+            } else {
+                globalAudioPlayer.pause();
+                document.getElementById('highlight-box').style.display = 'none';
+            }
+            return;
+        }
+
+        globalAudioPlayer.pause();
+        statusDiv.textContent = 'Loading audio...';
+
+        const box = chunk.boundingBox;
+        const highlight = document.getElementById('highlight-box');
+        highlight.style.left = `${box.left}px`;
+        highlight.style.top = `${box.top}px`;
+        highlight.style.width = `${box.right - box.left}px`;
+        highlight.style.height = `${box.bottom - box.top}px`;
+        highlight.style.display = 'block';
+
+        currentlyPlayingChunk = chunk;
+      
+        const fileIdMatch = chunk.audioUrl.match(/id=([a-zA-Z0-9_-]+)/);
+        if (!fileIdMatch || !fileIdMatch[1]) {
+            onPdfLoadError('Could not parse audio file ID.');
+            return;
+        }
+        const fileId = fileIdMatch[1];
+
+        google.script.run
+            .withSuccessHandler(base64Data => {
+                if (!base64Data) {
+                    onPdfLoadError('Failed to load audio data from server.');
+                    document.getElementById('highlight-box').style.display = 'none';
+                    currentlyPlayingChunk = null;
+                    return;
+                }
+                globalAudioPlayer.src = `data:audio/wav;base64,${base64Data}`;
+                globalAudioPlayer.play();
+                statusDiv.textContent = 'Playing...';
+            })
+            .withFailureHandler(err => {
+                onPdfLoadError(err);
+                document.getElementById('highlight-box').style.display = 'none';
+                currentlyPlayingChunk = null;
+            })
+            .getAudioDataAsBase64(fileId);
+    }
+    
+    globalAudioPlayer.onended = () => {
+        if(currentlyPlayingChunk) {
+            document.getElementById('highlight-box').style.display = 'none';
+        }
+        currentlyPlayingChunk = null;
+        statusDiv.textContent = 'Click the speaker icon to hear the text read.';
+    };
+
+    passwordInput.addEventListener('keypress', function(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        loadButton.click();
+      }
+    });
+
+    emailInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            passwordInput.focus();
+        }
+    });
+
+  </script>
+</body>
+</html>
+
