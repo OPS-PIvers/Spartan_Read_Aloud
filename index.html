@@ -3,6 +3,7 @@
 <head>
   <base target="_top">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/text_layer_builder.css">
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
@@ -74,13 +75,239 @@
       cursor: not-allowed;
     }
 
+    /* Audio Toolbar Styles */
+    #audio-toolbar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      padding: 15px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      z-index: 1000;
+      min-width: 800px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .toolbar-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toolbar-section button {
+      width: auto;
+      min-width: 36px;
+      height: 36px;
+      padding: 8px 12px;
+      font-size: 14px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .toolbar-section button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+    }
+
+    .toolbar-section button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .timeline-section {
+      flex-grow: 1;
+      min-width: 200px;
+    }
+
+    #timeline {
+      flex-grow: 1;
+      margin: 0 10px;
+      height: 6px;
+      border-radius: 3px;
+      background: #e0e0e0;
+      outline: none;
+      cursor: pointer;
+    }
+
+    #timeline::-webkit-slider-thumb {
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #1a73e8;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    #timeline::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #1a73e8;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .title-section {
+      position: relative;
+      min-width: 200px;
+    }
+
+    #current-title-btn {
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #title-dropdown {
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 5px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .dropdown-item {
+      padding: 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+      transition: background-color 0.2s ease;
+    }
+
+    .dropdown-item:hover {
+      background-color: #f8f9fa;
+    }
+
+    .dropdown-item.current {
+      background-color: #e8f0fe;
+      color: #1a73e8;
+      font-weight: 500;
+    }
+
+    .dropdown-item:last-child {
+      border-bottom: none;
+    }
+
+    /* Focus Mode Styles */
+    body.focus-mode #pdf-container > *:not(.highlighted-chunk) {
+      opacity: 0.2;
+      transition: opacity 0.3s ease;
+    }
+
+    .highlighted-chunk {
+      background-color: rgba(255, 235, 59, 0.3) !important;
+      outline: 2px solid #ffc107 !important;
+      outline-offset: 2px;
+      opacity: 1 !important;
+      transition: all 0.3s ease;
+      border-radius: 4px;
+    }
+
+    .highlighted-text-span {
+      background-color: rgba(255, 235, 59, 0.8) !important;
+      color: #000 !important;
+      border-radius: 2px;
+      box-shadow: 0 0 4px rgba(255, 193, 7, 0.6);
+    }
+
+    body.focus-mode .highlighted-chunk {
+      box-shadow: 0 0 20px rgba(255, 193, 7, 0.4);
+    }
+
+    /* Button Active States */
+    .toolbar-section button.active {
+      background-color: #1a73e8;
+      color: white;
+    }
+
+    /* Time Display */
+    #current-time, #total-time {
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 12px;
+      color: #666;
+      min-width: 35px;
+    }
+
+    /* Speed Display */
+    #speed-display {
+      font-weight: 500;
+      color: #1a73e8;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+      #audio-toolbar {
+        min-width: 95vw;
+        padding: 12px;
+        gap: 12px;
+        flex-wrap: wrap;
+        bottom: 10px;
+      }
+
+      .toolbar-section {
+        gap: 6px;
+      }
+
+      .timeline-section {
+        order: -1;
+        width: 100%;
+        margin-bottom: 8px;
+      }
+
+      .title-section {
+        min-width: 150px;
+        flex-grow: 1;
+      }
+
+      .toolbar-section button {
+        min-width: 44px;
+        height: 44px;
+        font-size: 16px;
+      }
+
+      #current-title-btn {
+        font-size: 12px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      #audio-toolbar {
+        min-width: 98vw;
+        padding: 8px;
+        gap: 8px;
+      }
+
+      .toolbar-section button {
+        min-width: 40px;
+        height: 40px;
+        padding: 6px;
+        font-size: 14px;
+      }
+    }
+
     #viewer-container {
       width: 100%;
       max-width: 1200px;
       display: none;
-      position: relative; 
-      display: flex;
-      flex-direction: row;
+      position: relative;
     }
     
     #status {
@@ -94,58 +321,55 @@
       border: 1px solid #ddd;
       background-color: white;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      position: relative; 
-      flex-grow: 1;
+      position: relative;
+      width: 100%;
     }
     
-    #pdf-container canvas {
-      display: block;
+    .page-container {
+      position: relative;
       margin: 0 auto 10px auto;
-      max-width: 100%;
-      height: auto;
+      display: inline-block;
     }
 
-    #side-panel {
-      width: 300px;
-      margin-left: 20px;
-      background-color: white;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      padding: 20px;
-      max-height: 80vh;
-      overflow-y: auto;
-      position: sticky;
-      top: 20px;
+    .page-container canvas {
+      display: block;
     }
 
-    .side-panel-item {
-      padding: 10px;
-      border-bottom: 1px solid #eee;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
+    .textLayer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      opacity: 0.2;
+      line-height: 1.0;
     }
 
-    .side-panel-item:hover {
-      background-color: #f0f2f5;
+    .textLayer > span {
+      color: transparent;
+      position: absolute;
+      white-space: pre;
+      cursor: text;
+      transform-origin: 0% 0%;
     }
 
-    .side-panel-item.playing {
-      background-color: #e8f0fe;
+    .textLayer .highlight {
+      margin: -1px;
+      padding: 1px;
+      background-color: rgba(255, 235, 59, 0.6);
+      border-radius: 4px;
     }
 
-    .play-icon {
-      width: 20px;
-      height: 20px;
-      margin-right: 10px;
-      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%231a73e8"><path d="M8 5v14l11-7z"></path></svg>');
-      background-size: contain;
-      background-repeat: no-repeat;
+    /* Ensure text is selectable but invisible */
+    .textLayer > span {
+      color: transparent;
+      -webkit-user-select: text;
+      -moz-user-select: text;
+      -ms-user-select: text;
+      user-select: text;
     }
 
-    .side-panel-item.playing .play-icon {
-      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%231a73e8"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>');
-    }
 
   </style>
 </head>
@@ -165,8 +389,38 @@
     <div id="pdf-container">
       <!-- Canvases will be added here -->
     </div>
-    <div id="side-panel">
-      <!-- Audio chunks will be added here -->
+  </div>
+
+  <div id="audio-toolbar" style="display: none;">
+    <div class="toolbar-section">
+      <button id="prev-btn" title="Previous chunk">⏮</button>
+      <button id="play-pause-btn" title="Play/Pause">▶</button>
+      <button id="next-btn" title="Next chunk">⏭</button>
+    </div>
+
+    <div class="toolbar-section timeline-section">
+      <span id="current-time">0:00</span>
+      <input type="range" id="timeline" min="0" max="100" value="0" title="Audio timeline">
+      <span id="total-time">0:00</span>
+    </div>
+
+    <div class="toolbar-section">
+      <label>Speed:</label>
+      <button id="speed-down" title="Decrease speed">-</button>
+      <span id="speed-display">1.0x</span>
+      <button id="speed-up" title="Increase speed">+</button>
+    </div>
+
+    <div class="toolbar-section title-section">
+      <button id="current-title-btn" title="Current chunk - click to see all">Loading...</button>
+      <div id="title-dropdown" style="display: none;">
+        <!-- Will be populated with all chunks -->
+      </div>
+    </div>
+
+    <div class="toolbar-section">
+      <button id="focus-mode-btn" title="Focus mode">🎯</button>
+      <button id="loop-btn" title="Loop current chunk">🔁</button>
     </div>
   </div>
 
@@ -178,11 +432,17 @@
     const loginContainer = document.getElementById('login-container');
     const viewerContainer = document.getElementById('viewer-container');
     const loginErrorDiv = document.getElementById('login-error');
-    const sidePanel = document.getElementById('side-panel');
     
     let globalAudioPlayer = new Audio();
     let currentlyPlayingChunk = null;
     let serverChunks = [];
+    let currentChunkIndex = 0;
+    let isLooping = false;
+    let isFocusMode = false;
+    let currentPlaybackRate = 1.0;
+    let scrollTimeout;
+    let currentHighlight = null;
+    let pageTextContent = []; // Store extracted text content for each page
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
@@ -194,7 +454,7 @@
       }
       
       loginContainer.style.display = 'none';
-      viewerContainer.style.display = 'flex';
+      viewerContainer.style.display = 'block';
       loadButton.disabled = true;
 
       google.script.run
@@ -223,7 +483,8 @@
         
         Promise.all(pagePromises).then(() => {
             console.log("All pages rendered.");
-            populateSidePanel();
+            initializeAudioToolbar();
+            setupEventListeners();
         });
 
       }).catch(onPdfLoadError);
@@ -232,18 +493,55 @@
     function processPage(pdfDocument, pageNum) {
       return pdfDocument.getPage(pageNum).then(page => {
         const viewport = page.getViewport({ scale: 1.5 });
+
+        // Create page container
+        const pageContainer = document.createElement('div');
+        pageContainer.className = 'page-container';
+        pageContainer.id = 'page-container-' + pageNum;
+
+        // Create canvas
         const canvas = document.createElement('canvas');
         canvas.id = 'page-' + pageNum;
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-        pdfContainer.appendChild(canvas);
-        
+
+        // Create text layer div
+        const textLayerDiv = document.createElement('div');
+        textLayerDiv.className = 'textLayer';
+        textLayerDiv.style.width = viewport.width + 'px';
+        textLayerDiv.style.height = viewport.height + 'px';
+
+        // Append canvas and text layer to page container
+        pageContainer.appendChild(canvas);
+        pageContainer.appendChild(textLayerDiv);
+        pdfContainer.appendChild(pageContainer);
+
         const renderContext = {
           canvasContext: context,
           viewport: viewport
         };
-        return page.render(renderContext).promise;
+
+        // Render canvas and text layer
+        const renderPromise = page.render(renderContext).promise;
+
+        const textPromise = page.getTextContent().then(textContent => {
+          const pageText = textContent.items.map(item => item.str).join(' ');
+          pageTextContent[pageNum - 1] = pageText; // Store 0-indexed
+
+          // Render text layer
+          return pdfjsLib.renderTextLayer({
+            textContent: textContent,
+            container: textLayerDiv,
+            viewport: viewport,
+            textDivs: []
+          }).promise;
+        }).catch(err => {
+          console.warn(`Failed to extract/render text for page ${pageNum}:`, err);
+          pageTextContent[pageNum - 1] = ''; // Empty string fallback
+        });
+
+        return Promise.all([renderPromise, textPromise]);
       });
     }
 
@@ -254,58 +552,71 @@
       loginErrorDiv.textContent = 'Error: ' + error;
     }
 
-    function populateSidePanel() {
-      sidePanel.innerHTML = '';
-      serverChunks.forEach((chunk, index) => {
-        const item = document.createElement('div');
-        item.className = 'side-panel-item';
-        item.id = 'chunk-item-' + index;
-
-        const playIcon = document.createElement('div');
-        playIcon.className = 'play-icon';
-
-        const text = document.createElement('div');
-        text.textContent = getCleanedChunkText(chunk.text);
-
-        item.appendChild(playIcon);
-        item.appendChild(text);
-
-        item.onclick = () => playAudio(chunk, index);
-        sidePanel.appendChild(item);
-      });
-    }
 
     function getCleanedChunkText(text) {
       const words = text.trim().split(/\s+/);
       return words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
     }
 
-    function playAudio(chunk, index) {
-      const item = document.getElementById('chunk-item-' + index);
+    function initializeAudioToolbar() {
+      document.getElementById('audio-toolbar').style.display = 'flex';
+      populateTitleDropdown();
+      updateToolbarDisplay();
 
+      // Initialize with first chunk ready to play
+      if (serverChunks.length > 0) {
+        currentChunkIndex = 0;
+        updateToolbarDisplay();
+      }
+    }
+
+    function populateTitleDropdown() {
+      const dropdown = document.getElementById('title-dropdown');
+      dropdown.innerHTML = '';
+
+      serverChunks.forEach((chunk, index) => {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.textContent = getCleanedChunkText(chunk.text);
+        item.onclick = () => jumpToChunk(index);
+        dropdown.appendChild(item);
+      });
+    }
+
+    function updateToolbarDisplay() {
+      if (serverChunks.length === 0) return;
+
+      const currentChunk = serverChunks[currentChunkIndex];
+      if (currentChunk) {
+        document.getElementById('current-title-btn').textContent = getCleanedChunkText(currentChunk.text);
+      }
+      document.getElementById('speed-display').textContent = currentPlaybackRate.toFixed(1) + 'x';
+
+      // Update dropdown current item
+      document.querySelectorAll('.dropdown-item').forEach((item, index) => {
+        item.classList.toggle('current', index === currentChunkIndex);
+      });
+
+      // Update navigation button states
+      document.getElementById('prev-btn').disabled = currentChunkIndex === 0;
+      document.getElementById('next-btn').disabled = currentChunkIndex === serverChunks.length - 1;
+    }
+
+    function playAudio(chunk, index) {
       if (currentlyPlayingChunk === chunk) {
         if (globalAudioPlayer.paused) {
           globalAudioPlayer.play();
-          item.classList.add('playing');
+          document.getElementById('play-pause-btn').textContent = '⏸';
         } else {
           globalAudioPlayer.pause();
-          item.classList.remove('playing');
+          document.getElementById('play-pause-btn').textContent = '▶';
         }
         return;
       }
 
-      // Stop currently playing and remove its 'playing' class
-      if (currentlyPlayingChunk) {
-        const oldIndex = serverChunks.indexOf(currentlyPlayingChunk);
-        const oldItem = document.getElementById('chunk-item-' + oldIndex);
-        if (oldItem) {
-          oldItem.classList.remove('playing');
-        }
-      }
-
       globalAudioPlayer.pause();
       currentlyPlayingChunk = chunk;
-      item.classList.add('playing');
+      currentChunkIndex = index;
 
       const fileIdMatch = chunk.audioUrl.match(/id=([a-zA-Z0-9_-]+)/);
       if (!fileIdMatch || !fileIdMatch[1]) {
@@ -314,35 +625,414 @@
       }
       const fileId = fileIdMatch[1];
 
+      document.getElementById('play-pause-btn').textContent = '⏸';
+      updateToolbarDisplay();
+      // Use the exact same text that's displayed in the browser for searching
+      const displayText = getCleanedChunkText(chunk.text);
+      console.log('Audio title displayed:', displayText);
+      console.log('Original chunk text:', chunk.text);
+      console.log('Backend searchWords:', chunk.searchWords);
+
+      highlightChunkInPDF(displayText);
+
       google.script.run
         .withSuccessHandler(base64Data => {
           if (!base64Data) {
             onPdfLoadError('Failed to load audio data from server.');
-            item.classList.remove('playing');
             currentlyPlayingChunk = null;
+            document.getElementById('play-pause-btn').textContent = '▶';
             return;
           }
           globalAudioPlayer.src = `data:audio/wav;base64,${base64Data}`;
+          globalAudioPlayer.playbackRate = currentPlaybackRate;
           globalAudioPlayer.play();
         })
         .withFailureHandler(err => {
           onPdfLoadError(err);
-          item.classList.remove('playing');
           currentlyPlayingChunk = null;
+          document.getElementById('play-pause-btn').textContent = '▶';
         })
         .getAudioDataAsBase64(fileId);
     }
     
-    globalAudioPlayer.onended = () => {
-      if (currentlyPlayingChunk) {
-        const index = serverChunks.indexOf(currentlyPlayingChunk);
-        const item = document.getElementById('chunk-item-' + index);
-        if (item) {
-          item.classList.remove('playing');
+    function setupEventListeners() {
+      document.getElementById('prev-btn').onclick = () => navigateChunk(-1);
+      document.getElementById('next-btn').onclick = () => navigateChunk(1);
+      document.getElementById('play-pause-btn').onclick = togglePlayPause;
+      document.getElementById('speed-up').onclick = () => adjustSpeed(0.25);
+      document.getElementById('speed-down').onclick = () => adjustSpeed(-0.25);
+      document.getElementById('current-title-btn').onclick = toggleTitleDropdown;
+      document.getElementById('focus-mode-btn').onclick = toggleFocusMode;
+      document.getElementById('loop-btn').onclick = toggleLoop;
+
+      // Timeline scrubbing
+      document.getElementById('timeline').oninput = scrubTimeline;
+
+      // Auto-pause on scroll
+      window.addEventListener('scroll', handleScroll);
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', handleKeyboard);
+
+      // Audio event listeners
+      globalAudioPlayer.ontimeupdate = updateTimeline;
+      globalAudioPlayer.onended = handleAudioEnd;
+      globalAudioPlayer.onloadedmetadata = updateDuration;
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.title-section')) {
+          document.getElementById('title-dropdown').style.display = 'none';
+        }
+      });
+    }
+
+    function navigateChunk(direction) {
+      const newIndex = currentChunkIndex + direction;
+      if (newIndex >= 0 && newIndex < serverChunks.length) {
+        jumpToChunk(newIndex);
+      }
+    }
+
+    function jumpToChunk(index) {
+      currentChunkIndex = index;
+      const chunk = serverChunks[index];
+      playAudio(chunk, index);
+      document.getElementById('title-dropdown').style.display = 'none';
+    }
+
+    function togglePlayPause() {
+      if (globalAudioPlayer.paused) {
+        if (!currentlyPlayingChunk) {
+          jumpToChunk(currentChunkIndex);
+        } else {
+          globalAudioPlayer.play();
+        }
+        document.getElementById('play-pause-btn').textContent = '⏸';
+      } else {
+        globalAudioPlayer.pause();
+        document.getElementById('play-pause-btn').textContent = '▶';
+      }
+    }
+
+    function adjustSpeed(delta) {
+      currentPlaybackRate = Math.max(0.25, Math.min(2.0, currentPlaybackRate + delta));
+      globalAudioPlayer.playbackRate = currentPlaybackRate;
+      updateToolbarDisplay();
+    }
+
+    function scrubTimeline() {
+      const timeline = document.getElementById('timeline');
+      const seekTime = (timeline.value / 100) * globalAudioPlayer.duration;
+      globalAudioPlayer.currentTime = seekTime;
+    }
+
+    function updateTimeline() {
+      if (globalAudioPlayer.duration) {
+        const progress = (globalAudioPlayer.currentTime / globalAudioPlayer.duration) * 100;
+        document.getElementById('timeline').value = progress;
+        document.getElementById('current-time').textContent = formatTime(globalAudioPlayer.currentTime);
+      }
+    }
+
+    function updateDuration() {
+      document.getElementById('total-time').textContent = formatTime(globalAudioPlayer.duration);
+    }
+
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function handleAudioEnd() {
+      document.getElementById('play-pause-btn').textContent = '▶';
+
+      if (isLooping) {
+        globalAudioPlayer.currentTime = 0;
+        globalAudioPlayer.play();
+        document.getElementById('play-pause-btn').textContent = '⏸';
+      } else if (currentChunkIndex < serverChunks.length - 1) {
+        // Auto-advance to next chunk
+        navigateChunk(1);
+      } else {
+        currentlyPlayingChunk = null;
+      }
+    }
+
+    function toggleLoop() {
+      isLooping = !isLooping;
+      const loopBtn = document.getElementById('loop-btn');
+      loopBtn.classList.toggle('active', isLooping);
+    }
+
+    function toggleTitleDropdown() {
+      const dropdown = document.getElementById('title-dropdown');
+      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function highlightChunkInPDF(searchWords) {
+      // Remove previous highlights
+      if (currentHighlight) {
+        currentHighlight.classList.remove('highlighted-chunk');
+      }
+      // Remove previous text span highlights
+      document.querySelectorAll('.highlighted-text-span').forEach(span => {
+        span.classList.remove('highlighted-text-span');
+      });
+
+      // Search for text in PDF text layers
+      const found = searchTextInPDF(searchWords);
+      if (found) {
+        if (found.spans && found.spans.length > 0) {
+          // Highlight specific text spans
+          found.spans.forEach(span => {
+            span.classList.add('highlighted-text-span');
+          });
+          currentHighlight = found.container;
+
+          // Scroll to first highlighted span
+          const rect = found.spans[0].getBoundingClientRect();
+          const offset = window.innerHeight * 0.3; // 30% from top
+          window.scrollTo({
+            top: window.scrollY + rect.top - offset,
+            behavior: 'smooth'
+          });
+        } else {
+          // Fallback to container highlighting
+          found.classList.add('highlighted-chunk');
+          currentHighlight = found;
+
+          const rect = found.getBoundingClientRect();
+          const offset = window.innerHeight * 0.3; // 30% from top
+          window.scrollTo({
+            top: window.scrollY + rect.top - offset,
+            behavior: 'smooth'
+          });
         }
       }
-      currentlyPlayingChunk = null;
-    };
+    }
+
+    function searchTextInPDF(searchText) {
+      // Clean the search text - this is what's displayed in the browser
+      const searchPhrase = searchText.trim().toLowerCase();
+      console.log('=== SEARCH DEBUG ===');
+      console.log('Searching for exact phrase:', searchPhrase);
+
+      // Debug: Log all text layer content first
+      const textLayers = document.querySelectorAll('.textLayer');
+      console.log('Found', textLayers.length, 'text layers');
+
+      textLayers.forEach((layer, layerIndex) => {
+        const spans = layer.querySelectorAll('span');
+        console.log(`Layer ${layerIndex + 1} has ${spans.length} spans`);
+
+        // Log first few spans to see what text actually exists
+        for (let i = 0; i < Math.min(5, spans.length); i++) {
+          const spanText = spans[i].textContent.trim();
+          if (spanText.length > 0) {
+            console.log(`  Span ${i + 1}:`, spanText);
+          }
+        }
+      });
+
+      // Try exact phrase match first
+      for (let layer of textLayers) {
+        const spans = layer.querySelectorAll('span');
+
+        // Method 1: Check each individual span for the complete phrase
+        for (let span of spans) {
+          const spanText = span.textContent.trim().toLowerCase();
+          if (spanText.includes(searchPhrase)) {
+            console.log('✓ FOUND exact phrase in single span:', spanText);
+            return {
+              container: layer.closest('.page-container'),
+              spans: [span]
+            };
+          }
+        }
+
+        // Method 2: Check combinations of consecutive spans
+        for (let i = 0; i < spans.length; i++) {
+          let combinedText = '';
+          let consecutiveSpans = [];
+
+          // Try combining up to 10 consecutive spans
+          for (let j = i; j < Math.min(i + 10, spans.length); j++) {
+            const span = spans[j];
+            const spanText = span.textContent.trim();
+
+            if (spanText.length > 0) {
+              if (combinedText.length > 0) combinedText += ' ';
+              combinedText += spanText;
+              consecutiveSpans.push(span);
+
+              // Check if this combination contains our phrase
+              if (combinedText.toLowerCase().includes(searchPhrase)) {
+                console.log('✓ FOUND phrase across', consecutiveSpans.length, 'spans:', combinedText);
+                return {
+                  container: layer.closest('.page-container'),
+                  spans: consecutiveSpans
+                };
+              }
+            }
+
+            // Stop if combined text is getting too long
+            if (combinedText.length > searchPhrase.length * 3) break;
+          }
+        }
+      }
+
+      // Try progressive shorter searches (remove "..." and try again)
+      if (searchPhrase.includes('...')) {
+        const shorterPhrase = searchPhrase.replace(/\.{3}.*$/, '').trim();
+        console.log('Trying shorter phrase without "...":', shorterPhrase);
+
+        for (let layer of textLayers) {
+          const spans = layer.querySelectorAll('span');
+
+          for (let i = 0; i < spans.length; i++) {
+            let combinedText = '';
+            let consecutiveSpans = [];
+
+            for (let j = i; j < Math.min(i + 8, spans.length); j++) {
+              const span = spans[j];
+              const spanText = span.textContent.trim();
+
+              if (spanText.length > 0) {
+                if (combinedText.length > 0) combinedText += ' ';
+                combinedText += spanText;
+                consecutiveSpans.push(span);
+
+                if (combinedText.toLowerCase().includes(shorterPhrase)) {
+                  console.log('✓ FOUND shorter phrase:', combinedText);
+                  return {
+                    container: layer.closest('.page-container'),
+                    spans: consecutiveSpans
+                  };
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Try just the first 4 words
+      const firstFourWords = searchPhrase.split(' ').slice(0, 4).join(' ');
+      console.log('Trying first 4 words:', firstFourWords);
+
+      for (let layer of textLayers) {
+        const spans = layer.querySelectorAll('span');
+
+        for (let i = 0; i < spans.length; i++) {
+          let combinedText = '';
+          let consecutiveSpans = [];
+
+          for (let j = i; j < Math.min(i + 6, spans.length); j++) {
+            const span = spans[j];
+            const spanText = span.textContent.trim();
+
+            if (spanText.length > 0) {
+              if (combinedText.length > 0) combinedText += ' ';
+              combinedText += spanText;
+              consecutiveSpans.push(span);
+
+              if (combinedText.toLowerCase().includes(firstFourWords)) {
+                console.log('✓ FOUND first 4 words:', combinedText);
+                return {
+                  container: layer.closest('.page-container'),
+                  spans: consecutiveSpans
+                };
+              }
+            }
+          }
+        }
+      }
+
+      console.log('✗ No text matches found, falling back to page-level highlighting');
+
+      // Final fallback to page container
+      const pageContainers = document.querySelectorAll('.page-container');
+      if (pageContainers.length > 0) {
+        const fallbackPageIndex = Math.min(currentChunkIndex, pageContainers.length - 1);
+        console.log('Using fallback page:', fallbackPageIndex + 1);
+        return pageContainers[fallbackPageIndex];
+      }
+
+      return null;
+    }
+
+    function toggleFocusMode() {
+      isFocusMode = !isFocusMode;
+      document.body.classList.toggle('focus-mode', isFocusMode);
+
+      const focusBtn = document.getElementById('focus-mode-btn');
+      focusBtn.classList.toggle('active', isFocusMode);
+    }
+
+    function handleScroll() {
+      if (!globalAudioPlayer.paused) {
+        // Clear previous timeout
+        clearTimeout(scrollTimeout);
+
+        // Set new timeout to pause after scroll stops
+        scrollTimeout = setTimeout(() => {
+          globalAudioPlayer.pause();
+          document.getElementById('play-pause-btn').textContent = '▶';
+        }, 2000); // 2 second delay
+      }
+    }
+
+    function handleKeyboard(event) {
+      // Don't interfere if user is typing in input fields
+      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      // Prevent default only for our shortcuts
+      switch(event.code) {
+        case 'Space':
+          event.preventDefault();
+          togglePlayPause();
+          break;
+        case 'ArrowLeft':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            navigateChunk(-1);
+          }
+          break;
+        case 'ArrowRight':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            navigateChunk(1);
+          }
+          break;
+        case 'KeyF':
+          if (!event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            toggleFocusMode();
+          }
+          break;
+        case 'KeyL':
+          if (!event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            toggleLoop();
+          }
+          break;
+        case 'ArrowUp':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            adjustSpeed(0.25);
+          }
+          break;
+        case 'ArrowDown':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            adjustSpeed(-0.25);
+          }
+          break;
+      }
+    }
 
     passwordInput.addEventListener('keypress', function(event) {
       if (event.key === 'Enter') {

@@ -223,7 +223,8 @@ function step2_GenerateMissingAudioAndFinalize() {
            audioDataForSheet.push({
              text: chunkText,
              audioUrl: `https://drive.google.com/uc?id=${audioFile.getId()}&export=media`,
-             audioFilename: audioFile.getName()
+             audioFilename: audioFile.getName(),
+             searchWords: chunkText.split(/\s+/).slice(0, 6).join(' ')
            });
         }
         sheet.getRange(i + 1, COL.AUDIO_JSON + 1).setValue(JSON.stringify(audioDataForSheet, null, 2));
