@@ -633,7 +633,7 @@
       console.log('Original chunk text:', chunk.text);
       console.log('Backend searchWords:', chunk.searchWords);
 
-      highlightChunkInPDF(displayText);
+      highlightChunkInPDF(chunk.searchWords);
 
       google.script.run
         .withSuccessHandler(base64Data => {
