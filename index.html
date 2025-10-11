@@ -942,6 +942,73 @@
       return null;
     }
 
+    function findEndBoundaryAfterStart(allSpans, startIndex, endSearchText) {
+      /**
+       * Searches for endSearchText only in spans AFTER startIndex.
+       * This ensures sequential ordering and includes all text between boundaries.
+       * Returns the index where the end boundary starts, or -1 if not found.
+       */
+      const normalizedEndSearch = normalizeText(endSearchText);
+      console.log('→ Searching for end boundary in spans after index', startIndex);
+
+      // Search through remaining spans, trying consecutive combinations
+      for (let i = startIndex + 1; i < allSpans.length; i++) {
+        let combinedText = '';
+        let consecutiveCount = 0;
+
+        // Try combining up to 15 consecutive spans (same as searchTextInPDF)
+        for (let j = i; j < Math.min(i + 15, allSpans.length); j++) {
+          const span = allSpans[j];
+          const spanText = span.textContent.trim();
+
+          if (spanText.length > 0) {
+            if (combinedText.length > 0) combinedText += ' ';
+            combinedText += spanText;
+            consecutiveCount++;
+
+            // Check if we've found the end boundary
+            const normalizedCombined = normalizeText(combinedText);
+            if (normalizedCombined.includes(normalizedEndSearch)) {
+              console.log(`→ Found end boundary at span index ${i} (matched across ${consecutiveCount} spans)`);
+              return i; // Return the starting position of the end boundary
+            }
+          }
+
+          // Stop if combined text is much longer than search phrase
+          if (combinedText.length > normalizedEndSearch.length * 4) break;
+        }
+      }
+
+      // Fallback: Try first 4 words of end search text
+      const words = normalizedEndSearch.split(/\s+/).filter(w => w.length > 0);
+      if (words.length > 4) {
+        const firstFourWords = words.slice(0, 4).join(' ');
+        console.log('→ Trying first 4 words of end boundary:', firstFourWords);
+
+        for (let i = startIndex + 1; i < allSpans.length; i++) {
+          let combinedText = '';
+
+          for (let j = i; j < Math.min(i + 8, allSpans.length); j++) {
+            const span = allSpans[j];
+            const spanText = span.textContent.trim();
+
+            if (spanText.length > 0) {
+              if (combinedText.length > 0) combinedText += ' ';
+              combinedText += spanText;
+
+              const normalizedCombined = normalizeText(combinedText);
+              if (normalizedCombined.includes(firstFourWords)) {
+                console.log(`→ Found end boundary using first 4 words at span index ${i}`);
+                return i;
+              }
+            }
+          }
+        }
+      }
+
+      return -1; // Not found
+    }
+
     function searchTextRangeInPDF(startSearchText, endSearchText) {
       /**
        * Searches for a range of text between two searchWords boundaries.
@@ -990,32 +1057,12 @@
         };
       }
 
-      // Try to find the end boundary
-      const endResult = searchTextInPDF(endSearchText);
+      // Search for end boundary ONLY in spans after the start position
+      // This ensures we find the NEXT occurrence and include all text (even after images)
+      const endSpanIndex = findEndBoundaryAfterStart(allSpans, startSpanIndex, endSearchText);
 
-      // If end boundary not found, highlight to end of current page
-      if (!endResult || !endResult.spans || endResult.spans.length === 0) {
-        console.log('→ End boundary not found, highlighting to end of page');
-        return {
-          container: pageContainer,
-          spans: allSpans.slice(startSpanIndex)
-        };
-      }
-
-      // Check if end boundary is on the same page
-      if (endResult.container !== pageContainer) {
-        console.log('→ End boundary on different page, highlighting to end of current page');
-        return {
-          container: pageContainer,
-          spans: allSpans.slice(startSpanIndex)
-        };
-      }
-
-      // Both boundaries on same page - find the precise range
-      const endSpanIndex = allSpans.indexOf(endResult.spans[0]);
-
-      if (endSpanIndex === -1 || endSpanIndex <= startSpanIndex) {
-        console.log('→ Invalid end position, highlighting to end of page');
+      if (endSpanIndex === -1) {
+        console.log('→ End boundary not found after start position, highlighting to end of page');
         return {
           container: pageContainer,
           spans: allSpans.slice(startSpanIndex)
@@ -1023,7 +1070,7 @@
       }
 
       // Return the precise range between boundaries
-      console.log(`✓ Precise range: ${endSpanIndex - startSpanIndex} spans`);
+      console.log(`✓ Precise range: ${endSpanIndex - startSpanIndex} spans (including text after images)`);
       return {
         container: pageContainer,
         spans: allSpans.slice(startSpanIndex, endSpanIndex)
