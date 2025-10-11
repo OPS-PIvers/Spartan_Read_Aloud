@@ -954,34 +954,28 @@
       // Search through remaining spans, trying consecutive combinations
       for (let i = startIndex + 1; i < allSpans.length; i++) {
         let combinedText = '';
-        let nonEmptyCount = 0;
-        let firstNonEmptyIndex = -1;
+        let consecutiveSpans = [];
 
-        // Try combining up to 15 NON-EMPTY spans (skips blank lines/whitespace)
-        for (let j = i; j < allSpans.length && nonEmptyCount < 15; j++) {
+        // Try combining up to 15 consecutive spans (consistent with searchTextInPDF)
+        for (let j = i; j < Math.min(i + 15, allSpans.length); j++) {
           const span = allSpans[j];
           const spanText = span.textContent.trim();
 
           if (spanText.length > 0) {
-            // Track the first non-empty span we encounter
-            if (firstNonEmptyIndex === -1) {
-              firstNonEmptyIndex = j;
-            }
-
             if (combinedText.length > 0) combinedText += ' ';
             combinedText += spanText;
-            nonEmptyCount++;
+            consecutiveSpans.push(span);
 
             // Check if we've found the end boundary
             const normalizedCombined = normalizeText(combinedText);
             if (normalizedCombined.includes(normalizedEndSearch)) {
-              console.log(`→ Found end boundary at span index ${firstNonEmptyIndex} (matched across ${nonEmptyCount} non-empty spans)`);
-              return firstNonEmptyIndex; // Return where actual text begins, not where we started searching
+              console.log(`→ Found end boundary at span index ${i} (matched across ${consecutiveSpans.length} spans)`);
+              return i; // Return where the search started (first span in range)
             }
-
-            // Stop if combined text is much longer than search phrase
-            if (combinedText.length > normalizedEndSearch.length * 4) break;
           }
+
+          // Stop if combined text is much longer than search phrase
+          if (combinedText.length > normalizedEndSearch.length * 4) break;
         }
       }
 
@@ -993,28 +987,22 @@
 
         for (let i = startIndex + 1; i < allSpans.length; i++) {
           let combinedText = '';
-          let nonEmptyCount = 0;
-          let firstNonEmptyIndex = -1;
+          let consecutiveSpans = [];
 
-          // Check up to 8 NON-EMPTY spans (skips blank lines)
-          for (let j = i; j < allSpans.length && nonEmptyCount < 8; j++) {
+          // Check up to 8 consecutive spans (consistent with searchTextInPDF)
+          for (let j = i; j < Math.min(i + 8, allSpans.length); j++) {
             const span = allSpans[j];
             const spanText = span.textContent.trim();
 
             if (spanText.length > 0) {
-              // Track the first non-empty span we encounter
-              if (firstNonEmptyIndex === -1) {
-                firstNonEmptyIndex = j;
-              }
-
               if (combinedText.length > 0) combinedText += ' ';
               combinedText += spanText;
-              nonEmptyCount++;
+              consecutiveSpans.push(span);
 
               const normalizedCombined = normalizeText(combinedText);
               if (normalizedCombined.includes(firstFourWords)) {
-                console.log(`→ Found end boundary using first 4 words at span index ${firstNonEmptyIndex}`);
-                return firstNonEmptyIndex;
+                console.log(`→ Found end boundary using first 4 words at span index ${i}`);
+                return i; // Return where the search started
               }
             }
           }
