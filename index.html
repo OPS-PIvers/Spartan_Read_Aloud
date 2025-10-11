@@ -635,13 +635,14 @@
       document.getElementById('play-pause-btn').textContent = '⏸';
       updateToolbarDisplay();
 
-      // Use searchWords if available, otherwise use full text
-      const searchPhrase = chunk.searchWords || chunk.text;
+      // Try full text first for complete highlighting, with searchWords as fallback
+      const primarySearch = chunk.text;  // Full chunk text
+      const fallbackSearch = chunk.searchWords;  // First 8 words (proven to work)
       console.log('Audio title displayed:', getCleanedChunkText(chunk.text));
-      console.log('Search phrase:', searchPhrase);
-      console.log('Full chunk text:', chunk.text);
+      console.log('Primary search (full text):', primarySearch);
+      console.log('Fallback search (searchWords):', fallbackSearch);
 
-      highlightChunkInPDF(searchPhrase, chunk.text);
+      highlightChunkInPDF(primarySearch, fallbackSearch);
 
       google.script.run
         .withSuccessHandler(base64Data => {
@@ -779,7 +780,7 @@
       dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
     }
 
-    function highlightChunkInPDF(searchPhrase, fullText) {
+    function highlightChunkInPDF(primarySearch, fallbackSearch) {
       // Remove previous highlights
       if (currentHighlight) {
         currentHighlight.classList.remove('highlighted-chunk');
@@ -789,11 +790,14 @@
         span.classList.remove('highlighted-text-span');
       });
 
-      // Search for text in PDF text layers - try searchPhrase first, then fullText
-      let found = searchTextInPDF(searchPhrase);
-      if (!found && fullText && fullText !== searchPhrase) {
-        console.log('Primary search failed, trying full text...');
-        found = searchTextInPDF(fullText);
+      // Try full chunk text first for complete highlighting
+      console.log('Attempting primary search with full chunk text...');
+      let found = searchTextInPDF(primarySearch);
+
+      // Fallback to searchWords (first 8 words) if full text doesn't match
+      if (!found && fallbackSearch && fallbackSearch !== primarySearch) {
+        console.log('Primary search failed, trying fallback search (searchWords)...');
+        found = searchTextInPDF(fallbackSearch);
       }
 
       if (found) {
