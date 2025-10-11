@@ -955,6 +955,7 @@
       for (let i = startIndex + 1; i < allSpans.length; i++) {
         let combinedText = '';
         let nonEmptyCount = 0;
+        let firstNonEmptyIndex = -1;
 
         // Try combining up to 15 NON-EMPTY spans (skips blank lines/whitespace)
         for (let j = i; j < allSpans.length && nonEmptyCount < 15; j++) {
@@ -962,6 +963,11 @@
           const spanText = span.textContent.trim();
 
           if (spanText.length > 0) {
+            // Track the first non-empty span we encounter
+            if (firstNonEmptyIndex === -1) {
+              firstNonEmptyIndex = j;
+            }
+
             if (combinedText.length > 0) combinedText += ' ';
             combinedText += spanText;
             nonEmptyCount++;
@@ -969,8 +975,8 @@
             // Check if we've found the end boundary
             const normalizedCombined = normalizeText(combinedText);
             if (normalizedCombined.includes(normalizedEndSearch)) {
-              console.log(`→ Found end boundary at span index ${i} (matched across ${nonEmptyCount} non-empty spans)`);
-              return i; // Return the starting position of the end boundary
+              console.log(`→ Found end boundary at span index ${firstNonEmptyIndex} (matched across ${nonEmptyCount} non-empty spans)`);
+              return firstNonEmptyIndex; // Return where actual text begins, not where we started searching
             }
 
             // Stop if combined text is much longer than search phrase
@@ -988,6 +994,7 @@
         for (let i = startIndex + 1; i < allSpans.length; i++) {
           let combinedText = '';
           let nonEmptyCount = 0;
+          let firstNonEmptyIndex = -1;
 
           // Check up to 8 NON-EMPTY spans (skips blank lines)
           for (let j = i; j < allSpans.length && nonEmptyCount < 8; j++) {
@@ -995,14 +1002,19 @@
             const spanText = span.textContent.trim();
 
             if (spanText.length > 0) {
+              // Track the first non-empty span we encounter
+              if (firstNonEmptyIndex === -1) {
+                firstNonEmptyIndex = j;
+              }
+
               if (combinedText.length > 0) combinedText += ' ';
               combinedText += spanText;
               nonEmptyCount++;
 
               const normalizedCombined = normalizeText(combinedText);
               if (normalizedCombined.includes(firstFourWords)) {
-                console.log(`→ Found end boundary using first 4 words at span index ${i}`);
-                return i;
+                console.log(`→ Found end boundary using first 4 words at span index ${firstNonEmptyIndex}`);
+                return firstNonEmptyIndex;
               }
             }
           }
