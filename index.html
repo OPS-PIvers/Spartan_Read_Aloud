@@ -635,14 +635,16 @@
       document.getElementById('play-pause-btn').textContent = '⏸';
       updateToolbarDisplay();
 
-      // Try full text first for complete highlighting, with searchWords as fallback
-      const primarySearch = chunk.text;  // Full chunk text
-      const fallbackSearch = chunk.searchWords;  // First 8 words (proven to work)
-      console.log('Audio title displayed:', getCleanedChunkText(chunk.text));
-      console.log('Primary search (full text):', primarySearch);
-      console.log('Fallback search (searchWords):', fallbackSearch);
+      // Use searchWords for current chunk and next chunk as boundaries
+      const currentSearchWords = chunk.searchWords;
+      const nextChunk = serverChunks[index + 1];
+      const nextSearchWords = nextChunk ? nextChunk.searchWords : null;
 
-      highlightChunkInPDF(primarySearch, fallbackSearch);
+      console.log('Audio title displayed:', getCleanedChunkText(chunk.text));
+      console.log('Current chunk searchWords:', currentSearchWords);
+      console.log('Next chunk searchWords:', nextSearchWords || '(last chunk)');
+
+      highlightChunkInPDF(currentSearchWords, nextSearchWords);
 
       google.script.run
         .withSuccessHandler(base64Data => {
@@ -780,7 +782,7 @@
       dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
     }
 
-    function highlightChunkInPDF(primarySearch, fallbackSearch) {
+    function highlightChunkInPDF(currentSearchWords, nextSearchWords) {
       // Remove previous highlights
       if (currentHighlight) {
         currentHighlight.classList.remove('highlighted-chunk');
@@ -790,19 +792,13 @@
         span.classList.remove('highlighted-text-span');
       });
 
-      // Try full chunk text first for complete highlighting
-      console.log('Attempting primary search with full chunk text...');
-      let found = searchTextInPDF(primarySearch);
-
-      // Fallback to searchWords (first 8 words) if full text doesn't match
-      if (!found && fallbackSearch && fallbackSearch !== primarySearch) {
-        console.log('Primary search failed, trying fallback search (searchWords)...');
-        found = searchTextInPDF(fallbackSearch);
-      }
+      // Use range-based search with current and next chunk boundaries
+      console.log('Using range-based highlighting with chunk boundaries...');
+      const found = searchTextRangeInPDF(currentSearchWords, nextSearchWords);
 
       if (found) {
         if (found.spans && found.spans.length > 0) {
-          // Highlight specific text spans
+          // Highlight all spans in the range
           found.spans.forEach(span => {
             span.classList.add('highlighted-text-span');
           });
@@ -815,6 +811,8 @@
             top: window.scrollY + rect.top - offset,
             behavior: 'smooth'
           });
+
+          console.log(`✓ Highlighted ${found.spans.length} spans in the chunk range`);
         } else {
           // Fallback to container highlighting
           found.classList.add('highlighted-chunk');
@@ -826,7 +824,11 @@
             top: window.scrollY + rect.top - offset,
             behavior: 'smooth'
           });
+
+          console.log('→ Using page-level highlighting fallback');
         }
+      } else {
+        console.log('✗ Could not find or highlight chunk');
       }
     }
 
@@ -938,6 +940,94 @@
       }
 
       return null;
+    }
+
+    function searchTextRangeInPDF(startSearchText, endSearchText) {
+      /**
+       * Searches for a range of text between two searchWords boundaries.
+       * Returns all spans from the start position to the end position.
+       * If no end boundary, highlights to end of page/document.
+       */
+      if (!startSearchText) return null;
+
+      console.log('=== RANGE SEARCH DEBUG ===');
+      console.log('Start search text:', startSearchText);
+      console.log('End search text:', endSearchText || '(end of page)');
+
+      // Find the starting position using the proven searchWords method
+      const startResult = searchTextInPDF(startSearchText);
+      if (!startResult) {
+        console.log('✗ Could not find start boundary');
+        return null;
+      }
+
+      console.log('✓ Found start boundary');
+
+      // If we only have a container (page-level fallback), return it as-is
+      if (!startResult.spans || startResult.spans.length === 0) {
+        return startResult;
+      }
+
+      // Get the page container and all its text spans
+      const pageContainer = startResult.container;
+      const textLayer = pageContainer.querySelector('.textLayer');
+      if (!textLayer) return startResult;
+
+      const allSpans = Array.from(textLayer.querySelectorAll('span'));
+      const startSpanIndex = allSpans.indexOf(startResult.spans[0]);
+
+      if (startSpanIndex === -1) {
+        console.log('✗ Could not locate start span in page');
+        return startResult;
+      }
+
+      // If no end search text, highlight from start to end of page
+      if (!endSearchText) {
+        console.log('→ Highlighting from start to end of page');
+        return {
+          container: pageContainer,
+          spans: allSpans.slice(startSpanIndex)
+        };
+      }
+
+      // Try to find the end boundary
+      const endResult = searchTextInPDF(endSearchText);
+
+      // If end boundary not found, highlight to end of current page
+      if (!endResult || !endResult.spans || endResult.spans.length === 0) {
+        console.log('→ End boundary not found, highlighting to end of page');
+        return {
+          container: pageContainer,
+          spans: allSpans.slice(startSpanIndex)
+        };
+      }
+
+      // Check if end boundary is on the same page
+      if (endResult.container !== pageContainer) {
+        console.log('→ End boundary on different page, highlighting to end of current page');
+        return {
+          container: pageContainer,
+          spans: allSpans.slice(startSpanIndex)
+        };
+      }
+
+      // Both boundaries on same page - find the precise range
+      const endSpanIndex = allSpans.indexOf(endResult.spans[0]);
+
+      if (endSpanIndex === -1 || endSpanIndex <= startSpanIndex) {
+        console.log('→ Invalid end position, highlighting to end of page');
+        return {
+          container: pageContainer,
+          spans: allSpans.slice(startSpanIndex)
+        };
+      }
+
+      // Return the precise range between boundaries
+      console.log(`✓ Precise range: ${endSpanIndex - startSpanIndex} spans`);
+      return {
+        container: pageContainer,
+        spans: allSpans.slice(startSpanIndex, endSpanIndex)
+      };
     }
 
     function toggleFocusMode() {
