@@ -558,6 +558,13 @@
       return words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
     }
 
+    function normalizeText(text) {
+      // Normalize text to handle OCR vs PDF.js differences
+      return text.trim().toLowerCase()
+        .replace(/\s+/g, ' ')  // Normalize whitespace
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '');  // Remove punctuation
+    }
+
     function initializeAudioToolbar() {
       document.getElementById('audio-toolbar').style.display = 'flex';
       populateTitleDropdown();
@@ -627,13 +634,14 @@
 
       document.getElementById('play-pause-btn').textContent = '⏸';
       updateToolbarDisplay();
-      // Use the exact same text that's displayed in the browser for searching
-      const displayText = getCleanedChunkText(chunk.text);
-      console.log('Audio title displayed:', displayText);
-      console.log('Original chunk text:', chunk.text);
-      console.log('Backend searchWords:', chunk.searchWords);
 
-      highlightChunkInPDF(chunk.searchWords);
+      // Use searchWords if available, otherwise use full text
+      const searchPhrase = chunk.searchWords || chunk.text;
+      console.log('Audio title displayed:', getCleanedChunkText(chunk.text));
+      console.log('Search phrase:', searchPhrase);
+      console.log('Full chunk text:', chunk.text);
+
+      highlightChunkInPDF(searchPhrase, chunk.text);
 
       google.script.run
         .withSuccessHandler(base64Data => {
@@ -771,7 +779,7 @@
       dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
     }
 
-    function highlightChunkInPDF(searchWords) {
+    function highlightChunkInPDF(searchPhrase, fullText) {
       // Remove previous highlights
       if (currentHighlight) {
         currentHighlight.classList.remove('highlighted-chunk');
@@ -781,8 +789,13 @@
         span.classList.remove('highlighted-text-span');
       });
 
-      // Search for text in PDF text layers
-      const found = searchTextInPDF(searchWords);
+      // Search for text in PDF text layers - try searchPhrase first, then fullText
+      let found = searchTextInPDF(searchPhrase);
+      if (!found && fullText && fullText !== searchPhrase) {
+        console.log('Primary search failed, trying full text...');
+        found = searchTextInPDF(fullText);
+      }
+
       if (found) {
         if (found.spans && found.spans.length > 0) {
           // Highlight specific text spans
@@ -814,37 +827,26 @@
     }
 
     function searchTextInPDF(searchText) {
-      // Clean the search text - this is what's displayed in the browser
-      const searchPhrase = searchText.trim().toLowerCase();
-      console.log('=== SEARCH DEBUG ===');
-      console.log('Searching for exact phrase:', searchPhrase);
+      if (!searchText) return null;
 
-      // Debug: Log all text layer content first
+      // Normalize the search text
+      const searchPhrase = normalizeText(searchText);
+      console.log('=== SEARCH DEBUG ===');
+      console.log('Original search text:', searchText);
+      console.log('Normalized search phrase:', searchPhrase);
+
       const textLayers = document.querySelectorAll('.textLayer');
       console.log('Found', textLayers.length, 'text layers');
 
-      textLayers.forEach((layer, layerIndex) => {
-        const spans = layer.querySelectorAll('span');
-        console.log(`Layer ${layerIndex + 1} has ${spans.length} spans`);
-
-        // Log first few spans to see what text actually exists
-        for (let i = 0; i < Math.min(5, spans.length); i++) {
-          const spanText = spans[i].textContent.trim();
-          if (spanText.length > 0) {
-            console.log(`  Span ${i + 1}:`, spanText);
-          }
-        }
-      });
-
-      // Try exact phrase match first
+      // Try exact normalized phrase match first
       for (let layer of textLayers) {
         const spans = layer.querySelectorAll('span');
 
         // Method 1: Check each individual span for the complete phrase
         for (let span of spans) {
-          const spanText = span.textContent.trim().toLowerCase();
-          if (spanText.includes(searchPhrase)) {
-            console.log('✓ FOUND exact phrase in single span:', spanText);
+          const spanText = normalizeText(span.textContent);
+          if (spanText && spanText.includes(searchPhrase)) {
+            console.log('✓ FOUND normalized phrase in single span');
             return {
               container: layer.closest('.page-container'),
               spans: [span]
@@ -857,8 +859,8 @@
           let combinedText = '';
           let consecutiveSpans = [];
 
-          // Try combining up to 10 consecutive spans
-          for (let j = i; j < Math.min(i + 10, spans.length); j++) {
+          // Try combining up to 15 consecutive spans for longer text
+          for (let j = i; j < Math.min(i + 15, spans.length); j++) {
             const span = spans[j];
             const spanText = span.textContent.trim();
 
@@ -867,9 +869,11 @@
               combinedText += spanText;
               consecutiveSpans.push(span);
 
-              // Check if this combination contains our phrase
-              if (combinedText.toLowerCase().includes(searchPhrase)) {
-                console.log('✓ FOUND phrase across', consecutiveSpans.length, 'spans:', combinedText);
+              // Check normalized text
+              const normalizedCombined = normalizeText(combinedText);
+              if (normalizedCombined.includes(searchPhrase)) {
+                console.log('✓ FOUND normalized phrase across', consecutiveSpans.length, 'spans');
+                console.log('  Combined text:', combinedText.substring(0, 100));
                 return {
                   container: layer.closest('.page-container'),
                   spans: consecutiveSpans
@@ -877,16 +881,17 @@
               }
             }
 
-            // Stop if combined text is getting too long
-            if (combinedText.length > searchPhrase.length * 3) break;
+            // Stop if combined text is much longer than search phrase
+            if (combinedText.length > searchPhrase.length * 4) break;
           }
         }
       }
 
-      // Try progressive shorter searches (remove "..." and try again)
-      if (searchPhrase.includes('...')) {
-        const shorterPhrase = searchPhrase.replace(/\.{3}.*$/, '').trim();
-        console.log('Trying shorter phrase without "...":', shorterPhrase);
+      // Fallback: Try first 4 normalized words only
+      const words = searchPhrase.split(/\s+/).filter(w => w.length > 0);
+      if (words.length > 4) {
+        const firstFourWords = words.slice(0, 4).join(' ');
+        console.log('Trying first 4 normalized words:', firstFourWords);
 
         for (let layer of textLayers) {
           const spans = layer.querySelectorAll('span');
@@ -904,8 +909,9 @@
                 combinedText += spanText;
                 consecutiveSpans.push(span);
 
-                if (combinedText.toLowerCase().includes(shorterPhrase)) {
-                  console.log('✓ FOUND shorter phrase:', combinedText);
+                const normalizedCombined = normalizeText(combinedText);
+                if (normalizedCombined.includes(firstFourWords)) {
+                  console.log('✓ FOUND first 4 normalized words in:', combinedText.substring(0, 100));
                   return {
                     container: layer.closest('.page-container'),
                     spans: consecutiveSpans
@@ -917,41 +923,9 @@
         }
       }
 
-      // Try just the first 4 words
-      const firstFourWords = searchPhrase.split(' ').slice(0, 4).join(' ');
-      console.log('Trying first 4 words:', firstFourWords);
-
-      for (let layer of textLayers) {
-        const spans = layer.querySelectorAll('span');
-
-        for (let i = 0; i < spans.length; i++) {
-          let combinedText = '';
-          let consecutiveSpans = [];
-
-          for (let j = i; j < Math.min(i + 6, spans.length); j++) {
-            const span = spans[j];
-            const spanText = span.textContent.trim();
-
-            if (spanText.length > 0) {
-              if (combinedText.length > 0) combinedText += ' ';
-              combinedText += spanText;
-              consecutiveSpans.push(span);
-
-              if (combinedText.toLowerCase().includes(firstFourWords)) {
-                console.log('✓ FOUND first 4 words:', combinedText);
-                return {
-                  container: layer.closest('.page-container'),
-                  spans: consecutiveSpans
-                };
-              }
-            }
-          }
-        }
-      }
-
       console.log('✗ No text matches found, falling back to page-level highlighting');
 
-      // Final fallback to page container
+      // Final fallback to page container based on chunk index
       const pageContainers = document.querySelectorAll('.page-container');
       if (pageContainers.length > 0) {
         const fallbackPageIndex = Math.min(currentChunkIndex, pageContainers.length - 1);

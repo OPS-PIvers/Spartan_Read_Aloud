@@ -220,8 +220,13 @@ function step2_GenerateMissingAudioAndFinalize() {
         for(let j = 0; j < totalChunks; j++) {
            const chunkText = textChunks[j];
            const audioFile = audioFileObjects[j];
+           // Generate searchWords: first 8 words to match frontend display
+           const words = chunkText.trim().split(/\s+/);
+           const searchWords = words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
+
            audioDataForSheet.push({
              text: chunkText,
+             searchWords: searchWords,
              audioUrl: `https://drive.google.com/uc?id=${audioFile.getId()}&export=media`,
              audioFilename: audioFile.getName()
            });
