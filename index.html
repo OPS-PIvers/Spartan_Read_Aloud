@@ -942,6 +942,42 @@
       return null;
     }
 
+    function getAllSpansFromPageRange(startPageContainer, maxPages = 3) {
+      /**
+       * Collects spans from multiple consecutive pages starting from startPageContainer.
+       * Returns an object with all spans and metadata for multi-page highlighting.
+       */
+      const pageContainers = Array.from(document.querySelectorAll('.page-container'));
+      const startPageIndex = pageContainers.indexOf(startPageContainer);
+
+      if (startPageIndex === -1) {
+        console.warn('Start page container not found in document');
+        return { allSpans: [], spanToPage: new Map(), pages: [], startPageIndex: -1 };
+      }
+
+      const result = {
+        allSpans: [],
+        spanToPage: new Map(), // Track which page each span belongs to
+        pages: [],
+        startPageIndex: startPageIndex
+      };
+
+      // Collect spans from current page and up to maxPages-1 subsequent pages
+      for (let i = 0; i < maxPages && (startPageIndex + i) < pageContainers.length; i++) {
+        const pageContainer = pageContainers[startPageIndex + i];
+        const textLayer = pageContainer.querySelector('.textLayer');
+        if (textLayer) {
+          const spans = Array.from(textLayer.querySelectorAll('span'));
+          spans.forEach(span => result.spanToPage.set(span, pageContainer));
+          result.allSpans.push(...spans);
+          result.pages.push(pageContainer);
+        }
+      }
+
+      console.log(`→ Collected ${result.allSpans.length} spans from ${result.pages.length} pages`);
+      return result;
+    }
+
     function findEndBoundaryAfterStart(allSpans, startIndex, endSearchText) {
       /**
        * Searches for endSearchText only in spans AFTER startIndex.
@@ -975,7 +1011,8 @@
           }
 
           // Stop if combined text is much longer than search phrase
-          if (combinedText.length > normalizedEndSearch.length * 4) break;
+          // Increased multiplier to handle large gaps (blank paragraphs, images)
+          if (combinedText.length > normalizedEndSearch.length * 10) break;
         }
       }
 
@@ -1038,18 +1075,24 @@
         return startResult;
       }
 
-      // Get the page container and all its text spans
+      // Get spans from current page AND subsequent pages (multi-page support)
       const pageContainer = startResult.container;
-      const textLayer = pageContainer.querySelector('.textLayer');
-      if (!textLayer) return startResult;
+      const multiPageData = getAllSpansFromPageRange(pageContainer, 3);
 
-      const allSpans = Array.from(textLayer.querySelectorAll('span'));
+      if (multiPageData.allSpans.length === 0) {
+        console.log('✗ No spans found in page range');
+        return startResult;
+      }
+
+      const allSpans = multiPageData.allSpans;
       const startSpanIndex = allSpans.indexOf(startResult.spans[0]);
 
       if (startSpanIndex === -1) {
-        console.log('✗ Could not locate start span in page');
+        console.log('✗ Could not locate start span in multi-page range');
         return startResult;
       }
+
+      console.log(`→ Searching across ${multiPageData.pages.length} pages for end boundary`);
 
       // If no end search text, highlight from start to end of page
       if (!endSearchText) {
