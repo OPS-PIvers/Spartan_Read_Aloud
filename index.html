@@ -327,8 +327,8 @@
     
     .page-container {
       position: relative;
-      margin: 0 auto 10px auto;
-      display: inline-block;
+      margin: 0 auto 0 auto;
+      display: block;
     }
 
     .page-container canvas {
@@ -492,7 +492,7 @@
 
     function processPage(pdfDocument, pageNum) {
       return pdfDocument.getPage(pageNum).then(page => {
-        const viewport = page.getViewport({ scale: 1.5 });
+        const viewport = page.getViewport({ scale: 1.0 });
 
         // Create page container
         const pageContainer = document.createElement('div');
