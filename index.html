@@ -75,119 +75,373 @@
       cursor: not-allowed;
     }
 
-    /* Audio Toolbar Styles */
+    /* ========================================
+       AUDIO TOOLBAR - REDESIGNED
+       ======================================== */
+
     #audio-toolbar {
       position: fixed;
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-      padding: 15px;
-      display: flex;
-      align-items: center;
-      gap: 20px;
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(20px);
+      border-radius: 16px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1);
       z-index: 1000;
-      min-width: 800px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      max-width: 600px;
+      width: 90vw;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
-    .toolbar-section {
+    #audio-toolbar.minimized {
+      opacity: 0.85;
+    }
+
+    #audio-toolbar:hover {
+      opacity: 1;
+    }
+
+    /* Tier 1: Core Controls */
+    .toolbar-core {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 20px 12px 20px;
+    }
+
+    .control-btn {
+      background: transparent;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 8px;
-    }
-
-    .toolbar-section button {
-      width: auto;
-      min-width: 36px;
-      height: 36px;
-      padding: 8px 12px;
-      font-size: 14px;
-      border-radius: 6px;
+      justify-content: center;
       transition: all 0.2s ease;
+      color: #1a73e8;
+      padding: 0;
+      width: 48px;
+      height: 48px;
     }
 
-    .toolbar-section button:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+    .control-btn:hover:not(:disabled) {
+      background: rgba(26, 115, 232, 0.08);
+      transform: scale(1.05);
     }
 
-    .toolbar-section button:disabled {
-      opacity: 0.5;
+    .control-btn:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    .control-btn:disabled {
+      opacity: 0.3;
       cursor: not-allowed;
-      transform: none;
     }
 
-    .timeline-section {
-      flex-grow: 1;
-      min-width: 200px;
+    .control-play {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+      color: white;
+      box-shadow: 0 4px 16px rgba(26, 115, 232, 0.3);
     }
 
-    #timeline {
-      flex-grow: 1;
-      margin: 0 10px;
+    .control-play:hover:not(:disabled) {
+      background: linear-gradient(135deg, #1557b0 0%, #0d47a1 100%);
+      transform: scale(1.08);
+      box-shadow: 0 6px 20px rgba(26, 115, 232, 0.4);
+    }
+
+    .control-prev,
+    .control-next {
+      width: 44px;
+      height: 44px;
+    }
+
+    /* Progress Section */
+    .toolbar-progress {
+      padding: 0 20px 16px 20px;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+
+    .time-display {
+      font-family: 'Monaco', 'Consolas', monospace;
+      color: #666;
+      font-size: 11px;
+      min-width: 36px;
+    }
+
+    .chunk-counter {
+      color: #1a73e8;
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    .progress-bar-container {
+      position: relative;
+      height: 28px;
+      display: flex;
+      align-items: center;
+    }
+
+    .progress-bar-bg {
+      position: absolute;
+      width: 100%;
       height: 6px;
+      background: #e8eaed;
       border-radius: 3px;
-      background: #e0e0e0;
-      outline: none;
-      cursor: pointer;
+      overflow: hidden;
     }
 
-    #timeline::-webkit-slider-thumb {
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #1a73e8 0%, #4285f4 100%);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    .chunk-markers {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .chunk-marker {
+      position: absolute;
+      top: 0;
+      width: 2px;
+      height: 6px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .timeline-slider {
+      position: relative;
+      width: 100%;
+      height: 28px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+      z-index: 2;
+      margin: 0;
+    }
+
+    .timeline-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
       appearance: none;
       width: 16px;
       height: 16px;
       border-radius: 50%;
       background: #1a73e8;
       cursor: pointer;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.4);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    #timeline::-moz-range-thumb {
+    .timeline-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 3px 12px rgba(26, 115, 232, 0.5);
+    }
+
+    .timeline-slider::-moz-range-thumb {
       width: 16px;
       height: 16px;
       border-radius: 50%;
       background: #1a73e8;
       cursor: pointer;
       border: none;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.4);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .title-section {
-      position: relative;
-      min-width: 200px;
+    .timeline-slider::-moz-range-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 3px 12px rgba(26, 115, 232, 0.5);
     }
 
-    #current-title-btn {
-      max-width: 200px;
+    /* Tier 2: Secondary Controls */
+    .toolbar-secondary {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease, opacity 0.3s ease;
+      opacity: 0;
+      border-top: 1px solid transparent;
+    }
+
+    .toolbar-secondary.expanded {
+      max-height: 400px;
+      opacity: 1;
+      border-top-color: #e8eaed;
+    }
+
+    .secondary-panel {
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #5f6368;
+      letter-spacing: 0.5px;
+      margin: 0;
+    }
+
+    /* Speed Control */
+    .speed-controls {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .speed-preset {
+      background: #f1f3f4;
+      border: 1px solid #e8eaed;
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #5f6368;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: auto;
+      min-width: 52px;
+      height: auto;
+    }
+
+    .speed-preset:hover {
+      background: #e8eaed;
+      border-color: #dadce0;
+      transform: translateY(-1px);
+    }
+
+    .speed-preset.active {
+      background: #1a73e8;
+      color: white;
+      border-color: #1a73e8;
+    }
+
+    .speed-slider-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .speed-label-min,
+    .speed-label-max {
+      font-size: 11px;
+      color: #80868b;
+      min-width: 32px;
+      text-align: center;
+    }
+
+    #speed-slider {
+      flex: 1;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #e8eaed;
+      border-radius: 2px;
+      outline: none;
+    }
+
+    #speed-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #1a73e8;
+      cursor: pointer;
+    }
+
+    #speed-slider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #1a73e8;
+      cursor: pointer;
+      border: none;
+    }
+
+    /* Chunk Navigation */
+    .chunk-list-btn {
+      width: 100%;
+      background: #f1f3f4;
+      border: 1px solid #e8eaed;
+      padding: 10px 12px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: #202124;
+      font-size: 14px;
+      height: auto;
+    }
+
+    .chunk-list-btn:hover {
+      background: #e8eaed;
+      border-color: #dadce0;
+    }
+
+    #current-title-text {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      text-align: left;
+      flex: 1;
     }
 
-    #title-dropdown {
+    .chunk-dropdown {
       position: absolute;
-      bottom: 100%;
-      left: 0;
-      right: 0;
+      bottom: calc(100% + 8px);
+      left: 20px;
+      right: 20px;
       background: white;
-      border-radius: 8px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-      max-height: 300px;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      max-height: 320px;
       overflow-y: auto;
-      margin-bottom: 5px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid #e8eaed;
+      z-index: 100;
     }
 
     .dropdown-item {
-      padding: 12px;
+      padding: 12px 16px;
       cursor: pointer;
-      border-bottom: 1px solid #f0f0f0;
-      font-size: 14px;
-      transition: background-color 0.2s ease;
+      border-bottom: 1px solid #f1f3f4;
+      font-size: 13px;
+      transition: background-color 0.15s ease;
+      color: #202124;
     }
 
     .dropdown-item:hover {
@@ -202,6 +456,111 @@
 
     .dropdown-item:last-child {
       border-bottom: none;
+    }
+
+    /* Feature Toggles */
+    .feature-toggles {
+      flex-direction: row;
+      gap: 8px;
+    }
+
+    .toggle-btn {
+      flex: 1;
+      background: #f1f3f4;
+      border: 1px solid #e8eaed;
+      padding: 10px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: #5f6368;
+      font-size: 13px;
+      font-weight: 500;
+      width: auto;
+      height: auto;
+    }
+
+    .toggle-btn:hover {
+      background: #e8eaed;
+      border-color: #dadce0;
+    }
+
+    .toggle-btn.active {
+      background: #e8f0fe;
+      border-color: #1a73e8;
+      color: #1a73e8;
+    }
+
+    .toggle-btn svg {
+      flex-shrink: 0;
+    }
+
+    /* Toggle Secondary Button */
+    .toggle-secondary-btn {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-top: 1px solid #e8eaed;
+      padding: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #5f6368;
+      transition: all 0.2s ease;
+      height: auto;
+    }
+
+    .toggle-secondary-btn:hover {
+      background: #f8f9fa;
+      color: #1a73e8;
+    }
+
+    /* Keyboard Hints */
+    .keyboard-hints {
+      position: absolute;
+      bottom: calc(100% + 12px);
+      right: 0;
+      background: rgba(32, 33, 36, 0.95);
+      backdrop-filter: blur(10px);
+      color: white;
+      border-radius: 12px;
+      padding: 16px;
+      min-width: 280px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      z-index: 1001;
+    }
+
+    .hints-header {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 12px;
+      color: #e8eaed;
+    }
+
+    .hints-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hints-list > div {
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .keyboard-hints kbd {
+      background: rgba(255, 255, 255, 0.15);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     /* Focus Mode Styles */
@@ -230,76 +589,121 @@
       box-shadow: 0 0 20px rgba(255, 193, 7, 0.4);
     }
 
-    /* Button Active States */
-    .toolbar-section button.active {
-      background-color: #1a73e8;
-      color: white;
-    }
-
-    /* Time Display */
-    #current-time, #total-time {
-      font-family: 'Monaco', 'Consolas', monospace;
-      font-size: 12px;
-      color: #666;
-      min-width: 35px;
-    }
-
-    /* Speed Display */
-    #speed-display {
-      font-weight: 500;
-      color: #1a73e8;
-      min-width: 40px;
-      text-align: center;
-    }
-
     /* Mobile Responsive */
     @media (max-width: 768px) {
       #audio-toolbar {
-        min-width: 95vw;
-        padding: 12px;
-        gap: 12px;
-        flex-wrap: wrap;
+        width: 95vw;
+        max-width: 95vw;
         bottom: 10px;
       }
 
-      .toolbar-section {
-        gap: 6px;
+      .toolbar-core {
+        padding: 16px 12px 10px 12px;
+        gap: 10px;
       }
 
-      .timeline-section {
-        order: -1;
-        width: 100%;
-        margin-bottom: 8px;
+      .control-btn {
+        width: 56px;
+        height: 56px;
       }
 
-      .title-section {
-        min-width: 150px;
-        flex-grow: 1;
+      .control-play {
+        width: 72px;
+        height: 72px;
       }
 
-      .toolbar-section button {
-        min-width: 44px;
-        height: 44px;
-        font-size: 16px;
+      .control-prev,
+      .control-next {
+        width: 52px;
+        height: 52px;
       }
 
-      #current-title-btn {
+      .toolbar-progress {
+        padding: 0 12px 12px 12px;
+      }
+
+      .secondary-panel {
+        padding: 12px;
+      }
+
+      .speed-controls {
+        gap: 4px;
+      }
+
+      .speed-preset {
+        min-width: 48px;
+        padding: 8px 10px;
         font-size: 12px;
+      }
+
+      .feature-toggles {
+        flex-direction: column;
+      }
+
+      .toggle-btn {
+        padding: 12px;
+      }
+
+      .keyboard-hints {
+        right: 10px;
+        left: 10px;
+        min-width: auto;
       }
     }
 
     @media (max-width: 480px) {
       #audio-toolbar {
-        min-width: 98vw;
-        padding: 8px;
+        width: 98vw;
+        max-width: 98vw;
+        border-radius: 12px;
+      }
+
+      .toolbar-core {
+        padding: 14px 10px 8px 10px;
         gap: 8px;
       }
 
-      .toolbar-section button {
-        min-width: 40px;
-        height: 40px;
-        padding: 6px;
-        font-size: 14px;
+      .control-btn {
+        width: 48px;
+        height: 48px;
+      }
+
+      .control-play {
+        width: 64px;
+        height: 64px;
+      }
+
+      .control-prev,
+      .control-next {
+        width: 44px;
+        height: 44px;
+      }
+
+      .toolbar-progress {
+        padding: 0 10px 10px 10px;
+      }
+
+      .progress-header {
+        font-size: 10px;
+      }
+
+      .time-display {
+        font-size: 10px;
+        min-width: 32px;
+      }
+
+      .chunk-counter {
+        font-size: 11px;
+      }
+
+      .secondary-panel {
+        padding: 10px;
+        gap: 12px;
+      }
+
+      .speed-preset {
+        min-width: 44px;
+        padding: 6px 8px;
       }
     }
 
@@ -392,35 +796,141 @@
   </div>
 
   <div id="audio-toolbar" style="display: none;">
-    <div class="toolbar-section">
-      <button id="prev-btn" title="Previous chunk">⏮</button>
-      <button id="play-pause-btn" title="Play/Pause">▶</button>
-      <button id="next-btn" title="Next chunk">⏭</button>
+    <!-- Tier 1: Core Controls (Always Visible) -->
+    <div class="toolbar-core">
+      <button id="prev-btn" class="control-btn control-prev" title="Previous chunk (Ctrl+←)" aria-label="Previous chunk">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 20L9 12l10-8v16z"/>
+          <path d="M5 19V5"/>
+        </svg>
+      </button>
+
+      <button id="play-pause-btn" class="control-btn control-play" title="Play/Pause (Space)" aria-label="Play or pause">
+        <svg class="play-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+        <svg class="pause-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+          <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+        </svg>
+      </button>
+
+      <button id="next-btn" class="control-btn control-next" title="Next chunk (Ctrl+→)" aria-label="Next chunk">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 4l10 8-10 8V4z"/>
+          <path d="M19 5v14"/>
+        </svg>
+      </button>
     </div>
 
-    <div class="toolbar-section timeline-section">
-      <span id="current-time">0:00</span>
-      <input type="range" id="timeline" min="0" max="100" value="0" title="Audio timeline">
-      <span id="total-time">0:00</span>
-    </div>
-
-    <div class="toolbar-section">
-      <label>Speed:</label>
-      <button id="speed-down" title="Decrease speed">-</button>
-      <span id="speed-display">1.0x</span>
-      <button id="speed-up" title="Increase speed">+</button>
-    </div>
-
-    <div class="toolbar-section title-section">
-      <button id="current-title-btn" title="Current chunk - click to see all">Loading...</button>
-      <div id="title-dropdown" style="display: none;">
-        <!-- Will be populated with all chunks -->
+    <!-- Progress Section -->
+    <div class="toolbar-progress">
+      <div class="progress-header">
+        <span id="current-time" class="time-display">0:00</span>
+        <span id="chunk-counter" class="chunk-counter">Chunk 1 of 1</span>
+        <span id="total-time" class="time-display">0:00</span>
+      </div>
+      <div class="progress-bar-container">
+        <div id="progress-bar-bg" class="progress-bar-bg">
+          <div id="progress-bar-fill" class="progress-bar-fill"></div>
+          <div id="chunk-markers" class="chunk-markers">
+            <!-- Chunk markers will be added dynamically -->
+          </div>
+        </div>
+        <input type="range" id="timeline" class="timeline-slider" min="0" max="100" value="0"
+               title="Audio timeline" aria-label="Audio timeline slider">
       </div>
     </div>
 
-    <div class="toolbar-section">
-      <button id="focus-mode-btn" title="Focus mode">🎯</button>
-      <button id="loop-btn" title="Loop current chunk">🔁</button>
+    <!-- Tier 2: Secondary Controls (Collapsible) -->
+    <div class="toolbar-secondary" id="toolbar-secondary">
+      <div class="secondary-panel">
+
+        <!-- Speed Control -->
+        <div class="control-group speed-control">
+          <label class="control-label">Playback Speed</label>
+          <div class="speed-controls">
+            <button class="speed-preset" data-speed="0.5">0.5×</button>
+            <button class="speed-preset" data-speed="0.75">0.75×</button>
+            <button class="speed-preset active" data-speed="1.0">1.0×</button>
+            <button class="speed-preset" data-speed="1.25">1.25×</button>
+            <button class="speed-preset" data-speed="1.5">1.5×</button>
+            <button class="speed-preset" data-speed="2.0">2.0×</button>
+          </div>
+          <div class="speed-slider-container">
+            <span class="speed-label-min">0.5×</span>
+            <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.25" value="1.0"
+                   aria-label="Fine-tune playback speed">
+            <span class="speed-label-max">2.0×</span>
+          </div>
+        </div>
+
+        <!-- Chunk Navigation -->
+        <div class="control-group chunk-nav">
+          <label class="control-label">Audio Chunks</label>
+          <button id="current-title-btn" class="chunk-list-btn"
+                  title="Click to see all chunks" aria-label="Show chunk list">
+            <span id="current-title-text">Loading...</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+          <div id="title-dropdown" class="chunk-dropdown" style="display: none;">
+            <!-- Will be populated with all chunks -->
+          </div>
+        </div>
+
+        <!-- Feature Toggles -->
+        <div class="control-group feature-toggles">
+          <button id="focus-mode-btn" class="toggle-btn"
+                  title="Focus mode - dim surrounding content (F)"
+                  aria-label="Toggle focus mode" aria-pressed="false">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="3" fill="currentColor"/>
+            </svg>
+            <span>Focus Mode</span>
+          </button>
+
+          <button id="loop-btn" class="toggle-btn"
+                  title="Loop current chunk (L)"
+                  aria-label="Toggle loop mode" aria-pressed="false">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 1l4 4-4 4"/>
+              <path d="M3 11V9a4 4 0 014-4h14"/>
+              <path d="M7 23l-4-4 4-4"/>
+              <path d="M21 13v2a4 4 0 01-4 4H3"/>
+            </svg>
+            <span>Loop</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Toggle Secondary Panel Button -->
+    <button id="toggle-secondary-btn" class="toggle-secondary-btn"
+            title="Show more controls" aria-label="Toggle additional controls" aria-expanded="false">
+      <svg class="expand-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+      <svg class="collapse-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+        <polyline points="18 15 12 9 6 15"></polyline>
+      </svg>
+    </button>
+
+    <!-- Keyboard Shortcuts Hint -->
+    <div id="keyboard-hints" class="keyboard-hints" style="display: none;">
+      <div class="hints-header">Keyboard Shortcuts</div>
+      <div class="hints-list">
+        <div><kbd>Space</kbd> Play/Pause</div>
+        <div><kbd>Ctrl</kbd>+<kbd>←</kbd> Previous Chunk</div>
+        <div><kbd>Ctrl</kbd>+<kbd>→</kbd> Next Chunk</div>
+        <div><kbd>Ctrl</kbd>+<kbd>↑</kbd> Speed Up</div>
+        <div><kbd>Ctrl</kbd>+<kbd>↓</kbd> Slow Down</div>
+        <div><kbd>F</kbd> Focus Mode</div>
+        <div><kbd>L</kbd> Loop Chunk</div>
+        <div><kbd>?</kbd> Show/Hide Shortcuts</div>
+      </div>
     </div>
   </div>
 
@@ -568,12 +1078,33 @@
     function initializeAudioToolbar() {
       document.getElementById('audio-toolbar').style.display = 'flex';
       populateTitleDropdown();
+      createChunkMarkers();
       updateToolbarDisplay();
 
       // Initialize with first chunk ready to play
       if (serverChunks.length > 0) {
         currentChunkIndex = 0;
         updateToolbarDisplay();
+      }
+    }
+
+    function createChunkMarkers() {
+      const markersContainer = document.getElementById('chunk-markers');
+      if (!markersContainer || serverChunks.length <= 1) return;
+
+      markersContainer.innerHTML = ''; // Clear existing markers
+
+      // Calculate total duration (estimate based on first chunk if needed)
+      // For now, we'll space markers evenly as we don't know exact durations upfront
+      const markerCount = serverChunks.length - 1; // markers between chunks
+
+      for (let i = 1; i < serverChunks.length; i++) {
+        const marker = document.createElement('div');
+        marker.className = 'chunk-marker';
+        // Position evenly across the progress bar
+        marker.style.left = `${(i / serverChunks.length) * 100}%`;
+        marker.title = `Chunk ${i + 1}: ${getCleanedChunkText(serverChunks[i].text)}`;
+        markersContainer.appendChild(marker);
       }
     }
 
@@ -595,9 +1126,29 @@
 
       const currentChunk = serverChunks[currentChunkIndex];
       if (currentChunk) {
-        document.getElementById('current-title-btn').textContent = getCleanedChunkText(currentChunk.text);
+        const titleText = document.getElementById('current-title-text');
+        if (titleText) {
+          titleText.textContent = getCleanedChunkText(currentChunk.text);
+        }
       }
-      document.getElementById('speed-display').textContent = currentPlaybackRate.toFixed(1) + 'x';
+
+      // Update chunk counter
+      const chunkCounter = document.getElementById('chunk-counter');
+      if (chunkCounter) {
+        chunkCounter.textContent = `Chunk ${currentChunkIndex + 1} of ${serverChunks.length}`;
+      }
+
+      // Update speed preset buttons
+      document.querySelectorAll('.speed-preset').forEach(btn => {
+        const speed = parseFloat(btn.getAttribute('data-speed'));
+        btn.classList.toggle('active', Math.abs(speed - currentPlaybackRate) < 0.01);
+      });
+
+      // Update speed slider
+      const speedSlider = document.getElementById('speed-slider');
+      if (speedSlider) {
+        speedSlider.value = currentPlaybackRate;
+      }
 
       // Update dropdown current item
       document.querySelectorAll('.dropdown-item').forEach((item, index) => {
@@ -613,10 +1164,10 @@
       if (currentlyPlayingChunk === chunk) {
         if (globalAudioPlayer.paused) {
           globalAudioPlayer.play();
-          document.getElementById('play-pause-btn').textContent = '⏸';
+          updatePlayPauseButton(true);
         } else {
           globalAudioPlayer.pause();
-          document.getElementById('play-pause-btn').textContent = '▶';
+          updatePlayPauseButton(false);
         }
         return;
       }
@@ -632,7 +1183,7 @@
       }
       const fileId = fileIdMatch[1];
 
-      document.getElementById('play-pause-btn').textContent = '⏸';
+      updatePlayPauseButton(true);
       updateToolbarDisplay();
 
       // Use searchWords for current chunk and next chunk as boundaries
@@ -651,7 +1202,7 @@
           if (!base64Data) {
             onPdfLoadError('Failed to load audio data from server.');
             currentlyPlayingChunk = null;
-            document.getElementById('play-pause-btn').textContent = '▶';
+            updatePlayPauseButton(false);
             return;
           }
           globalAudioPlayer.src = `data:audio/wav;base64,${base64Data}`;
@@ -661,23 +1212,69 @@
         .withFailureHandler(err => {
           onPdfLoadError(err);
           currentlyPlayingChunk = null;
-          document.getElementById('play-pause-btn').textContent = '▶';
+          updatePlayPauseButton(false);
         })
         .getAudioDataAsBase64(fileId);
     }
+
+    function updatePlayPauseButton(isPlaying) {
+      const btn = document.getElementById('play-pause-btn');
+      const playIcon = btn.querySelector('.play-icon');
+      const pauseIcon = btn.querySelector('.pause-icon');
+
+      if (isPlaying) {
+        playIcon.style.display = 'none';
+        pauseIcon.style.display = 'block';
+      } else {
+        playIcon.style.display = 'block';
+        pauseIcon.style.display = 'none';
+      }
+    }
+
+    function updateProgressBar() {
+      if (globalAudioPlayer.duration) {
+        const progress = (globalAudioPlayer.currentTime / globalAudioPlayer.duration) * 100;
+        const progressFill = document.getElementById('progress-bar-fill');
+        if (progressFill) {
+          progressFill.style.width = progress + '%';
+        }
+      }
+    }
     
     function setupEventListeners() {
+      // Core controls
       document.getElementById('prev-btn').onclick = () => navigateChunk(-1);
       document.getElementById('next-btn').onclick = () => navigateChunk(1);
       document.getElementById('play-pause-btn').onclick = togglePlayPause;
-      document.getElementById('speed-up').onclick = () => adjustSpeed(0.25);
-      document.getElementById('speed-down').onclick = () => adjustSpeed(-0.25);
-      document.getElementById('current-title-btn').onclick = toggleTitleDropdown;
-      document.getElementById('focus-mode-btn').onclick = toggleFocusMode;
-      document.getElementById('loop-btn').onclick = toggleLoop;
 
       // Timeline scrubbing
       document.getElementById('timeline').oninput = scrubTimeline;
+
+      // Speed preset buttons
+      document.querySelectorAll('.speed-preset').forEach(btn => {
+        btn.onclick = () => {
+          const speed = parseFloat(btn.getAttribute('data-speed'));
+          setPlaybackSpeed(speed);
+        };
+      });
+
+      // Speed slider
+      const speedSlider = document.getElementById('speed-slider');
+      if (speedSlider) {
+        speedSlider.oninput = (e) => {
+          setPlaybackSpeed(parseFloat(e.target.value));
+        };
+      }
+
+      // Chunk list button
+      document.getElementById('current-title-btn').onclick = toggleTitleDropdown;
+
+      // Feature toggles
+      document.getElementById('focus-mode-btn').onclick = toggleFocusMode;
+      document.getElementById('loop-btn').onclick = toggleLoop;
+
+      // Toggle secondary panel
+      document.getElementById('toggle-secondary-btn').onclick = toggleSecondaryPanel;
 
       // Auto-pause on scroll
       window.addEventListener('scroll', handleScroll);
@@ -686,16 +1283,82 @@
       document.addEventListener('keydown', handleKeyboard);
 
       // Audio event listeners
-      globalAudioPlayer.ontimeupdate = updateTimeline;
+      globalAudioPlayer.ontimeupdate = () => {
+        updateTimeline();
+        updateProgressBar();
+      };
       globalAudioPlayer.onended = handleAudioEnd;
       globalAudioPlayer.onloadedmetadata = updateDuration;
 
       // Close dropdown when clicking outside
       document.addEventListener('click', (e) => {
-        if (!e.target.closest('.title-section')) {
+        if (!e.target.closest('.chunk-nav')) {
           document.getElementById('title-dropdown').style.display = 'none';
         }
       });
+
+      // Auto-minimize behavior
+      setupAutoMinimize();
+    }
+
+    let autoMinimizeTimeout;
+    let isSecondaryPanelExpanded = false;
+
+    function setupAutoMinimize() {
+      const toolbar = document.getElementById('audio-toolbar');
+      let inactivityTimer;
+
+      const resetMinimizeTimer = () => {
+        clearTimeout(inactivityTimer);
+        toolbar.classList.remove('minimized');
+
+        // Only auto-minimize if secondary panel is closed
+        if (!isSecondaryPanelExpanded) {
+          inactivityTimer = setTimeout(() => {
+            if (globalAudioPlayer.paused) {
+              toolbar.classList.add('minimized');
+            }
+          }, 3000);
+        }
+      };
+
+      // Reset timer on user interaction
+      toolbar.addEventListener('mouseenter', resetMinimizeTimer);
+      toolbar.addEventListener('mousemove', resetMinimizeTimer);
+      toolbar.addEventListener('click', resetMinimizeTimer);
+      toolbar.addEventListener('touchstart', resetMinimizeTimer);
+
+      // Also reset when audio plays
+      globalAudioPlayer.addEventListener('play', resetMinimizeTimer);
+    }
+
+    function toggleSecondaryPanel() {
+      const panel = document.getElementById('toolbar-secondary');
+      const toggleBtn = document.getElementById('toggle-secondary-btn');
+      const expandIcon = toggleBtn.querySelector('.expand-icon');
+      const collapseIcon = toggleBtn.querySelector('.collapse-icon');
+
+      isSecondaryPanelExpanded = !isSecondaryPanelExpanded;
+
+      if (isSecondaryPanelExpanded) {
+        panel.classList.add('expanded');
+        expandIcon.style.display = 'none';
+        collapseIcon.style.display = 'block';
+        toggleBtn.setAttribute('aria-expanded', 'true');
+        toggleBtn.title = 'Hide additional controls';
+      } else {
+        panel.classList.remove('expanded');
+        expandIcon.style.display = 'block';
+        collapseIcon.style.display = 'none';
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        toggleBtn.title = 'Show more controls';
+      }
+    }
+
+    function setPlaybackSpeed(speed) {
+      currentPlaybackRate = Math.max(0.5, Math.min(2.0, speed));
+      globalAudioPlayer.playbackRate = currentPlaybackRate;
+      updateToolbarDisplay();
     }
 
     function navigateChunk(direction) {
@@ -719,17 +1382,11 @@
         } else {
           globalAudioPlayer.play();
         }
-        document.getElementById('play-pause-btn').textContent = '⏸';
+        updatePlayPauseButton(true);
       } else {
         globalAudioPlayer.pause();
-        document.getElementById('play-pause-btn').textContent = '▶';
+        updatePlayPauseButton(false);
       }
-    }
-
-    function adjustSpeed(delta) {
-      currentPlaybackRate = Math.max(0.25, Math.min(2.0, currentPlaybackRate + delta));
-      globalAudioPlayer.playbackRate = currentPlaybackRate;
-      updateToolbarDisplay();
     }
 
     function scrubTimeline() {
@@ -757,12 +1414,12 @@
     }
 
     function handleAudioEnd() {
-      document.getElementById('play-pause-btn').textContent = '▶';
+      updatePlayPauseButton(false);
 
       if (isLooping) {
         globalAudioPlayer.currentTime = 0;
         globalAudioPlayer.play();
-        document.getElementById('play-pause-btn').textContent = '⏸';
+        updatePlayPauseButton(true);
       } else if (currentChunkIndex < serverChunks.length - 1) {
         // Auto-advance to next chunk
         navigateChunk(1);
@@ -775,6 +1432,7 @@
       isLooping = !isLooping;
       const loopBtn = document.getElementById('loop-btn');
       loopBtn.classList.toggle('active', isLooping);
+      loopBtn.setAttribute('aria-pressed', isLooping.toString());
     }
 
     function toggleTitleDropdown() {
@@ -1129,6 +1787,7 @@
 
       const focusBtn = document.getElementById('focus-mode-btn');
       focusBtn.classList.toggle('active', isFocusMode);
+      focusBtn.setAttribute('aria-pressed', isFocusMode.toString());
     }
 
     function handleScroll() {
@@ -1139,7 +1798,7 @@
         // Set new timeout to pause after scroll stops
         scrollTimeout = setTimeout(() => {
           globalAudioPlayer.pause();
-          document.getElementById('play-pause-btn').textContent = '▶';
+          updatePlayPauseButton(false);
         }, 2000); // 2 second delay
       }
     }
@@ -1183,16 +1842,27 @@
         case 'ArrowUp':
           if (event.ctrlKey || event.metaKey) {
             event.preventDefault();
-            adjustSpeed(0.25);
+            setPlaybackSpeed(currentPlaybackRate + 0.25);
           }
           break;
         case 'ArrowDown':
           if (event.ctrlKey || event.metaKey) {
             event.preventDefault();
-            adjustSpeed(-0.25);
+            setPlaybackSpeed(currentPlaybackRate - 0.25);
+          }
+          break;
+        case 'Slash':
+          if (event.shiftKey) { // '?' key
+            event.preventDefault();
+            toggleKeyboardHints();
           }
           break;
       }
+    }
+
+    function toggleKeyboardHints() {
+      const hints = document.getElementById('keyboard-hints');
+      hints.style.display = hints.style.display === 'none' ? 'block' : 'none';
     }
 
     passwordInput.addEventListener('keypress', function(event) {
