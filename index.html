@@ -157,6 +157,16 @@
       height: 44px;
     }
 
+    .control-skip {
+      width: 40px;
+      height: 40px;
+      position: relative;
+    }
+
+    .control-skip svg text {
+      pointer-events: none;
+    }
+
     /* Progress Section */
     .toolbar-progress {
       padding: 0 20px 16px 20px;
@@ -611,6 +621,11 @@
         height: 52px;
       }
 
+      .control-skip {
+        width: 48px;
+        height: 48px;
+      }
+
       .toolbar-progress {
         padding: 0 12px 12px 12px;
       }
@@ -670,6 +685,11 @@
       .control-next {
         width: 44px;
         height: 44px;
+      }
+
+      .control-skip {
+        width: 40px;
+        height: 40px;
       }
 
       .toolbar-progress {
@@ -768,139 +788,126 @@
     }
 
     /* ========================================
-       HTML ASSESSMENT RENDERING - UDL OPTIMIZED
+       HTML ASSESSMENT RENDERING - MINIMAL & CALM
+       Optimized for dyslexia, ADHD, and reduced cognitive load
        ======================================== */
 
     .html-assessment-container {
-      padding: 40px;
-      max-width: 800px;
+      padding: 50px 60px;
+      max-width: 700px; /* Narrower for better reading (70 chars/line) */
       margin: 0 auto;
-      background: white;
-      line-height: 1.8;
+      background: #fafafa; /* Soft off-white, easier on eyes */
+      line-height: 2.0; /* Generous spacing prevents line confusion */
       font-family: 'Inter', sans-serif;
-      color: #202124;
+      color: #4a4a4a; /* Soft dark gray, not harsh black */
       font-size: clamp(16px, 2vw, 18px);
     }
 
-    /* Universal spacing for all elements */
+    /* Generous spacing between all elements - white space is key */
     .html-assessment-container > * + * {
-      margin-top: 1.2em;
+      margin-top: 2em;
     }
 
-    /* Paragraphs - base styling */
+    /* Paragraphs - calm and spacious */
     .html-assessment-container p {
-      margin: 0.8em 0;
-      line-height: 1.8;
+      margin: 1.5em 0;
+      line-height: 2.0;
+      max-width: 65ch; /* Limit line length for readability */
     }
 
-    /* Headings - clear hierarchy */
+    /* Headings - size and space only, no color decoration */
     .html-assessment-container h1 {
-      font-size: 2em;
-      margin: 1.5em 0 0.8em 0;
-      color: #1a73e8;
-      font-weight: 700;
-      line-height: 1.3;
+      font-size: 1.8em;
+      margin: 2em 0 1em 0;
+      color: #4a4a4a;
+      font-weight: 600;
+      line-height: 1.4;
     }
 
     .html-assessment-container h2 {
-      font-size: 1.6em;
-      margin: 1.3em 0 0.7em 0;
-      color: #1a73e8;
+      font-size: 1.5em;
+      margin: 1.8em 0 0.8em 0;
+      color: #4a4a4a;
       font-weight: 600;
       line-height: 1.4;
     }
 
     .html-assessment-container h3 {
-      font-size: 1.3em;
-      margin: 1.2em 0 0.6em 0;
-      color: #1a73e8;
+      font-size: 1.25em;
+      margin: 1.6em 0 0.7em 0;
+      color: #4a4a4a;
       font-weight: 600;
       line-height: 1.4;
     }
 
-    /* Images - universal sizing and positioning */
+    /* Images - simple and clean */
     .html-assessment-container img {
       max-width: 100%;
       height: auto;
       display: block;
-      margin: 1.5em auto;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      margin: 2em auto;
     }
 
     /* Images in table cells */
     .html-assessment-container td img,
     .html-assessment-container th img {
-      margin: 0.5em auto;
+      margin: 1em auto;
       max-width: 100%;
     }
 
-    /* Lists - improved spacing */
+    /* Lists - generous spacing */
     .html-assessment-container ol,
     .html-assessment-container ul {
-      padding-left: 2em;
-      margin: 1.5em 0;
+      padding-left: 2.5em;
+      margin: 2em 0;
     }
 
     .html-assessment-container li {
-      margin: 0.8em 0;
-      line-height: 1.7;
+      margin: 1em 0;
+      line-height: 2.0;
     }
 
-    /* Emphasis - clear visual distinction */
+    /* Emphasis - subtle, no backgrounds */
     .html-assessment-container strong,
     .html-assessment-container b {
       font-weight: 700;
-      color: #1a1a1a;
-      background: rgba(255, 235, 59, 0.15);
-      padding: 2px 4px;
-      border-radius: 2px;
+      color: #2a2a2a;
     }
 
     .html-assessment-container em,
     .html-assessment-container i {
       font-style: italic;
-      color: #5f6368;
+      color: #6a6a6a;
     }
 
     /* ========================================
-       UNIVERSAL TABLE STYLING
+       MINIMAL TABLE STYLING - WHITE SPACE ONLY
        ======================================== */
 
     .html-assessment-container table {
       width: 100%;
       border-collapse: separate;
-      border-spacing: 10px;
-      margin: 1.5em 0;
+      border-spacing: 20px; /* Large spacing creates natural separation */
+      margin: 2.5em 0;
     }
 
     .html-assessment-container td,
     .html-assessment-container th {
-      padding: 16px 20px;
-      background: #f8f9fa;
-      border: 2px solid #e8eaed;
-      border-radius: 8px;
+      padding: 0; /* No padding, just natural spacing */
       vertical-align: top;
-      line-height: 1.7;
+      line-height: 2.0;
       font-size: 1em;
-      transition: all 0.2s ease;
     }
 
     .html-assessment-container th {
-      background: #e8f0fe;
       font-weight: 600;
-      color: #1a73e8;
     }
 
-    /* Hover effect for interactive feel */
-    .html-assessment-container td:hover {
-      background: #f1f3f4;
-      border-color: #dadce0;
-    }
+    /* No borders, backgrounds, or hover effects - just clean text */
 
     /* Ensure tables don't have cramped content */
     .html-assessment-container table p {
-      margin: 0.5em 0;
+      margin: 0.8em 0;
     }
 
     .html-assessment-container table p:first-child {
@@ -912,90 +919,65 @@
     }
 
     /* ========================================
-       PATTERN-DETECTED ELEMENTS (Enhanced by JS)
+       PATTERN-DETECTED ELEMENTS - NO VISUAL STYLING
+       Used for highlighting logic only, not decoration
        ======================================== */
 
-    /* Questions - detected by pattern */
+    /* Questions - extra space only, no decoration */
     .html-assessment-container .detected-question {
-      font-weight: 600;
-      font-size: 1.1em;
-      color: #1a73e8;
-      margin-top: 2.5em;
-      padding: 16px 20px;
-      background: linear-gradient(to right, #e8f0fe 0%, rgba(232, 240, 254, 0) 100%);
-      border-left: 4px solid #1a73e8;
-      border-radius: 4px;
+      margin-top: 3em;
+      margin-bottom: 1.5em;
     }
 
-    /* Answer choices - detected by pattern */
+    /* Answer choices - just spacing */
     .html-assessment-container .detected-answer-choice {
-      padding: 14px 18px;
-      margin: 8px 0;
-      background: #f8f9fa;
-      border-left: 3px solid #1a73e8;
-      border-radius: 6px;
-      transition: all 0.2s ease;
+      margin: 1em 0;
     }
 
-    .html-assessment-container .detected-answer-choice:hover {
-      background: #f1f3f4;
-      transform: translateX(4px);
-    }
-
-    /* Passages - detected by pattern */
+    /* Passages - just spacing */
     .html-assessment-container .detected-passage {
-      padding: 20px;
-      background: #fafafa;
-      border-left: 3px solid #5f6368;
-      border-radius: 4px;
-      margin: 2em 0;
-      line-height: 1.9;
+      margin: 2.5em 0;
+      line-height: 2.0;
     }
 
     /* ========================================
-       HIGHLIGHTING SYSTEM
+       HIGHLIGHTING SYSTEM - SUBTLE & CALM
        ======================================== */
 
-    /* Highlighted elements in HTML mode */
+    /* Highlighted elements - soft yellow, no outlines */
     .html-assessment-container .highlighted-element {
-      background-color: rgba(255, 235, 59, 0.3) !important;
-      outline: 3px solid #ffc107 !important;
-      outline-offset: 3px;
-      border-radius: 6px;
+      background-color: rgba(255, 251, 230, 0.6) !important; /* Soft pale yellow */
       opacity: 1 !important;
-      transition: all 0.3s ease;
-      box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.2);
+      transition: background-color 0.3s ease;
     }
 
-    /* Focus mode for HTML assessments */
+    /* Focus mode - very subtle dimming */
     body.focus-mode .html-assessment-container > *:not(.highlighted-element) {
-      opacity: 0.2;
+      opacity: 0.3;
       transition: opacity 0.3s ease;
     }
 
     body.focus-mode .html-assessment-container .highlighted-element {
-      box-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
       opacity: 1 !important;
     }
 
-    /* Highlighted table cells get special treatment */
+    /* Highlighted table cells - same soft treatment */
     .html-assessment-container td.highlighted-element,
     .html-assessment-container th.highlighted-element {
-      background-color: rgba(255, 235, 59, 0.5) !important;
-      border-color: #ffc107 !important;
+      background-color: rgba(255, 251, 230, 0.6) !important;
     }
 
     /* ========================================
-       MOBILE RESPONSIVE (UDL Optimized)
+       MOBILE RESPONSIVE - MINIMAL & SPACIOUS
        ======================================== */
 
     @media (max-width: 768px) {
       .html-assessment-container {
-        padding: 20px;
-        font-size: 15px;
+        padding: 30px 20px;
+        font-size: 16px; /* Keep readable size */
       }
 
-      /* Force tables to single-column layout */
+      /* Force tables to single-column layout - clean stacking */
       .html-assessment-container table,
       .html-assessment-container tbody,
       .html-assessment-container tr {
@@ -1007,14 +989,12 @@
       .html-assessment-container th {
         display: block;
         width: 100%;
-        margin-bottom: 8px;
-        border-width: 2px;
+        margin-bottom: 1.5em; /* Generous spacing between items */
       }
 
-      /* Reduce margins on mobile */
+      /* Maintain generous spacing on mobile */
       .html-assessment-container .detected-question {
-        margin-top: 2em;
-        padding: 12px 16px;
+        margin-top: 2.5em;
       }
 
       .html-assessment-container h1 {
@@ -1032,17 +1012,8 @@
 
     @media (max-width: 480px) {
       .html-assessment-container {
-        padding: 16px;
-        font-size: 14px;
-      }
-
-      .html-assessment-container td,
-      .html-assessment-container th {
-        padding: 12px 14px;
-      }
-
-      .html-assessment-container .detected-answer-choice {
-        padding: 10px 14px;
+        padding: 20px 16px;
+        font-size: 16px; /* Maintain readable size even on small screens */
       }
     }
 
@@ -1050,24 +1021,15 @@
        ACCESSIBILITY ENHANCEMENTS
        ======================================== */
 
-    /* High contrast mode support */
+    /* High contrast mode support - user preference */
     @media (prefers-contrast: high) {
       .html-assessment-container {
         color: #000;
-      }
-
-      .html-assessment-container td,
-      .html-assessment-container th {
-        border-width: 3px;
-        border-color: #000;
-      }
-
-      .html-assessment-container .detected-question {
-        border-left-width: 6px;
+        background: #fff;
       }
     }
 
-    /* Reduced motion support */
+    /* Reduced motion support - respect user preference */
     @media (prefers-reduced-motion: reduce) {
       .html-assessment-container * {
         transition: none !important;
@@ -1075,21 +1037,17 @@
       }
     }
 
-    /* Print styles */
+    /* Print styles - clean output */
     @media print {
       .html-assessment-container {
         max-width: 100%;
         padding: 0;
+        background: white;
+        color: black;
       }
 
       .html-assessment-container table {
-        border-spacing: 5px;
-      }
-
-      .html-assessment-container td,
-      .html-assessment-container th {
-        padding: 10px;
-        border: 1px solid #000;
+        border-spacing: 10px;
       }
     }
 
@@ -1124,6 +1082,13 @@
         </svg>
       </button>
 
+      <button id="skip-back-btn" class="control-btn control-skip" title="Skip back 5 seconds (←)" aria-label="Skip back 5 seconds">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/>
+        </svg>
+        <text x="12" y="16" font-size="8" text-anchor="middle" fill="currentColor" font-weight="bold">5</text>
+      </button>
+
       <button id="play-pause-btn" class="control-btn control-play" title="Play/Pause (Space)" aria-label="Play or pause">
         <svg class="play-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
           <path d="M8 5v14l11-7z"/>
@@ -1131,6 +1096,13 @@
         <svg class="pause-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
           <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
         </svg>
+      </button>
+
+      <button id="skip-forward-btn" class="control-btn control-skip" title="Skip forward 5 seconds (→)" aria-label="Skip forward 5 seconds">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/>
+        </svg>
+        <text x="12" y="16" font-size="8" text-anchor="middle" fill="currentColor" font-weight="bold">5</text>
       </button>
 
       <button id="next-btn" class="control-btn control-next" title="Next chunk (Ctrl+→)" aria-label="Next chunk">
@@ -1242,6 +1214,8 @@
       <div class="hints-header">Keyboard Shortcuts</div>
       <div class="hints-list">
         <div><kbd>Space</kbd> Play/Pause</div>
+        <div><kbd>←</kbd> Skip Back 5s</div>
+        <div><kbd>→</kbd> Skip Forward 5s</div>
         <div><kbd>Ctrl</kbd>+<kbd>←</kbd> Previous Chunk</div>
         <div><kbd>Ctrl</kbd>+<kbd>→</kbd> Next Chunk</div>
         <div><kbd>Ctrl</kbd>+<kbd>↑</kbd> Speed Up</div>
@@ -1742,6 +1716,8 @@
       document.getElementById('prev-btn').onclick = () => navigateChunk(-1);
       document.getElementById('next-btn').onclick = () => navigateChunk(1);
       document.getElementById('play-pause-btn').onclick = togglePlayPause;
+      document.getElementById('skip-back-btn').onclick = () => skipTime(-5);
+      document.getElementById('skip-forward-btn').onclick = () => skipTime(5);
 
       // Timeline scrubbing
       document.getElementById('timeline').oninput = scrubTimeline;
@@ -1851,6 +1827,26 @@
         globalAudioPlayer.pause();
         updatePlayPauseButton(false);
       }
+    }
+
+    function skipTime(seconds) {
+      // Only skip if audio is loaded and has duration
+      if (!globalAudioPlayer.duration) {
+        return;
+      }
+
+      // Calculate new time and clamp to valid range
+      const newTime = Math.max(0, Math.min(
+        globalAudioPlayer.currentTime + seconds,
+        globalAudioPlayer.duration
+      ));
+
+      // Update audio position
+      globalAudioPlayer.currentTime = newTime;
+
+      // Update UI immediately
+      updateTimeline();
+      updateProgressBar();
     }
 
     function scrubTimeline() {
@@ -2360,15 +2356,19 @@
           togglePlayPause();
           break;
         case 'ArrowLeft':
+          event.preventDefault();
           if (event.ctrlKey || event.metaKey) {
-            event.preventDefault();
             navigateChunk(-1);
+          } else {
+            skipTime(-5);
           }
           break;
         case 'ArrowRight':
+          event.preventDefault();
           if (event.ctrlKey || event.metaKey) {
-            event.preventDefault();
             navigateChunk(1);
+          } else {
+            skipTime(5);
           }
           break;
         case 'KeyF':
