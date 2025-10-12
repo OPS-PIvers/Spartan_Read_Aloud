@@ -768,7 +768,7 @@
     }
 
     /* ========================================
-       HTML ASSESSMENT RENDERING
+       HTML ASSESSMENT RENDERING - UDL OPTIMIZED
        ======================================== */
 
     .html-assessment-container {
@@ -776,75 +776,195 @@
       max-width: 800px;
       margin: 0 auto;
       background: white;
-      line-height: 1.6;
+      line-height: 1.8;
       font-family: 'Inter', sans-serif;
       color: #202124;
-      font-size: 16px;
+      font-size: clamp(16px, 2vw, 18px);
     }
 
+    /* Universal spacing for all elements */
+    .html-assessment-container > * + * {
+      margin-top: 1.2em;
+    }
+
+    /* Paragraphs - base styling */
     .html-assessment-container p {
       margin: 0.8em 0;
+      line-height: 1.8;
     }
 
+    /* Headings - clear hierarchy */
     .html-assessment-container h1 {
       font-size: 2em;
-      margin: 1.2em 0 0.6em 0;
+      margin: 1.5em 0 0.8em 0;
       color: #1a73e8;
       font-weight: 700;
+      line-height: 1.3;
     }
 
     .html-assessment-container h2 {
-      font-size: 1.5em;
-      margin: 1.2em 0 0.6em 0;
+      font-size: 1.6em;
+      margin: 1.3em 0 0.7em 0;
       color: #1a73e8;
       font-weight: 600;
+      line-height: 1.4;
     }
 
     .html-assessment-container h3 {
-      font-size: 1.25em;
-      margin: 1em 0 0.5em 0;
+      font-size: 1.3em;
+      margin: 1.2em 0 0.6em 0;
       color: #1a73e8;
       font-weight: 600;
+      line-height: 1.4;
     }
 
+    /* Images - universal sizing and positioning */
     .html-assessment-container img {
       max-width: 100%;
       height: auto;
       display: block;
-      margin: 1em auto;
-      border-radius: 4px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      margin: 1.5em auto;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
+    /* Images in table cells */
+    .html-assessment-container td img,
+    .html-assessment-container th img {
+      margin: 0.5em auto;
+      max-width: 100%;
+    }
+
+    /* Lists - improved spacing */
     .html-assessment-container ol,
     .html-assessment-container ul {
       padding-left: 2em;
-      margin: 0.8em 0;
+      margin: 1.5em 0;
     }
 
     .html-assessment-container li {
-      margin: 0.4em 0;
+      margin: 0.8em 0;
+      line-height: 1.7;
     }
 
+    /* Emphasis - clear visual distinction */
     .html-assessment-container strong,
     .html-assessment-container b {
-      font-weight: 600;
+      font-weight: 700;
       color: #1a1a1a;
+      background: rgba(255, 235, 59, 0.15);
+      padding: 2px 4px;
+      border-radius: 2px;
     }
 
     .html-assessment-container em,
     .html-assessment-container i {
       font-style: italic;
+      color: #5f6368;
     }
+
+    /* ========================================
+       UNIVERSAL TABLE STYLING
+       ======================================== */
+
+    .html-assessment-container table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 10px;
+      margin: 1.5em 0;
+    }
+
+    .html-assessment-container td,
+    .html-assessment-container th {
+      padding: 16px 20px;
+      background: #f8f9fa;
+      border: 2px solid #e8eaed;
+      border-radius: 8px;
+      vertical-align: top;
+      line-height: 1.7;
+      font-size: 1em;
+      transition: all 0.2s ease;
+    }
+
+    .html-assessment-container th {
+      background: #e8f0fe;
+      font-weight: 600;
+      color: #1a73e8;
+    }
+
+    /* Hover effect for interactive feel */
+    .html-assessment-container td:hover {
+      background: #f1f3f4;
+      border-color: #dadce0;
+    }
+
+    /* Ensure tables don't have cramped content */
+    .html-assessment-container table p {
+      margin: 0.5em 0;
+    }
+
+    .html-assessment-container table p:first-child {
+      margin-top: 0;
+    }
+
+    .html-assessment-container table p:last-child {
+      margin-bottom: 0;
+    }
+
+    /* ========================================
+       PATTERN-DETECTED ELEMENTS (Enhanced by JS)
+       ======================================== */
+
+    /* Questions - detected by pattern */
+    .html-assessment-container .detected-question {
+      font-weight: 600;
+      font-size: 1.1em;
+      color: #1a73e8;
+      margin-top: 2.5em;
+      padding: 16px 20px;
+      background: linear-gradient(to right, #e8f0fe 0%, rgba(232, 240, 254, 0) 100%);
+      border-left: 4px solid #1a73e8;
+      border-radius: 4px;
+    }
+
+    /* Answer choices - detected by pattern */
+    .html-assessment-container .detected-answer-choice {
+      padding: 14px 18px;
+      margin: 8px 0;
+      background: #f8f9fa;
+      border-left: 3px solid #1a73e8;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .html-assessment-container .detected-answer-choice:hover {
+      background: #f1f3f4;
+      transform: translateX(4px);
+    }
+
+    /* Passages - detected by pattern */
+    .html-assessment-container .detected-passage {
+      padding: 20px;
+      background: #fafafa;
+      border-left: 3px solid #5f6368;
+      border-radius: 4px;
+      margin: 2em 0;
+      line-height: 1.9;
+    }
+
+    /* ========================================
+       HIGHLIGHTING SYSTEM
+       ======================================== */
 
     /* Highlighted elements in HTML mode */
     .html-assessment-container .highlighted-element {
       background-color: rgba(255, 235, 59, 0.3) !important;
-      outline: 2px solid #ffc107 !important;
-      outline-offset: 2px;
-      border-radius: 4px;
+      outline: 3px solid #ffc107 !important;
+      outline-offset: 3px;
+      border-radius: 6px;
       opacity: 1 !important;
       transition: all 0.3s ease;
+      box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.2);
     }
 
     /* Focus mode for HTML assessments */
@@ -854,15 +974,122 @@
     }
 
     body.focus-mode .html-assessment-container .highlighted-element {
-      box-shadow: 0 0 20px rgba(255, 193, 7, 0.4);
+      box-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
       opacity: 1 !important;
     }
 
-    /* Mobile responsive adjustments */
+    /* Highlighted table cells get special treatment */
+    .html-assessment-container td.highlighted-element,
+    .html-assessment-container th.highlighted-element {
+      background-color: rgba(255, 235, 59, 0.5) !important;
+      border-color: #ffc107 !important;
+    }
+
+    /* ========================================
+       MOBILE RESPONSIVE (UDL Optimized)
+       ======================================== */
+
     @media (max-width: 768px) {
       .html-assessment-container {
         padding: 20px;
         font-size: 15px;
+      }
+
+      /* Force tables to single-column layout */
+      .html-assessment-container table,
+      .html-assessment-container tbody,
+      .html-assessment-container tr {
+        display: block;
+        width: 100%;
+      }
+
+      .html-assessment-container td,
+      .html-assessment-container th {
+        display: block;
+        width: 100%;
+        margin-bottom: 8px;
+        border-width: 2px;
+      }
+
+      /* Reduce margins on mobile */
+      .html-assessment-container .detected-question {
+        margin-top: 2em;
+        padding: 12px 16px;
+      }
+
+      .html-assessment-container h1 {
+        font-size: 1.6em;
+      }
+
+      .html-assessment-container h2 {
+        font-size: 1.4em;
+      }
+
+      .html-assessment-container h3 {
+        font-size: 1.2em;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .html-assessment-container {
+        padding: 16px;
+        font-size: 14px;
+      }
+
+      .html-assessment-container td,
+      .html-assessment-container th {
+        padding: 12px 14px;
+      }
+
+      .html-assessment-container .detected-answer-choice {
+        padding: 10px 14px;
+      }
+    }
+
+    /* ========================================
+       ACCESSIBILITY ENHANCEMENTS
+       ======================================== */
+
+    /* High contrast mode support */
+    @media (prefers-contrast: high) {
+      .html-assessment-container {
+        color: #000;
+      }
+
+      .html-assessment-container td,
+      .html-assessment-container th {
+        border-width: 3px;
+        border-color: #000;
+      }
+
+      .html-assessment-container .detected-question {
+        border-left-width: 6px;
+      }
+    }
+
+    /* Reduced motion support */
+    @media (prefers-reduced-motion: reduce) {
+      .html-assessment-container * {
+        transition: none !important;
+        animation: none !important;
+      }
+    }
+
+    /* Print styles */
+    @media print {
+      .html-assessment-container {
+        max-width: 100%;
+        padding: 0;
+      }
+
+      .html-assessment-container table {
+        border-spacing: 5px;
+      }
+
+      .html-assessment-container td,
+      .html-assessment-container th {
+        padding: 10px;
+        border: 1px solid #000;
       }
     }
 
@@ -1178,10 +1405,14 @@
       pdfContainer.innerHTML = '';
       pdfContainer.appendChild(htmlContainer);
 
+      // Phase 2: Pattern detection and enhancement
+      detectAndEnhanceAssessmentPatterns(htmlContainer);
+      groupRelatedElements(htmlContainer);
+
       // Extract text content structure for highlighting
       extractTextContentFromHtml(htmlContainer);
 
-      console.log("✓ HTML assessment rendered");
+      console.log("✓ HTML assessment rendered with pattern enhancement");
     }
 
     /**
@@ -1207,6 +1438,117 @@
       });
 
       console.log(`✓ Extracted ${pageTextContent.length} text elements from HTML`);
+    }
+
+    /**
+     * Detects assessment patterns and adds CSS classes for enhanced styling.
+     * Patterns detected:
+     * - Questions: paragraphs starting with "1.", "2.", etc.
+     * - Answer choices: text starting with "A.", "B.", "C.", "D."
+     * - Passages: longer paragraphs without numbering
+     * @param {HTMLElement} container The HTML assessment container
+     */
+    function detectAndEnhanceAssessmentPatterns(container) {
+      console.log('=== PATTERN DETECTION ===');
+
+      // Patterns to detect
+      const questionPattern = /^\s*(\d+)\.\s+/; // Matches "1. ", "2. ", etc.
+      const answerPattern = /^\s*([A-D])\.\s+/i; // Matches "A. ", "B. ", "C. ", "D. "
+      const passageLengthThreshold = 150; // Characters
+
+      let questionsDetected = 0;
+      let answersDetected = 0;
+      let passagesDetected = 0;
+
+      // Get all potential elements (paragraphs, list items, table cells)
+      const elements = container.querySelectorAll('p, li, td, div');
+
+      elements.forEach((element) => {
+        const text = element.textContent.trim();
+
+        // Skip empty elements
+        if (!text) return;
+
+        // Skip if already classified or has children with patterns
+        if (element.classList.contains('detected-question') ||
+            element.classList.contains('detected-answer-choice') ||
+            element.classList.contains('detected-passage')) {
+          return;
+        }
+
+        // Detect questions
+        if (questionPattern.test(text)) {
+          element.classList.add('detected-question');
+          questionsDetected++;
+          console.log(`→ Detected question: ${text.substring(0, 50)}...`);
+        }
+        // Detect answer choices
+        else if (answerPattern.test(text)) {
+          element.classList.add('detected-answer-choice');
+          answersDetected++;
+        }
+        // Detect passages (longer text without numbering)
+        else if (text.length > passageLengthThreshold &&
+                 !questionPattern.test(text) &&
+                 !answerPattern.test(text) &&
+                 element.tagName.toLowerCase() === 'p') {
+          element.classList.add('detected-passage');
+          passagesDetected++;
+          console.log(`→ Detected passage: ${text.substring(0, 50)}...`);
+        }
+      });
+
+      console.log(`✓ Pattern detection complete:`);
+      console.log(`  - Questions: ${questionsDetected}`);
+      console.log(`  - Answer choices: ${answersDetected}`);
+      console.log(`  - Passages: ${passagesDetected}`);
+
+      return {
+        questions: questionsDetected,
+        answers: answersDetected,
+        passages: passagesDetected
+      };
+    }
+
+    /**
+     * Improves text chunking by grouping related elements.
+     * Groups question + answer choices together for better highlighting.
+     * @param {HTMLElement} container The HTML assessment container
+     */
+    function groupRelatedElements(container) {
+      const questions = container.querySelectorAll('.detected-question');
+
+      questions.forEach((question) => {
+        // Find all answer choices immediately following this question
+        let nextElement = question.nextElementSibling;
+        const relatedAnswers = [];
+
+        while (nextElement &&
+               (nextElement.classList.contains('detected-answer-choice') ||
+                nextElement.tagName === 'BR' ||
+                (nextElement.textContent.trim() === ''))) {
+
+          if (nextElement.classList.contains('detected-answer-choice')) {
+            relatedAnswers.push(nextElement);
+          }
+
+          nextElement = nextElement.nextElementSibling;
+
+          // Stop after finding 4-5 answers (typical multiple choice)
+          if (relatedAnswers.length >= 5) break;
+        }
+
+        // Store relationship for improved highlighting
+        if (relatedAnswers.length > 0) {
+          question.setAttribute('data-answer-count', relatedAnswers.length);
+          relatedAnswers.forEach((answer, index) => {
+            answer.setAttribute('data-question-ref', questions.length);
+            answer.setAttribute('data-answer-index', index);
+          });
+        }
+      });
+
+      console.log(`✓ Grouped ${questions.length} questions with their answer choices`);
     }
 
     function onPdfLoadError(error) {
