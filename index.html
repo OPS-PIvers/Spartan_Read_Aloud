@@ -88,21 +88,14 @@
       backdrop-filter: blur(20px);
       border-radius: 16px;
       box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1);
-      z-index: 1000;
+      z-index: 9999;
       max-width: 600px;
       width: 90vw;
       border: 1px solid rgba(0, 0, 0, 0.08);
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      transition: transform 0.3s ease;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-    }
-
-    #audio-toolbar.minimized {
-      opacity: 0.85;
-    }
-
-    #audio-toolbar:hover {
       opacity: 1;
     }
 
@@ -1296,41 +1289,9 @@
           document.getElementById('title-dropdown').style.display = 'none';
         }
       });
-
-      // Auto-minimize behavior
-      setupAutoMinimize();
     }
 
-    let autoMinimizeTimeout;
     let isSecondaryPanelExpanded = false;
-
-    function setupAutoMinimize() {
-      const toolbar = document.getElementById('audio-toolbar');
-      let inactivityTimer;
-
-      const resetMinimizeTimer = () => {
-        clearTimeout(inactivityTimer);
-        toolbar.classList.remove('minimized');
-
-        // Only auto-minimize if secondary panel is closed
-        if (!isSecondaryPanelExpanded) {
-          inactivityTimer = setTimeout(() => {
-            if (globalAudioPlayer.paused) {
-              toolbar.classList.add('minimized');
-            }
-          }, 3000);
-        }
-      };
-
-      // Reset timer on user interaction
-      toolbar.addEventListener('mouseenter', resetMinimizeTimer);
-      toolbar.addEventListener('mousemove', resetMinimizeTimer);
-      toolbar.addEventListener('click', resetMinimizeTimer);
-      toolbar.addEventListener('touchstart', resetMinimizeTimer);
-
-      // Also reset when audio plays
-      globalAudioPlayer.addEventListener('play', resetMinimizeTimer);
-    }
 
     function toggleSecondaryPanel() {
       const panel = document.getElementById('toolbar-secondary');
