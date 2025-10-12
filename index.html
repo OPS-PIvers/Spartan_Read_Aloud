@@ -767,6 +767,105 @@
       user-select: text;
     }
 
+    /* ========================================
+       HTML ASSESSMENT RENDERING
+       ======================================== */
+
+    .html-assessment-container {
+      padding: 40px;
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      line-height: 1.6;
+      font-family: 'Inter', sans-serif;
+      color: #202124;
+      font-size: 16px;
+    }
+
+    .html-assessment-container p {
+      margin: 0.8em 0;
+    }
+
+    .html-assessment-container h1 {
+      font-size: 2em;
+      margin: 1.2em 0 0.6em 0;
+      color: #1a73e8;
+      font-weight: 700;
+    }
+
+    .html-assessment-container h2 {
+      font-size: 1.5em;
+      margin: 1.2em 0 0.6em 0;
+      color: #1a73e8;
+      font-weight: 600;
+    }
+
+    .html-assessment-container h3 {
+      font-size: 1.25em;
+      margin: 1em 0 0.5em 0;
+      color: #1a73e8;
+      font-weight: 600;
+    }
+
+    .html-assessment-container img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 1em auto;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .html-assessment-container ol,
+    .html-assessment-container ul {
+      padding-left: 2em;
+      margin: 0.8em 0;
+    }
+
+    .html-assessment-container li {
+      margin: 0.4em 0;
+    }
+
+    .html-assessment-container strong,
+    .html-assessment-container b {
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .html-assessment-container em,
+    .html-assessment-container i {
+      font-style: italic;
+    }
+
+    /* Highlighted elements in HTML mode */
+    .html-assessment-container .highlighted-element {
+      background-color: rgba(255, 235, 59, 0.3) !important;
+      outline: 2px solid #ffc107 !important;
+      outline-offset: 2px;
+      border-radius: 4px;
+      opacity: 1 !important;
+      transition: all 0.3s ease;
+    }
+
+    /* Focus mode for HTML assessments */
+    body.focus-mode .html-assessment-container > *:not(.highlighted-element) {
+      opacity: 0.2;
+      transition: opacity 0.3s ease;
+    }
+
+    body.focus-mode .html-assessment-container .highlighted-element {
+      box-shadow: 0 0 20px rgba(255, 193, 7, 0.4);
+      opacity: 1 !important;
+    }
+
+    /* Mobile responsive adjustments */
+    @media (max-width: 768px) {
+      .html-assessment-container {
+        padding: 20px;
+        font-size: 15px;
+      }
+    }
+
 
   </style>
 </head>
@@ -971,26 +1070,41 @@
         onPdfLoadError(result.error);
         return;
       }
-      
+
       serverChunks = result.audioChunks;
-      const pdfData = atob(result.pdfData);
-      
-      const loadingTask = pdfjsLib.getDocument({ data: pdfData });
-      loadingTask.promise.then(pdfDocument => {
-        
-        pdfContainer.innerHTML = ''; // Clear container
-        const pagePromises = [];
-        for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-          pagePromises.push(processPage(pdfDocument, pageNum));
-        }
-        
-        Promise.all(pagePromises).then(() => {
-            console.log("All pages rendered.");
+      console.log(`Loaded ${serverChunks.length} audio chunks`);
+
+      // Dual rendering based on fileType from backend
+      if (result.fileType === 'pdf') {
+        console.log('Rendering PDF using PDF.js');
+        // Existing PDF.js rendering (BACKWARDS COMPATIBLE)
+        const pdfData = atob(result.pdfData);
+        const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+
+        loadingTask.promise.then(pdfDocument => {
+          pdfContainer.innerHTML = '';
+          const pagePromises = [];
+          for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+            pagePromises.push(processPage(pdfDocument, pageNum));
+          }
+
+          Promise.all(pagePromises).then(() => {
+            console.log("✓ PDF rendered successfully");
             initializeAudioToolbar();
             setupEventListeners();
-        });
+          });
+        }).catch(onPdfLoadError);
 
-      }).catch(onPdfLoadError);
+      } else if (result.fileType === 'html') {
+        console.log('Rendering HTML assessment');
+        // New HTML rendering for Docs/Word
+        renderHtmlAssessment(result.assessmentHtml);
+        initializeAudioToolbar();
+        setupEventListeners();
+
+      } else {
+        onPdfLoadError(`Unknown file type received: ${result.fileType}`);
+      }
     }
 
     function processPage(pdfDocument, pageNum) {
@@ -1046,6 +1160,53 @@
 
         return Promise.all([renderPromise, textPromise]);
       });
+    }
+
+    /**
+     * Renders an HTML-based assessment (from Google Docs or Word).
+     * Replaces PDF.js rendering for non-PDF formats.
+     * @param {string} htmlContent Sanitized HTML from backend
+     */
+    function renderHtmlAssessment(htmlContent) {
+      console.log("Rendering HTML assessment");
+
+      // Create container with CSS reset
+      const htmlContainer = document.createElement('div');
+      htmlContainer.className = 'html-assessment-container';
+      htmlContainer.innerHTML = htmlContent;
+
+      pdfContainer.innerHTML = '';
+      pdfContainer.appendChild(htmlContainer);
+
+      // Extract text content structure for highlighting
+      extractTextContentFromHtml(htmlContainer);
+
+      console.log("✓ HTML assessment rendered");
+    }
+
+    /**
+     * Extracts text content from HTML elements for chunk matching.
+     * Stores element references and normalized text for highlighting.
+     * @param {HTMLElement} container The HTML assessment container
+     */
+    function extractTextContentFromHtml(container) {
+      pageTextContent = []; // Reset global array
+
+      // Select all text-containing elements
+      const elements = container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div');
+
+      elements.forEach((element, index) => {
+        const text = element.textContent.trim();
+        if (text) {
+          pageTextContent.push({
+            element: element,
+            text: text,
+            normalizedText: normalizeText(text)
+          });
+        }
+      });
+
+      console.log(`✓ Extracted ${pageTextContent.length} text elements from HTML`);
     }
 
     function onPdfLoadError(error) {
@@ -1401,7 +1562,87 @@
       dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
     }
 
+    /**
+     * Highlights text chunks in HTML-rendered assessments.
+     * Uses element-based matching instead of PDF.js text layer spans.
+     * @param {string} currentSearchWords First few words of current chunk
+     * @param {string} nextSearchWords First few words of next chunk (boundary)
+     * @returns {boolean} True if highlighting succeeded
+     */
+    function highlightChunkInHTML(currentSearchWords, nextSearchWords) {
+      // Remove previous highlights
+      document.querySelectorAll('.highlighted-element').forEach(el => {
+        el.classList.remove('highlighted-element');
+      });
+
+      const normalizedSearch = normalizeText(currentSearchWords);
+      console.log('=== HTML HIGHLIGHTING ===');
+      console.log('Searching for:', currentSearchWords);
+      console.log('Normalized:', normalizedSearch);
+
+      // Find matching element in extracted text content
+      for (let i = 0; i < pageTextContent.length; i++) {
+        const item = pageTextContent[i];
+
+        if (item.normalizedText.includes(normalizedSearch)) {
+          console.log(`✓ Found match at element ${i}`);
+
+          // Highlight current element
+          item.element.classList.add('highlighted-element');
+
+          // If there's a next chunk, highlight all elements up to it
+          if (nextSearchWords) {
+            const normalizedNext = normalizeText(nextSearchWords);
+            console.log('Highlighting range to next chunk:', nextSearchWords);
+
+            for (let j = i + 1; j < pageTextContent.length; j++) {
+              if (pageTextContent[j].normalizedText.includes(normalizedNext)) {
+                console.log(`✓ Found end boundary at element ${j}`);
+                break; // Stop before next chunk
+              }
+              // Highlight all elements between current and next
+              pageTextContent[j].element.classList.add('highlighted-element');
+            }
+          }
+
+          // Scroll to first highlighted element
+          const rect = item.element.getBoundingClientRect();
+          const offset = window.innerHeight * 0.3; // 30% from top
+          window.scrollTo({
+            top: window.scrollY + rect.top - offset,
+            behavior: 'smooth'
+          });
+
+          console.log('✓ HTML highlighting complete');
+          return true;
+        }
+      }
+
+      console.log('✗ No match found in HTML elements');
+
+      // Fallback: highlight first element
+      if (pageTextContent.length > 0) {
+        const fallbackIndex = Math.min(currentChunkIndex, pageTextContent.length - 1);
+        pageTextContent[fallbackIndex].element.classList.add('highlighted-element');
+        pageTextContent[fallbackIndex].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        console.log(`Using fallback highlighting at element ${fallbackIndex}`);
+        return true;
+      }
+
+      return false;
+    }
+
     function highlightChunkInPDF(currentSearchWords, nextSearchWords) {
+      // Detect rendering mode and route to appropriate highlighting function
+      const isHtmlMode = document.querySelector('.html-assessment-container') !== null;
+
+      if (isHtmlMode) {
+        // Use HTML-based highlighting
+        highlightChunkInHTML(currentSearchWords, nextSearchWords);
+        return;
+      }
+
+      // EXISTING PDF HIGHLIGHTING LOGIC BELOW
       // Remove previous highlights
       if (currentHighlight) {
         currentHighlight.classList.remove('highlighted-chunk');
