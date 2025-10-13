@@ -592,6 +592,16 @@
       box-shadow: 0 0 20px rgba(255, 193, 7, 0.4);
     }
 
+    /* Loading spinner animation */
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .loading-spinner {
+      animation: spin 1s linear infinite;
+    }
+
     /* Mobile Responsive */
     @media (max-width: 768px) {
       #audio-toolbar {
@@ -1096,6 +1106,10 @@
         <svg class="pause-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
           <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
         </svg>
+        <svg class="loading-spinner" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+          <path d="M12 2 A10 10 0 0 1 22 12" stroke-linecap="round"/>
+        </svg>
       </button>
 
       <button id="skip-forward-btn" class="control-btn control-skip" title="Skip forward 5 seconds (→)" aria-label="Skip forward 5 seconds">
@@ -1246,6 +1260,12 @@
     let scrollTimeout;
     let currentHighlight = null;
     let pageTextContent = []; // Store extracted text content for each page
+    let isProgrammaticScroll = false; // Flag to ignore auto-scroll during highlighting
+    let audioCache = new Map(); // Cache loaded audio chunks (key: fileId, value: base64 data)
+    let isLoadingAudio = false; // Track loading state
+    let sessionToken = null; // Secure session token for audio access
+    let totalChunks = 0; // Total number of audio chunks
+    let chunksLoaded = 0; // Number of chunks currently loaded/cached
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
@@ -1273,7 +1293,10 @@
       }
 
       serverChunks = result.audioChunks;
+      totalChunks = serverChunks.length;
+      sessionToken = result.sessionToken; // Store session token for audio fetching
       console.log(`Loaded ${serverChunks.length} audio chunks`);
+      console.log(`Session token received: ${sessionToken ? 'Yes' : 'No'}`);
 
       // Dual rendering based on fileType from backend
       if (result.fileType === 'pdf') {
@@ -1293,6 +1316,8 @@
             console.log("✓ PDF rendered successfully");
             initializeAudioToolbar();
             setupEventListeners();
+            // NEW: Start bulk preloading audio after UI is ready
+            bulkPreloadAudio();
           });
         }).catch(onPdfLoadError);
 
@@ -1302,6 +1327,8 @@
         renderHtmlAssessment(result.assessmentHtml);
         initializeAudioToolbar();
         setupEventListeners();
+        // NEW: Start bulk preloading audio after UI is ready
+        bulkPreloadAudio();
 
       } else {
         onPdfLoadError(`Unknown file type received: ${result.fileType}`);
@@ -1538,6 +1565,186 @@
       return words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
     }
 
+    /**
+     * Extracts file ID from Google Drive URL.
+     * @param {string} audioUrl Drive URL containing file ID
+     * @returns {string|null} File ID or null if not found
+     */
+    function getFileIdFromAudioUrl(audioUrl) {
+      const fileIdMatch = audioUrl.match(/id=([a-zA-Z0-9_-]+)/);
+      return fileIdMatch ? fileIdMatch[1] : null;
+    }
+
+    /**
+     * Bulk preloads audio chunks in smart batches.
+     * Strategy: Load first 5 immediately, then rest in background.
+     */
+    function bulkPreloadAudio() {
+      if (!sessionToken || serverChunks.length === 0) {
+        console.warn('Cannot preload audio: missing session token or chunks');
+        return;
+      }
+
+      console.log('=== BULK AUDIO PRELOAD START ===');
+      updateLoadingProgress(); // Show initial progress
+
+      // Phase 1: Load first 5 chunks immediately (priority for playback)
+      const priorityCount = Math.min(5, serverChunks.length);
+      const priorityChunks = serverChunks.slice(0, priorityCount);
+      const priorityFileIds = priorityChunks.map(c => getFileIdFromAudioUrl(c.audioUrl)).filter(id => id);
+
+      console.log(`→ Phase 1: Loading first ${priorityFileIds.length} priority chunks`);
+
+      bulkFetchAndCache(priorityFileIds)
+        .then(() => {
+          console.log(`✓ Phase 1 complete: ${chunksLoaded}/${totalChunks} chunks ready`);
+          updateLoadingProgress();
+
+          // Phase 2: Load remaining chunks in background (if any)
+          if (serverChunks.length > priorityCount) {
+            const remainingChunks = serverChunks.slice(priorityCount);
+            const remainingFileIds = remainingChunks.map(c => getFileIdFromAudioUrl(c.audioUrl)).filter(id => id);
+
+            console.log(`→ Phase 2: Background loading ${remainingFileIds.length} remaining chunks`);
+
+            // Load in batches of 5 to avoid timeouts
+            loadInBatches(remainingFileIds, 5);
+          }
+        })
+        .catch(err => {
+          console.error('Priority chunk loading failed:', err);
+        });
+    }
+
+    /**
+     * Loads file IDs in batches to avoid timeouts.
+     * @param {Array<string>} fileIds Array of file IDs
+     * @param {number} batchSize Number of files per batch
+     */
+    function loadInBatches(fileIds, batchSize) {
+      if (fileIds.length === 0) {
+        console.log('✓ All chunks loaded');
+        updateLoadingProgress();
+        return;
+      }
+
+      const batch = fileIds.slice(0, batchSize);
+      const remaining = fileIds.slice(batchSize);
+
+      bulkFetchAndCache(batch)
+        .then(() => {
+          console.log(`→ Batch complete: ${chunksLoaded}/${totalChunks} chunks ready`);
+          updateLoadingProgress();
+
+          // Continue with next batch after short delay
+          setTimeout(() => loadInBatches(remaining, batchSize), 500);
+        })
+        .catch(err => {
+          console.error('Batch loading failed:', err);
+          // Continue anyway
+          setTimeout(() => loadInBatches(remaining, batchSize), 1000);
+        });
+    }
+
+    /**
+     * Fetches multiple audio files via getBulkAudioData and caches results.
+     * @param {Array<string>} fileIds Array of file IDs to fetch
+     * @returns {Promise} Resolves when all files are cached
+     */
+    function bulkFetchAndCache(fileIds) {
+      if (!fileIds || fileIds.length === 0) {
+        return Promise.resolve();
+      }
+
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(result => {
+            if (!result.success) {
+              console.error('Bulk fetch failed:', result.error);
+              reject(result.error);
+              return;
+            }
+
+            // Cache all successful results
+            result.results.forEach(item => {
+              if (item.success && item.data) {
+                audioCache.set(item.fileId, item.data);
+                chunksLoaded++;
+              } else {
+                console.warn(`Failed to load audio: ${item.fileId}`, item.error);
+              }
+            });
+
+            console.log(`✓ Cached ${result.stats.success} files (${audioCache.size} total in cache)`);
+            resolve();
+          })
+          .withFailureHandler(err => {
+            console.error('Bulk fetch error:', err);
+            reject(err);
+          })
+          .getBulkAudioData(sessionToken, fileIds);
+      });
+    }
+
+    /**
+     * Fetches and caches audio data for a single chunk (fallback).
+     * Used when bulk loading is not available or fails.
+     * @param {string} audioUrl The audio URL from the chunk
+     * @returns {Promise<string>} Base64-encoded audio data
+     */
+    function fetchAndCacheAudio(audioUrl) {
+      const fileId = getFileIdFromAudioUrl(audioUrl);
+      if (!fileId) {
+        return Promise.reject('Could not parse audio file ID from URL');
+      }
+
+      // Check cache first
+      if (audioCache.has(fileId)) {
+        console.log('✓ Using cached audio for:', fileId);
+        return Promise.resolve(audioCache.get(fileId));
+      }
+
+      console.log('→ Fetching single audio from server:', fileId);
+
+      // Fallback to single fetch if not in cache
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(base64Data => {
+            if (!base64Data) {
+              reject('Failed to load audio data from server.');
+              return;
+            }
+
+            // Cache the audio data
+            audioCache.set(fileId, base64Data);
+            chunksLoaded++;
+            console.log(`✓ Cached audio (${chunksLoaded}/${totalChunks})`);
+            resolve(base64Data);
+          })
+          .withFailureHandler(err => {
+            reject(err);
+          })
+          .getAudioDataAsBase64(fileId);
+      });
+    }
+
+    /**
+     * Updates the loading progress indicator in the UI.
+     * Shows how many chunks are ready to play.
+     */
+    function updateLoadingProgress() {
+      const chunkCounter = document.getElementById('chunk-counter');
+      if (!chunkCounter) return;
+
+      if (chunksLoaded < totalChunks) {
+        chunkCounter.textContent = `Loading audio: ${chunksLoaded}/${totalChunks} ready`;
+        chunkCounter.style.color = '#f59e0b'; // Orange while loading
+      } else {
+        chunkCounter.textContent = `Chunk ${currentChunkIndex + 1} of ${totalChunks}`;
+        chunkCounter.style.color = '#1a73e8'; // Blue when complete
+      }
+    }
+
     function normalizeText(text) {
       // Normalize text to handle OCR vs PDF.js differences
       return text.trim().toLowerCase()
@@ -1646,14 +1853,11 @@
       currentlyPlayingChunk = chunk;
       currentChunkIndex = index;
 
-      const fileIdMatch = chunk.audioUrl.match(/id=([a-zA-Z0-9_-]+)/);
-      if (!fileIdMatch || !fileIdMatch[1]) {
-        onPdfLoadError('Could not parse audio file ID.');
-        return;
-      }
-      const fileId = fileIdMatch[1];
-
+      // Show loading state
+      isLoadingAudio = true;
       updatePlayPauseButton(true);
+      setLoadingState(true);
+
       updateToolbarDisplay();
 
       // Use searchWords for current chunk and next chunk as boundaries
@@ -1667,30 +1871,62 @@
 
       highlightChunkInPDF(currentSearchWords, nextSearchWords);
 
-      google.script.run
-        .withSuccessHandler(base64Data => {
-          if (!base64Data) {
-            onPdfLoadError('Failed to load audio data from server.');
-            currentlyPlayingChunk = null;
-            updatePlayPauseButton(false);
-            return;
-          }
+      // Check if audio is already cached (from bulk preload)
+      const fileId = getFileIdFromAudioUrl(chunk.audioUrl);
+      if (!fileId) {
+        onPdfLoadError('Invalid audio URL format');
+        isLoadingAudio = false;
+        setLoadingState(false);
+        return;
+      }
+
+      let audioDataPromise;
+      if (audioCache.has(fileId)) {
+        console.log(`✓ Using preloaded audio for chunk ${index + 1}`);
+        audioDataPromise = Promise.resolve(audioCache.get(fileId));
+      } else {
+        console.log(`→ Audio not preloaded, fetching chunk ${index + 1}`);
+        audioDataPromise = fetchAndCacheAudio(chunk.audioUrl);
+      }
+
+      // Play the audio
+      audioDataPromise
+        .then(base64Data => {
+          // Clear loading state
+          isLoadingAudio = false;
+          setLoadingState(false);
+
+          // Set audio source and play
           globalAudioPlayer.src = `data:audio/wav;base64,${base64Data}`;
           globalAudioPlayer.playbackRate = currentPlaybackRate;
-          globalAudioPlayer.play();
+
+          return globalAudioPlayer.play();
         })
-        .withFailureHandler(err => {
-          onPdfLoadError(err);
+        .then(() => {
+          // Audio started playing successfully
+          console.log('✓ Audio playing');
+        })
+        .catch(err => {
+          // Handle errors
+          console.error('Audio playback error:', err);
+          onPdfLoadError(err.toString());
           currentlyPlayingChunk = null;
+          isLoadingAudio = false;
+          setLoadingState(false);
           updatePlayPauseButton(false);
-        })
-        .getAudioDataAsBase64(fileId);
+        });
     }
 
     function updatePlayPauseButton(isPlaying) {
       const btn = document.getElementById('play-pause-btn');
       const playIcon = btn.querySelector('.play-icon');
       const pauseIcon = btn.querySelector('.pause-icon');
+      const loadingSpinner = btn.querySelector('.loading-spinner');
+
+      // Hide loading spinner when updating play/pause state
+      if (loadingSpinner) {
+        loadingSpinner.style.display = 'none';
+      }
 
       if (isPlaying) {
         playIcon.style.display = 'none';
@@ -1698,6 +1934,35 @@
       } else {
         playIcon.style.display = 'block';
         pauseIcon.style.display = 'none';
+      }
+    }
+
+    /**
+     * Updates UI to show loading state during audio fetch.
+     * @param {boolean} loading True to show loading state, false to clear it
+     */
+    function setLoadingState(loading) {
+      const playPauseBtn = document.getElementById('play-pause-btn');
+      const playIcon = playPauseBtn.querySelector('.play-icon');
+      const pauseIcon = playPauseBtn.querySelector('.pause-icon');
+      const loadingSpinner = playPauseBtn.querySelector('.loading-spinner');
+
+      if (loading) {
+        // Hide play/pause icons, show spinner
+        playIcon.style.display = 'none';
+        pauseIcon.style.display = 'none';
+        loadingSpinner.style.display = 'block';
+
+        // Disable button while loading
+        playPauseBtn.disabled = true;
+        playPauseBtn.style.opacity = '0.8';
+      } else {
+        // Hide spinner, button state will be set by updatePlayPauseButton
+        loadingSpinner.style.display = 'none';
+
+        // Re-enable controls
+        playPauseBtn.disabled = false;
+        playPauseBtn.style.opacity = '1';
       }
     }
 
@@ -1943,13 +2208,19 @@
             }
           }
 
-          // Scroll to first highlighted element
+          // Scroll to first highlighted element (with programmatic scroll flag)
+          isProgrammaticScroll = true;
           const rect = item.element.getBoundingClientRect();
           const offset = window.innerHeight * 0.3; // 30% from top
           window.scrollTo({
             top: window.scrollY + rect.top - offset,
             behavior: 'smooth'
           });
+
+          // Clear flag after scroll animation completes (~500ms for smooth scroll)
+          setTimeout(() => {
+            isProgrammaticScroll = false;
+          }, 800);
 
           console.log('✓ HTML highlighting complete');
           return true;
@@ -1962,7 +2233,14 @@
       if (pageTextContent.length > 0) {
         const fallbackIndex = Math.min(currentChunkIndex, pageTextContent.length - 1);
         pageTextContent[fallbackIndex].element.classList.add('highlighted-element');
+
+        // Programmatic scroll with flag
+        isProgrammaticScroll = true;
         pageTextContent[fallbackIndex].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+          isProgrammaticScroll = false;
+        }, 800);
+
         console.log(`Using fallback highlighting at element ${fallbackIndex}`);
         return true;
       }
@@ -2002,7 +2280,8 @@
           });
           currentHighlight = found.container;
 
-          // Scroll to first highlighted span
+          // Scroll to first highlighted span (with programmatic scroll flag)
+          isProgrammaticScroll = true;
           const rect = found.spans[0].getBoundingClientRect();
           const offset = window.innerHeight * 0.3; // 30% from top
           window.scrollTo({
@@ -2010,18 +2289,29 @@
             behavior: 'smooth'
           });
 
+          // Clear flag after scroll animation completes
+          setTimeout(() => {
+            isProgrammaticScroll = false;
+          }, 800);
+
           console.log(`✓ Highlighted ${found.spans.length} spans in the chunk range`);
         } else {
           // Fallback to container highlighting
           found.classList.add('highlighted-chunk');
           currentHighlight = found;
 
+          // Programmatic scroll with flag
+          isProgrammaticScroll = true;
           const rect = found.getBoundingClientRect();
           const offset = window.innerHeight * 0.3; // 30% from top
           window.scrollTo({
             top: window.scrollY + rect.top - offset,
             behavior: 'smooth'
           });
+
+          setTimeout(() => {
+            isProgrammaticScroll = false;
+          }, 800);
 
           console.log('→ Using page-level highlighting fallback');
         }
@@ -2331,14 +2621,23 @@
     }
 
     function handleScroll() {
+      // Ignore programmatic scrolls from highlighting
+      if (isProgrammaticScroll) {
+        return;
+      }
+
+      // Only pause on user-initiated scrolling
       if (!globalAudioPlayer.paused) {
         // Clear previous timeout
         clearTimeout(scrollTimeout);
 
         // Set new timeout to pause after scroll stops
         scrollTimeout = setTimeout(() => {
-          globalAudioPlayer.pause();
-          updatePlayPauseButton(false);
+          // Double-check this wasn't a programmatic scroll
+          if (!isProgrammaticScroll) {
+            globalAudioPlayer.pause();
+            updatePlayPauseButton(false);
+          }
         }, 2000); // 2 second delay
       }
     }

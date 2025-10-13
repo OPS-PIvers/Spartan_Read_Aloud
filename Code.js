@@ -636,13 +636,178 @@ function getAudioDataAsBase64(fileId) {
 }
 
 /**
+ * Bulk fetches multiple audio files at once for better performance.
+ * Validates session token before returning audio data.
+ * @param {string} sessionToken Session token for authentication
+ * @param {Array<string>} fileIds Array of audio file IDs to fetch
+ * @returns {Object} Object with success boolean and data/error
+ */
+function getBulkAudioData(sessionToken, fileIds) {
+  try {
+    // Validate session token
+    const tokenData = validateSessionToken(sessionToken);
+    if (!tokenData) {
+      Logger.log('Invalid session token for bulk audio fetch');
+      return {
+        success: false,
+        error: 'Session expired or invalid. Please refresh the page and log in again.'
+      };
+    }
+
+    Logger.log(`Bulk fetching ${fileIds.length} audio files for ${tokenData.email}`);
+
+    const results = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < fileIds.length; i++) {
+      const fileId = fileIds[i];
+      try {
+        const file = DriveApp.getFileById(fileId);
+        const blob = file.getBlob();
+        const base64Data = Utilities.base64Encode(blob.getBytes());
+
+        results.push({
+          fileId: fileId,
+          data: base64Data,
+          success: true
+        });
+        successCount++;
+
+      } catch (e) {
+        Logger.log(`Failed to fetch audio file ${fileId}: ${e.toString()}`);
+        results.push({
+          fileId: fileId,
+          data: null,
+          success: false,
+          error: e.toString()
+        });
+        failCount++;
+      }
+    }
+
+    Logger.log(`Bulk fetch complete: ${successCount} success, ${failCount} failed`);
+
+    return {
+      success: true,
+      results: results,
+      stats: {
+        total: fileIds.length,
+        success: successCount,
+        failed: failCount
+      }
+    };
+
+  } catch (e) {
+    Logger.log(`Error in getBulkAudioData: ${e.toString()}`);
+    return {
+      success: false,
+      error: 'Failed to load audio files. Please try again.'
+    };
+  }
+}
+
+/**
+ * Generates a secure session token for authenticated access.
+ * Token format: base64(email|assessmentUrl|timestamp|random)
+ * @param {string} email Student email
+ * @param {string} assessmentUrl The PDF/Doc URL
+ * @param {number} expiryMinutes Token validity period (default: 180 min = 3 hours)
+ * @returns {string} Session token
+ */
+function generateSessionToken(email, assessmentUrl, expiryMinutes) {
+  if (!expiryMinutes) expiryMinutes = 180; // 3 hour default
+
+  const timestamp = Date.now();
+  const expiryTime = timestamp + (expiryMinutes * 60 * 1000);
+  const random = Utilities.getUuid(); // Add randomness for security
+
+  const tokenData = {
+    email: email.toLowerCase().trim(),
+    url: assessmentUrl,
+    exp: expiryTime,
+    rnd: random
+  };
+
+  const tokenString = JSON.stringify(tokenData);
+  const token = Utilities.base64Encode(tokenString);
+
+  // Store token in PropertiesService for validation
+  const props = PropertiesService.getUserProperties();
+  props.setProperty('session_' + token, tokenString);
+
+  Logger.log(`Generated session token for ${email}, expires: ${new Date(expiryTime)}`);
+  return token;
+}
+
+/**
+ * Validates a session token and returns the decoded data if valid.
+ * Checks: token exists, not expired, email still has access to assessment
+ * @param {string} token Session token to validate
+ * @returns {Object|null} Token data if valid, null if invalid/expired
+ */
+function validateSessionToken(token) {
+  try {
+    // Decode token
+    const tokenString = Utilities.newBlob(Utilities.base64Decode(token)).getDataAsString();
+    const tokenData = JSON.parse(tokenString);
+
+    // Check expiry
+    if (Date.now() > tokenData.exp) {
+      Logger.log('Token expired');
+      return null;
+    }
+
+    // Verify token exists in PropertiesService (prevents forgery)
+    const props = PropertiesService.getUserProperties();
+    const storedToken = props.getProperty('session_' + token);
+    if (!storedToken || storedToken !== tokenString) {
+      Logger.log('Token not found or mismatch');
+      return null;
+    }
+
+    // Additional check: verify email still has access to this assessment
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    if (!sheet) return null;
+
+    const data = sheet.getDataRange().getValues();
+    const email = tokenData.email;
+    const assessmentUrl = tokenData.url;
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const pdfUrl = row[COL.PDF_URL];
+      const studentEmailsRaw = row[COL.STUDENT_EMAILS].toString().toLowerCase();
+
+      if (pdfUrl === assessmentUrl) {
+        const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
+        if (!studentEmails.includes(email)) {
+          Logger.log(`Email ${email} no longer has access to ${assessmentUrl}`);
+          return null; // Email was removed from Column H
+        }
+
+        // Valid token and still has access
+        return tokenData;
+      }
+    }
+
+    Logger.log('Assessment not found for token');
+    return null;
+
+  } catch (e) {
+    Logger.log(`Token validation error: ${e.toString()}`);
+    return null;
+  }
+}
+
+/**
  * Retrieves assessment data for authenticated student.
  * Returns different data structures based on file type:
  * - PDFs: base64 pdfData for PDF.js rendering
  * - Docs/Word: assessmentHtml for native HTML rendering
  * @param {string} email Student email
  * @param {string} password Assessment password
- * @returns {Object} Assessment data or error
+ * @returns {Object} Assessment data or error (includes sessionToken for secure audio access)
  */
 function getAssessmentPdf(email, password) {
   try {
@@ -677,6 +842,9 @@ function getAssessmentPdf(email, password) {
 
         Logger.log(`Serving assessment: ${fileName} (${mimeType}) to ${email}`);
 
+        // Generate session token for secure audio access
+        const sessionToken = generateSessionToken(cleanEmail, pdfUrl);
+
         // PDFs: Return base64 data for PDF.js rendering (BACKWARDS COMPATIBLE)
         if (mimeType === MimeType.PDF) {
           Logger.log('→ Serving PDF with base64 encoding');
@@ -684,7 +852,8 @@ function getAssessmentPdf(email, password) {
             fileType: 'pdf',
             pdfData: Utilities.base64Encode(file.getBlob().getBytes()),
             fileName: fileName,
-            audioChunks: audioChunks
+            audioChunks: audioChunks,
+            sessionToken: sessionToken // NEW: For secure audio fetching
           };
         }
 
@@ -700,7 +869,8 @@ function getAssessmentPdf(email, password) {
           fileType: 'html',
           assessmentHtml: sanitizeHtml(conversionResult.html),
           fileName: fileName,
-          audioChunks: audioChunks
+          audioChunks: audioChunks,
+          sessionToken: sessionToken // NEW: For secure audio fetching
         };
       }
     }
