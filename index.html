@@ -567,7 +567,7 @@
     }
 
     /* Focus Mode Styles */
-    body.focus-mode #pdf-container > *:not(.highlighted-chunk) {
+    body.focus-mode #pdf-container > *:not(.highlighted-chunk):not(:has(.highlighted-chunk)) {
       opacity: 0.2;
       transition: opacity 0.3s ease;
     }
@@ -589,6 +589,7 @@
     }
 
     body.focus-mode .highlighted-chunk {
+      opacity: 1 !important;
       box-shadow: 0 0 20px rgba(255, 193, 7, 0.4);
     }
 
@@ -962,12 +963,17 @@
     }
 
     /* Focus mode - very subtle dimming */
-    body.focus-mode .html-assessment-container > *:not(.highlighted-element) {
+    body.focus-mode .html-assessment-container > *:not(.highlighted-element):not(:has(.highlighted-element)) {
       opacity: 0.3;
       transition: opacity 0.3s ease;
     }
 
     body.focus-mode .html-assessment-container .highlighted-element {
+      opacity: 1 !important;
+    }
+
+    /* Ensure parent elements containing highlighted content stay visible */
+    body.focus-mode .html-assessment-container *:has(.highlighted-element) {
       opacity: 1 !important;
     }
 
@@ -1257,7 +1263,6 @@
     let isLooping = false;
     let isFocusMode = false;
     let currentPlaybackRate = 1.0;
-    let scrollTimeout;
     let currentHighlight = null;
     let pageTextContent = []; // Store extracted text content for each page
     let isProgrammaticScroll = false; // Flag to ignore auto-scroll during highlighting
@@ -2013,9 +2018,6 @@
       // Toggle secondary panel
       document.getElementById('toggle-secondary-btn').onclick = toggleSecondaryPanel;
 
-      // Auto-pause on scroll
-      window.addEventListener('scroll', handleScroll);
-
       // Keyboard shortcuts
       document.addEventListener('keydown', handleKeyboard);
 
@@ -2618,28 +2620,6 @@
       const focusBtn = document.getElementById('focus-mode-btn');
       focusBtn.classList.toggle('active', isFocusMode);
       focusBtn.setAttribute('aria-pressed', isFocusMode.toString());
-    }
-
-    function handleScroll() {
-      // Ignore programmatic scrolls from highlighting
-      if (isProgrammaticScroll) {
-        return;
-      }
-
-      // Only pause on user-initiated scrolling
-      if (!globalAudioPlayer.paused) {
-        // Clear previous timeout
-        clearTimeout(scrollTimeout);
-
-        // Set new timeout to pause after scroll stops
-        scrollTimeout = setTimeout(() => {
-          // Double-check this wasn't a programmatic scroll
-          if (!isProgrammaticScroll) {
-            globalAudioPlayer.pause();
-            updatePlayPauseButton(false);
-          }
-        }, 2000); // 2 second delay
-      }
     }
 
     function handleKeyboard(event) {

@@ -74,24 +74,41 @@ function step0_addNewPdfs() {
   const data = sheet.getDataRange().getValues();
   const existingUrls = new Set(data.map(row => row[COL.PDF_URL]));
 
-  const allFiles = pdfFolder.getFiles();
   let addedCount = 0;
+  const pdfFolderId = pdfFolder.getId();
 
-  while (allFiles.hasNext()) {
-    const file = allFiles.next();
-    const mimeType = file.getMimeType();
+  // Search for all supported file types in the folder using Drive API
+  // This includes Google Docs (which getFiles() doesn't return)
+  const mimeTypeQuery = Object.values(SUPPORTED_MIME_TYPES)
+    .map(type => `mimeType='${type}'`)
+    .join(' or ');
 
-    // Check if supported format
-    const isSupported = Object.values(SUPPORTED_MIME_TYPES).includes(mimeType);
+  const query = `'${pdfFolderId}' in parents and (${mimeTypeQuery}) and trashed=false`;
 
-    if (isSupported) {
-      const fileUrl = file.getUrl();
+  Logger.log(`Searching for files with query: ${query}`);
+
+  const searchResults = Drive.Files.list({
+    q: query,
+    maxResults: 1000
+  });
+
+  if (searchResults.items && searchResults.items.length > 0) {
+    Logger.log(`Found ${searchResults.items.length} file(s) in folder`);
+
+    for (let i = 0; i < searchResults.items.length; i++) {
+      const file = searchResults.items[i];
+      const fileUrl = file.alternateLink; // Use alternateLink for the web URL
+      const mimeType = file.mimeType;
+      const fileName = file.title;
+
       if (!existingUrls.has(fileUrl)) {
         sheet.appendRow([fileUrl]);
-        Logger.log(`Added new file: ${file.getName()} (${mimeType})`);
+        Logger.log(`Added new file: ${fileName} (${mimeType})`);
         addedCount++;
       }
     }
+  } else {
+    Logger.log('No files found in the folder');
   }
 
   if (addedCount > 0) {
