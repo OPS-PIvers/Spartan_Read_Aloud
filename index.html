@@ -1,12 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <base target="_top">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/text_layer_builder.css">
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+    html, body {
+      min-height: 100vh;
+      position: relative;
+    }
 
     body {
       font-family: 'Inter', sans-serif;
@@ -567,9 +573,15 @@
     }
 
     /* Focus Mode Styles */
-    body.focus-mode #pdf-container > *:not(.highlighted-chunk):not(:has(.highlighted-chunk)) {
+    body.focus-mode #pdf-container > * {
       opacity: 0.2;
       transition: opacity 0.3s ease;
+    }
+
+    /* Keep highlighted chunks and their parents visible */
+    body.focus-mode #pdf-container > .highlighted-chunk,
+    body.focus-mode #pdf-container > .has-highlight {
+      opacity: 1 !important;
     }
 
     .highlighted-chunk {
@@ -963,17 +975,20 @@
     }
 
     /* Focus mode - very subtle dimming */
-    body.focus-mode .html-assessment-container > *:not(.highlighted-element):not(:has(.highlighted-element)) {
+    body.focus-mode .html-assessment-container > * {
       opacity: 0.3;
       transition: opacity 0.3s ease;
     }
 
-    body.focus-mode .html-assessment-container .highlighted-element {
+    /* Keep highlighted elements and their parents visible */
+    body.focus-mode .html-assessment-container .highlighted-element,
+    body.focus-mode .html-assessment-container .has-highlight {
       opacity: 1 !important;
     }
 
-    /* Ensure parent elements containing highlighted content stay visible */
-    body.focus-mode .html-assessment-container *:has(.highlighted-element) {
+    /* Ensure all ancestors with highlights stay visible */
+    body.focus-mode .html-assessment-container > .highlighted-element,
+    body.focus-mode .html-assessment-container > .has-highlight {
       opacity: 1 !important;
     }
 
@@ -2175,9 +2190,12 @@
      * @returns {boolean} True if highlighting succeeded
      */
     function highlightChunkInHTML(currentSearchWords, nextSearchWords) {
-      // Remove previous highlights
+      // Remove previous highlights and has-highlight classes
       document.querySelectorAll('.highlighted-element').forEach(el => {
         el.classList.remove('highlighted-element');
+      });
+      document.querySelectorAll('.has-highlight').forEach(el => {
+        el.classList.remove('has-highlight');
       });
 
       const normalizedSearch = normalizeText(currentSearchWords);
@@ -2195,6 +2213,13 @@
           // Highlight current element
           item.element.classList.add('highlighted-element');
 
+          // Add has-highlight class to all parent elements up to html-assessment-container
+          let parent = item.element.parentElement;
+          while (parent && !parent.classList.contains('html-assessment-container')) {
+            parent.classList.add('has-highlight');
+            parent = parent.parentElement;
+          }
+
           // If there's a next chunk, highlight all elements up to it
           if (nextSearchWords) {
             const normalizedNext = normalizeText(nextSearchWords);
@@ -2206,7 +2231,15 @@
                 break; // Stop before next chunk
               }
               // Highlight all elements between current and next
-              pageTextContent[j].element.classList.add('highlighted-element');
+              const elem = pageTextContent[j].element;
+              elem.classList.add('highlighted-element');
+
+              // Add has-highlight to parents
+              let p = elem.parentElement;
+              while (p && !p.classList.contains('html-assessment-container')) {
+                p.classList.add('has-highlight');
+                p = p.parentElement;
+              }
             }
           }
 
@@ -2234,11 +2267,19 @@
       // Fallback: highlight first element
       if (pageTextContent.length > 0) {
         const fallbackIndex = Math.min(currentChunkIndex, pageTextContent.length - 1);
-        pageTextContent[fallbackIndex].element.classList.add('highlighted-element');
+        const fallbackElem = pageTextContent[fallbackIndex].element;
+        fallbackElem.classList.add('highlighted-element');
+
+        // Add has-highlight to parent elements
+        let parent = fallbackElem.parentElement;
+        while (parent && !parent.classList.contains('html-assessment-container')) {
+          parent.classList.add('has-highlight');
+          parent = parent.parentElement;
+        }
 
         // Programmatic scroll with flag
         isProgrammaticScroll = true;
-        pageTextContent[fallbackIndex].element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        fallbackElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
         setTimeout(() => {
           isProgrammaticScroll = false;
         }, 800);
@@ -2261,13 +2302,15 @@
       }
 
       // EXISTING PDF HIGHLIGHTING LOGIC BELOW
-      // Remove previous highlights
+      // Remove previous highlights and has-highlight classes
       if (currentHighlight) {
         currentHighlight.classList.remove('highlighted-chunk');
       }
-      // Remove previous text span highlights
       document.querySelectorAll('.highlighted-text-span').forEach(span => {
         span.classList.remove('highlighted-text-span');
+      });
+      document.querySelectorAll('.has-highlight').forEach(el => {
+        el.classList.remove('has-highlight');
       });
 
       // Use range-based search with current and next chunk boundaries
@@ -2281,6 +2324,11 @@
             span.classList.add('highlighted-text-span');
           });
           currentHighlight = found.container;
+
+          // Add has-highlight class to page container (parent of textLayer)
+          if (found.container && found.container.classList.contains('page-container')) {
+            found.container.classList.add('has-highlight');
+          }
 
           // Scroll to first highlighted span (with programmatic scroll flag)
           isProgrammaticScroll = true;
@@ -2300,6 +2348,7 @@
         } else {
           // Fallback to container highlighting
           found.classList.add('highlighted-chunk');
+          found.classList.add('has-highlight');
           currentHighlight = found;
 
           // Programmatic scroll with flag
