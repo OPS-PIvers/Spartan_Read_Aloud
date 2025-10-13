@@ -12,6 +12,7 @@
     html, body {
       min-height: 100vh;
       position: relative;
+      overscroll-behavior: none; /* Prevent bounce/rubber-band scrolling */
     }
 
     body {
@@ -22,6 +23,8 @@
       align-items: center;
       margin: 0;
       padding: 20px;
+      overscroll-behavior-y: none; /* Specifically prevent vertical bounce */
+      -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
     }
 
     h1 {
@@ -82,56 +85,88 @@
     }
 
     /* ========================================
-       AUDIO TOOLBAR - REDESIGNED
+       AUDIO TOOLBAR - MODERN REDESIGN
        ======================================== */
 
     #audio-toolbar {
       position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(20px);
-      border-radius: 16px;
-      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1);
+      bottom: 0;
+      left: 0;
+      right: 0;
+      transform: translateZ(0); /* Force hardware acceleration */
+      background: transparent;
+      padding: 16px;
+      backdrop-filter: blur(4px);
       z-index: 9999;
-      max-width: 600px;
-      width: 90vw;
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      transition: transform 0.3s ease;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      opacity: 1;
-    }
-
-    /* Tier 1: Core Controls */
-    .toolbar-core {
       display: flex;
       justify-content: center;
       align-items: center;
-      gap: 12px;
-      padding: 20px 20px 12px 20px;
+      will-change: transform; /* Optimize for transform animations */
+      -webkit-transform: translateZ(0); /* iOS-specific fix */
     }
 
+    .audio-toolbar-inner {
+      width: 100%;
+      max-width: 512px; /* Tailwind's max-w-lg equivalent */
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25),
+                  0 0 0 1px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(229, 231, 235, 1); /* border-border-light */
+      padding: 16px;
+    }
+
+    /* Toolbar Header with Title and Controls */
+    .toolbar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .toolbar-title {
+      text-align: left;
+    }
+
+    .toolbar-title-main {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1F2937; /* text-light */
+      line-height: 1.25;
+    }
+
+    .toolbar-title-sub {
+      font-size: 12px;
+      color: #6B7280; /* subtle-light */
+      line-height: 1.25;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Control Buttons */
     .control-btn {
       background: transparent;
       border: none;
-      border-radius: 50%;
+      border-radius: 9999px; /* rounded-full */
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: all 0.2s ease;
-      color: #1a73e8;
+      color: #6B7280; /* subtle-light */
       padding: 0;
-      width: 48px;
-      height: 48px;
+      width: 40px;
+      height: 40px;
     }
 
     .control-btn:hover:not(:disabled) {
-      background: rgba(26, 115, 232, 0.08);
-      transform: scale(1.05);
+      color: #4F46E5; /* primary */
+      background: #E5E7EB; /* border-light */
+      transform: scale(1.0);
     }
 
     .control-btn:active:not(:disabled) {
@@ -143,82 +178,101 @@
       cursor: not-allowed;
     }
 
-    .control-play {
-      width: 64px;
-      height: 64px;
-      background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
-      color: white;
-      box-shadow: 0 4px 16px rgba(26, 115, 232, 0.3);
-    }
-
-    .control-play:hover:not(:disabled) {
-      background: linear-gradient(135deg, #1557b0 0%, #0d47a1 100%);
-      transform: scale(1.08);
-      box-shadow: 0 6px 20px rgba(26, 115, 232, 0.4);
-    }
-
-    .control-prev,
-    .control-next {
-      width: 44px;
-      height: 44px;
+    /* Main Control Buttons (Core Row) */
+    .toolbar-core {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
     }
 
     .control-skip {
       width: 40px;
       height: 40px;
-      position: relative;
     }
 
-    .control-skip svg text {
-      pointer-events: none;
+    .control-skip .material-icons {
+      font-size: 32px;
+    }
+
+    .control-prev,
+    .control-next {
+      width: 40px;
+      height: 40px;
+    }
+
+    .control-prev .material-icons,
+    .control-next .material-icons {
+      font-size: 40px;
+    }
+
+    .control-play {
+      width: 48px;
+      height: 48px;
+      background: #4F46E5; /* primary */
+      color: white;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .control-play:hover:not(:disabled) {
+      background: #4338CA; /* darker primary */
+      transform: scale(1.05);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+
+    .control-play .material-icons {
+      font-size: 40px;
     }
 
     /* Progress Section */
     .toolbar-progress {
-      padding: 0 20px 16px 20px;
+      margin-bottom: 12px;
     }
 
     .progress-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
       font-size: 12px;
+      color: #6B7280; /* subtle-light */
     }
 
     .time-display {
       font-family: 'Monaco', 'Consolas', monospace;
-      color: #666;
-      font-size: 11px;
+      color: #6B7280; /* subtle-light */
+      font-size: 12px;
       min-width: 36px;
     }
 
     .chunk-counter {
-      color: #1a73e8;
+      color: #6B7280; /* subtle-light */
       font-weight: 500;
       font-size: 12px;
     }
 
     .progress-bar-container {
       position: relative;
-      height: 28px;
-      display: flex;
-      align-items: center;
+      height: 6px;
+      width: 100%;
+      background: #E5E7EB; /* border-light */
+      border-radius: 9999px; /* rounded-full */
+      overflow: hidden;
+      cursor: pointer;
     }
 
     .progress-bar-bg {
       position: absolute;
       width: 100%;
-      height: 6px;
-      background: #e8eaed;
-      border-radius: 3px;
-      overflow: hidden;
+      height: 100%;
+      background: transparent;
     }
 
     .progress-bar-fill {
       height: 100%;
-      background: linear-gradient(90deg, #1a73e8 0%, #4285f4 100%);
-      border-radius: 3px;
+      background: #4F46E5; /* primary */
+      border-radius: 9999px; /* rounded-full */
       width: 0%;
       transition: width 0.1s linear;
     }
@@ -241,48 +295,50 @@
     }
 
     .timeline-slider {
-      position: relative;
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
-      height: 28px;
+      height: 6px;
       -webkit-appearance: none;
       appearance: none;
       background: transparent;
       cursor: pointer;
-      z-index: 2;
+      z-index: 10;
       margin: 0;
     }
 
     .timeline-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
-      background: #1a73e8;
+      background: #4F46E5; /* primary */
       cursor: pointer;
-      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.4);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
     .timeline-slider::-webkit-slider-thumb:hover {
-      transform: scale(1.2);
-      box-shadow: 0 3px 12px rgba(26, 115, 232, 0.5);
+      transform: scale(1.15);
+      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.5);
     }
 
     .timeline-slider::-moz-range-thumb {
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
-      background: #1a73e8;
+      background: #4F46E5; /* primary */
       cursor: pointer;
       border: none;
-      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.4);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
     .timeline-slider::-moz-range-thumb:hover {
-      transform: scale(1.2);
-      box-shadow: 0 3px 12px rgba(26, 115, 232, 0.5);
+      transform: scale(1.15);
+      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.5);
     }
 
     /* Tier 2: Secondary Controls */
@@ -330,13 +386,13 @@
     }
 
     .speed-preset {
-      background: #f1f3f4;
-      border: 1px solid #e8eaed;
-      padding: 6px 12px;
-      border-radius: 16px;
-      font-size: 13px;
+      background: transparent;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
       font-weight: 500;
-      color: #5f6368;
+      color: #6B7280; /* subtle-light */
       cursor: pointer;
       transition: all 0.2s ease;
       width: auto;
@@ -345,15 +401,13 @@
     }
 
     .speed-preset:hover {
-      background: #e8eaed;
-      border-color: #dadce0;
-      transform: translateY(-1px);
+      background: #E5E7EB; /* border-light */
+      color: #1F2937; /* text-light */
     }
 
     .speed-preset.active {
-      background: #1a73e8;
+      background: #4F46E5; /* primary */
       color: white;
-      border-color: #1a73e8;
     }
 
     .speed-slider-container {
@@ -445,26 +499,25 @@
     }
 
     .dropdown-item {
-      padding: 12px 16px;
+      padding: 8px;
       cursor: pointer;
-      border-bottom: 1px solid #f1f3f4;
-      font-size: 13px;
-      transition: background-color 0.15s ease;
-      color: #202124;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      color: #1F2937; /* text-light */
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
     }
 
     .dropdown-item:hover {
-      background-color: #f8f9fa;
+      background-color: #E5E7EB; /* border-light */
     }
 
     .dropdown-item.current {
-      background-color: #e8f0fe;
-      color: #1a73e8;
-      font-weight: 500;
-    }
-
-    .dropdown-item:last-child {
-      border-bottom: none;
+      background-color: rgba(79, 70, 229, 0.1); /* primary with opacity */
+      color: #4F46E5; /* primary */
+      font-weight: 600;
     }
 
     /* Feature Toggles */
@@ -1104,161 +1157,88 @@
   </div>
 
   <div id="audio-toolbar" style="display: none;">
-    <!-- Tier 1: Core Controls (Always Visible) -->
-    <div class="toolbar-core">
-      <button id="prev-btn" class="control-btn control-prev" title="Previous chunk (Ctrl+←)" aria-label="Previous chunk">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M19 20L9 12l10-8v16z"/>
-          <path d="M5 19V5"/>
-        </svg>
-      </button>
-
-      <button id="skip-back-btn" class="control-btn control-skip" title="Skip back 5 seconds (←)" aria-label="Skip back 5 seconds">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/>
-        </svg>
-        <text x="12" y="16" font-size="8" text-anchor="middle" fill="currentColor" font-weight="bold">5</text>
-      </button>
-
-      <button id="play-pause-btn" class="control-btn control-play" title="Play/Pause (Space)" aria-label="Play or pause">
-        <svg class="play-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M8 5v14l11-7z"/>
-        </svg>
-        <svg class="pause-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
-          <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
-        </svg>
-        <svg class="loading-spinner" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
-          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
-          <path d="M12 2 A10 10 0 0 1 22 12" stroke-linecap="round"/>
-        </svg>
-      </button>
-
-      <button id="skip-forward-btn" class="control-btn control-skip" title="Skip forward 5 seconds (→)" aria-label="Skip forward 5 seconds">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/>
-        </svg>
-        <text x="12" y="16" font-size="8" text-anchor="middle" fill="currentColor" font-weight="bold">5</text>
-      </button>
-
-      <button id="next-btn" class="control-btn control-next" title="Next chunk (Ctrl+→)" aria-label="Next chunk">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M5 4l10 8-10 8V4z"/>
-          <path d="M19 5v14"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Progress Section -->
-    <div class="toolbar-progress">
-      <div class="progress-header">
-        <span id="current-time" class="time-display">0:00</span>
-        <span id="chunk-counter" class="chunk-counter">Chunk 1 of 1</span>
-        <span id="total-time" class="time-display">0:00</span>
-      </div>
-      <div class="progress-bar-container">
-        <div id="progress-bar-bg" class="progress-bar-bg">
-          <div id="progress-bar-fill" class="progress-bar-fill"></div>
-          <div id="chunk-markers" class="chunk-markers">
-            <!-- Chunk markers will be added dynamically -->
-          </div>
+    <div class="audio-toolbar-inner">
+      <!-- Header: Title and Action Buttons -->
+      <div class="toolbar-header">
+        <div class="toolbar-title">
+          <p id="current-title-text" class="toolbar-title-main">Loading...</p>
+          <p id="chunk-counter" class="toolbar-title-sub">Chunk 1 of 1</p>
         </div>
-        <input type="range" id="timeline" class="timeline-slider" min="0" max="100" value="0"
-               title="Audio timeline" aria-label="Audio timeline slider">
-      </div>
-    </div>
-
-    <!-- Tier 2: Secondary Controls (Collapsible) -->
-    <div class="toolbar-secondary" id="toolbar-secondary">
-      <div class="secondary-panel">
-
-        <!-- Speed Control -->
-        <div class="control-group speed-control">
-          <label class="control-label">Playback Speed</label>
-          <div class="speed-controls">
-            <button class="speed-preset" data-speed="0.5">0.5×</button>
-            <button class="speed-preset" data-speed="0.75">0.75×</button>
-            <button class="speed-preset active" data-speed="1.0">1.0×</button>
-            <button class="speed-preset" data-speed="1.25">1.25×</button>
-            <button class="speed-preset" data-speed="1.5">1.5×</button>
-            <button class="speed-preset" data-speed="2.0">2.0×</button>
-          </div>
-          <div class="speed-slider-container">
-            <span class="speed-label-min">0.5×</span>
-            <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.25" value="1.0"
-                   aria-label="Fine-tune playback speed">
-            <span class="speed-label-max">2.0×</span>
-          </div>
-        </div>
-
-        <!-- Chunk Navigation -->
-        <div class="control-group chunk-nav">
-          <label class="control-label">Audio Chunks</label>
-          <button id="current-title-btn" class="chunk-list-btn"
-                  title="Click to see all chunks" aria-label="Show chunk list">
-            <span id="current-title-text">Loading...</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
+        <div class="toolbar-actions">
+          <button id="speed-menu-btn" class="control-btn" title="Playback speed" aria-label="Playback speed">
+            <span id="speed-display" class="text-sm font-bold" style="font-size: 12px;">1.25x</span>
           </button>
-          <div id="title-dropdown" class="chunk-dropdown" style="display: none;">
-            <!-- Will be populated with all chunks -->
-          </div>
-        </div>
-
-        <!-- Feature Toggles -->
-        <div class="control-group feature-toggles">
-          <button id="focus-mode-btn" class="toggle-btn"
-                  title="Focus mode - dim surrounding content (F)"
-                  aria-label="Toggle focus mode" aria-pressed="false">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <circle cx="12" cy="12" r="3" fill="currentColor"/>
-            </svg>
-            <span>Focus Mode</span>
-          </button>
-
-          <button id="loop-btn" class="toggle-btn"
-                  title="Loop current chunk (L)"
-                  aria-label="Toggle loop mode" aria-pressed="false">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17 1l4 4-4 4"/>
-              <path d="M3 11V9a4 4 0 014-4h14"/>
-              <path d="M7 23l-4-4 4-4"/>
-              <path d="M21 13v2a4 4 0 01-4 4H3"/>
-            </svg>
-            <span>Loop</span>
+          <button id="chunk-menu-btn" class="control-btn" title="Jump to chunk" aria-label="Jump to chunk">
+            <span class="material-icons">list_alt</span>
           </button>
         </div>
-
       </div>
-    </div>
 
-    <!-- Toggle Secondary Panel Button -->
-    <button id="toggle-secondary-btn" class="toggle-secondary-btn"
-            title="Show more controls" aria-label="Toggle additional controls" aria-expanded="false">
-      <svg class="expand-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="6 9 12 15 18 9"></polyline>
-      </svg>
-      <svg class="collapse-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
-        <polyline points="18 15 12 9 6 15"></polyline>
-      </svg>
-    </button>
-
-    <!-- Keyboard Shortcuts Hint -->
-    <div id="keyboard-hints" class="keyboard-hints" style="display: none;">
-      <div class="hints-header">Keyboard Shortcuts</div>
-      <div class="hints-list">
-        <div><kbd>Space</kbd> Play/Pause</div>
-        <div><kbd>←</kbd> Skip Back 5s</div>
-        <div><kbd>→</kbd> Skip Forward 5s</div>
-        <div><kbd>Ctrl</kbd>+<kbd>←</kbd> Previous Chunk</div>
-        <div><kbd>Ctrl</kbd>+<kbd>→</kbd> Next Chunk</div>
-        <div><kbd>Ctrl</kbd>+<kbd>↑</kbd> Speed Up</div>
-        <div><kbd>Ctrl</kbd>+<kbd>↓</kbd> Slow Down</div>
-        <div><kbd>F</kbd> Focus Mode</div>
-        <div><kbd>L</kbd> Loop Chunk</div>
-        <div><kbd>?</kbd> Show/Hide Shortcuts</div>
+      <!-- Progress Bar -->
+      <div class="toolbar-progress">
+        <div class="progress-bar-container">
+          <div id="progress-bar-bg" class="progress-bar-bg">
+            <div id="progress-bar-fill" class="progress-bar-fill"></div>
+            <div id="chunk-markers" class="chunk-markers"></div>
+          </div>
+          <input type="range" id="timeline" class="timeline-slider" min="0" max="100" value="0"
+                 title="Audio timeline" aria-label="Audio timeline slider">
+        </div>
+        <div class="progress-header">
+          <span id="current-time" class="time-display">01:02</span>
+          <span id="total-time" class="time-display">-01:34</span>
+        </div>
       </div>
+
+      <!-- Main Controls -->
+      <div class="toolbar-core">
+        <button id="skip-back-btn" class="control-btn control-skip" title="Skip back 10 seconds" aria-label="Skip back 10 seconds">
+          <span class="material-icons">replay_10</span>
+        </button>
+        <button id="prev-btn" class="control-btn control-prev" title="Previous chunk" aria-label="Previous chunk">
+          <span class="material-icons">skip_previous</span>
+        </button>
+        <button id="play-pause-btn" class="control-btn control-play" title="Play/Pause" aria-label="Play or pause">
+          <span class="material-icons play-icon">play_arrow</span>
+          <span class="material-icons pause-icon" style="display: none;">pause</span>
+          <span class="material-icons loading-spinner" style="display: none;">refresh</span>
+        </button>
+        <button id="next-btn" class="control-btn control-next" title="Next chunk" aria-label="Next chunk">
+          <span class="material-icons">skip_next</span>
+        </button>
+        <button id="skip-forward-btn" class="control-btn control-skip" title="Skip forward 10 seconds" aria-label="Skip forward 10 seconds">
+          <span class="material-icons">forward_10</span>
+        </button>
+      </div>
+
+      <!-- Speed Menu Popup (Hidden by default) -->
+      <div id="speed-popup" class="popup-menu" style="display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 12px; background: white; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #E5E7EB; padding: 16px; min-width: 200px; z-index: 100;">
+        <p style="text-align: center; font-size: 14px; font-weight: 500; color: #1F2937; margin-bottom: 12px;">Playback Speed</p>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+          <button class="speed-preset" data-speed="0.5" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: transparent; border: none; color: #6B7280; cursor: pointer; transition: all 0.2s;">0.5x</button>
+          <button class="speed-preset" data-speed="0.75" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: transparent; border: none; color: #6B7280; cursor: pointer; transition: all 0.2s;">0.75x</button>
+          <button class="speed-preset" data-speed="1.0" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: transparent; border: none; color: #6B7280; cursor: pointer; transition: all 0.2s;">1.0x</button>
+          <button class="speed-preset active" data-speed="1.25" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: #4F46E5; border: none; color: white; cursor: pointer; transition: all 0.2s;">1.25x</button>
+          <button class="speed-preset" data-speed="1.5" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: transparent; border: none; color: #6B7280; cursor: pointer; transition: all 0.2s;">1.5x</button>
+          <button class="speed-preset" data-speed="2.0" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: transparent; border: none; color: #6B7280; cursor: pointer; transition: all 0.2s;">2.0x</button>
+        </div>
+      </div>
+
+      <!-- Chunk Menu Popup (Hidden by default) -->
+      <div id="chunk-popup" class="popup-menu" style="display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 12px; background: white; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #E5E7EB; padding: 16px; min-width: 300px; max-width: 400px; max-height: 256px; overflow-y: auto; z-index: 100;">
+        <p style="text-align: center; font-size: 14px; font-weight: 500; color: #1F2937; margin-bottom: 12px;">Questions</p>
+        <div id="title-dropdown" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Will be populated with chunks -->
+        </div>
+      </div>
+
+      <!-- Hidden elements for compatibility -->
+      <div id="toolbar-secondary" style="display: none;"></div>
+      <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.25" value="1.0" style="display: none;" aria-label="Fine-tune playback speed">
+      <button id="toggle-secondary-btn" style="display: none;"></button>
+      <button id="focus-mode-btn" style="display: none;"></button>
+      <button id="loop-btn" style="display: none;"></button>
+      <div id="keyboard-hints" style="display: none;"></div>
     </div>
   </div>
 
@@ -2001,8 +1981,8 @@
       document.getElementById('prev-btn').onclick = () => navigateChunk(-1);
       document.getElementById('next-btn').onclick = () => navigateChunk(1);
       document.getElementById('play-pause-btn').onclick = togglePlayPause;
-      document.getElementById('skip-back-btn').onclick = () => skipTime(-5);
-      document.getElementById('skip-forward-btn').onclick = () => skipTime(5);
+      document.getElementById('skip-back-btn').onclick = () => skipTime(-10);
+      document.getElementById('skip-forward-btn').onclick = () => skipTime(10);
 
       // Timeline scrubbing
       document.getElementById('timeline').oninput = scrubTimeline;
@@ -2023,15 +2003,39 @@
         };
       }
 
-      // Chunk list button
-      document.getElementById('current-title-btn').onclick = toggleTitleDropdown;
+      // Chunk list button (old compatibility)
+      const oldTitleBtn = document.getElementById('current-title-btn');
+      if (oldTitleBtn) {
+        oldTitleBtn.onclick = toggleTitleDropdown;
+      }
+
+      // New menu buttons
+      const speedMenuBtn = document.getElementById('speed-menu-btn');
+      if (speedMenuBtn) {
+        speedMenuBtn.onclick = (e) => {
+          e.stopPropagation();
+          toggleSpeedMenu();
+        };
+      }
+
+      const chunkMenuBtn = document.getElementById('chunk-menu-btn');
+      if (chunkMenuBtn) {
+        chunkMenuBtn.onclick = (e) => {
+          e.stopPropagation();
+          toggleChunkMenu();
+        };
+      }
 
       // Feature toggles
-      document.getElementById('focus-mode-btn').onclick = toggleFocusMode;
-      document.getElementById('loop-btn').onclick = toggleLoop;
+      const focusModeBtn = document.getElementById('focus-mode-btn');
+      if (focusModeBtn) focusModeBtn.onclick = toggleFocusMode;
+
+      const loopBtn = document.getElementById('loop-btn');
+      if (loopBtn) loopBtn.onclick = toggleLoop;
 
       // Toggle secondary panel
-      document.getElementById('toggle-secondary-btn').onclick = toggleSecondaryPanel;
+      const toggleSecBtn = document.getElementById('toggle-secondary-btn');
+      if (toggleSecBtn) toggleSecBtn.onclick = toggleSecondaryPanel;
 
       // Keyboard shortcuts
       document.addEventListener('keydown', handleKeyboard);
@@ -2044,10 +2048,20 @@
       globalAudioPlayer.onended = handleAudioEnd;
       globalAudioPlayer.onloadedmetadata = updateDuration;
 
-      // Close dropdown when clicking outside
+      // Close dropdowns when clicking outside
       document.addEventListener('click', (e) => {
+        if (!e.target.closest('#speed-menu-btn') && !e.target.closest('#speed-popup')) {
+          const speedPopup = document.getElementById('speed-popup');
+          if (speedPopup) speedPopup.style.display = 'none';
+        }
+        if (!e.target.closest('#chunk-menu-btn') && !e.target.closest('#chunk-popup')) {
+          const chunkPopup = document.getElementById('chunk-popup');
+          if (chunkPopup) chunkPopup.style.display = 'none';
+        }
+        // Old dropdown compatibility
         if (!e.target.closest('.chunk-nav')) {
-          document.getElementById('title-dropdown').style.display = 'none';
+          const titleDropdown = document.getElementById('title-dropdown');
+          if (titleDropdown) titleDropdown.style.display = 'none';
         }
       });
     }
@@ -2081,6 +2095,44 @@
       currentPlaybackRate = Math.max(0.5, Math.min(2.0, speed));
       globalAudioPlayer.playbackRate = currentPlaybackRate;
       updateToolbarDisplay();
+
+      // Update speed display
+      const speedDisplay = document.getElementById('speed-display');
+      if (speedDisplay) {
+        speedDisplay.textContent = speed + 'x';
+      }
+
+      // Close speed popup
+      const speedPopup = document.getElementById('speed-popup');
+      if (speedPopup) {
+        speedPopup.style.display = 'none';
+      }
+    }
+
+    function toggleSpeedMenu() {
+      const popup = document.getElementById('speed-popup');
+      const chunkPopup = document.getElementById('chunk-popup');
+
+      // Close chunk menu if open
+      if (chunkPopup) chunkPopup.style.display = 'none';
+
+      // Toggle speed menu
+      if (popup) {
+        popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+      }
+    }
+
+    function toggleChunkMenu() {
+      const popup = document.getElementById('chunk-popup');
+      const speedPopup = document.getElementById('speed-popup');
+
+      // Close speed menu if open
+      if (speedPopup) speedPopup.style.display = 'none';
+
+      // Toggle chunk menu
+      if (popup) {
+        popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+      }
     }
 
     function navigateChunk(direction) {
@@ -2094,7 +2146,13 @@
       currentChunkIndex = index;
       const chunk = serverChunks[index];
       playAudio(chunk, index);
-      document.getElementById('title-dropdown').style.display = 'none';
+
+      // Close all menus
+      const titleDropdown = document.getElementById('title-dropdown');
+      if (titleDropdown) titleDropdown.style.display = 'none';
+
+      const chunkPopup = document.getElementById('chunk-popup');
+      if (chunkPopup) chunkPopup.style.display = 'none';
     }
 
     function togglePlayPause() {

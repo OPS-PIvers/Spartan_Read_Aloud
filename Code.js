@@ -89,17 +89,18 @@ function step0_addNewPdfs() {
 
   const searchResults = Drive.Files.list({
     q: query,
-    maxResults: 1000
+    pageSize: 1000,
+    fields: 'files(id, name, mimeType, webViewLink)'
   });
 
-  if (searchResults.items && searchResults.items.length > 0) {
-    Logger.log(`Found ${searchResults.items.length} file(s) in folder`);
+  if (searchResults.files && searchResults.files.length > 0) {
+    Logger.log(`Found ${searchResults.files.length} file(s) in folder`);
 
-    for (let i = 0; i < searchResults.items.length; i++) {
-      const file = searchResults.items[i];
-      const fileUrl = file.alternateLink; // Use alternateLink for the web URL
+    for (let i = 0; i < searchResults.files.length; i++) {
+      const file = searchResults.files[i];
+      const fileUrl = file.webViewLink; // Use webViewLink for the web URL
       const mimeType = file.mimeType;
-      const fileName = file.title;
+      const fileName = file.name;
 
       if (!existingUrls.has(fileUrl)) {
         sheet.appendRow([fileUrl]);
@@ -407,14 +408,16 @@ function convertWordToHtml(fileId, file) {
   let tempDocId = null;
   try {
     const blob = file.getBlob();
-    const resource = {
-      title: blob.getName(),
+    const metadata = {
+      name: blob.getName(),
       mimeType: MimeType.GOOGLE_DOCS // Convert to Google Doc
     };
 
     Logger.log('→ Converting Word file to temporary Google Doc');
-    // Use Drive API v2 to convert Word → Google Doc
-    const tempDoc = Drive.Files.insert(resource, blob);
+    // Use Drive API v3 to convert Word → Google Doc
+    const tempDoc = Drive.Files.create(metadata, blob, {
+      fields: 'id'
+    });
     tempDocId = tempDoc.id;
     Logger.log(`→ Created temporary Google Doc: ${tempDocId}`);
 
@@ -436,7 +439,7 @@ function convertWordToHtml(fileId, file) {
     // Always clean up temporary doc
     if (tempDocId) {
       try {
-        Drive.Files.remove(tempDocId);
+        Drive.Files.delete(tempDocId);
         Logger.log('→ Deleted temporary Google Doc');
       } catch (cleanupError) {
         Logger.log(`⚠ Failed to delete temp doc ${tempDocId}: ${cleanupError.toString()}`);
@@ -455,14 +458,17 @@ function convertPdfToHtml(fileId, file) {
   let tempDocId = null;
   try {
     const blob = file.getBlob();
-    const resource = {
-      title: blob.getName(),
-      mimeType: blob.getContentType()
+    const metadata = {
+      name: blob.getName(),
+      mimeType: MimeType.GOOGLE_DOCS // Convert to Google Doc with OCR
     };
 
     Logger.log('→ OCR-ing PDF to temporary Google Doc');
-    // OCR the PDF into a Google Doc
-    const tempDoc = Drive.Files.insert(resource, blob, { ocr: true });
+    // OCR the PDF into a Google Doc using Drive API v3
+    const tempDoc = Drive.Files.create(metadata, blob, {
+      ocrLanguage: 'en',
+      fields: 'id'
+    });
     tempDocId = tempDoc.id;
     Logger.log(`→ Created OCR'd Google Doc: ${tempDocId}`);
 
@@ -484,7 +490,7 @@ function convertPdfToHtml(fileId, file) {
     // Always clean up temporary doc
     if (tempDocId) {
       try {
-        Drive.Files.remove(tempDocId);
+        Drive.Files.delete(tempDocId);
         Logger.log('→ Deleted temporary OCR doc');
       } catch (cleanupError) {
         Logger.log(`⚠ Failed to delete temp doc ${tempDocId}: ${cleanupError.toString()}`);
@@ -547,16 +553,22 @@ function extractTextFromFile(fileId) {
     if (mimeType === MimeType.PDF) {
       Logger.log('→ Using OCR extraction for PDF');
       const blob = file.getBlob();
-      const resource = { title: blob.getName(), mimeType: blob.getContentType() };
+      const metadata = {
+        name: blob.getName(),
+        mimeType: MimeType.GOOGLE_DOCS // Convert to Google Doc with OCR
+      };
 
-      if (typeof Drive === 'undefined' || !Drive.Files || typeof Drive.Files.insert !== 'function') {
-        throw new Error("Drive API v2 not configured.");
+      if (typeof Drive === 'undefined' || !Drive.Files || typeof Drive.Files.create !== 'function') {
+        throw new Error("Drive API v3 not configured.");
       }
 
-      const tempDoc = Drive.Files.insert(resource, blob, { ocr: true });
+      const tempDoc = Drive.Files.create(metadata, blob, {
+        ocrLanguage: 'en',
+        fields: 'id'
+      });
       const doc = DocumentApp.openById(tempDoc.id);
       const text = doc.getBody().getText();
-      Drive.Files.remove(tempDoc.id);
+      Drive.Files.delete(tempDoc.id);
 
       const chunks = text.split(/\n(?=\s*\d+\.\s)/).map(chunk => chunk.trim()).filter(chunk => chunk);
       Logger.log(`✓ Extracted ${chunks.length} chunks from PDF`);

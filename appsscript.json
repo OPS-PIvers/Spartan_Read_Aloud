@@ -4,11 +4,6 @@
     "enabledAdvancedServices": [
       {
         "userSymbol": "Drive",
-        "version": "v2",
-        "serviceId": "drive"
-      },
-      {
-        "userSymbol": "DriveV3",
         "version": "v3",
         "serviceId": "drive"
       }
