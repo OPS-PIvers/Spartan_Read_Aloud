@@ -1160,6 +1160,124 @@
       }
     }
 
+    /* ========================================
+       ASSESSMENT SELECTION UI
+       ======================================== */
+
+    #assessment-selection-container {
+      background-color: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 600px;
+    }
+
+    #assessment-selection-container h2 {
+      margin-top: 0;
+      margin-bottom: 20px;
+      color: #1a73e8;
+      text-align: center;
+    }
+
+    .selection-subtitle {
+      text-align: center;
+      color: #5f6368;
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    .assessment-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .assessment-card {
+      background: #f8f9fa;
+      border: 2px solid #e8eaed;
+      border-radius: 8px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: left;
+    }
+
+    .assessment-card:hover {
+      background: #f1f3f4;
+      border-color: #1a73e8;
+      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .assessment-card:active {
+      transform: translateY(0);
+    }
+
+    .assessment-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #202124;
+      margin: 0 0 8px 0;
+      word-break: break-word;
+    }
+
+    .assessment-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .assessment-meta-item {
+      font-size: 14px;
+      color: #5f6368;
+      margin: 0;
+    }
+
+    .assessment-meta-label {
+      font-weight: 500;
+      color: #3c4043;
+    }
+
+    .assessment-status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      background: #e6f4ea;
+      color: #137333;
+      margin-top: 4px;
+    }
+
+    .back-to-login-btn {
+      width: 100%;
+      background-color: #f8f9fa;
+      color: #3c4043;
+      border: 1px solid #dadce0;
+      margin-top: 12px;
+    }
+
+    .back-to-login-btn:hover {
+      background-color: #f1f3f4;
+      border-color: #dadce0;
+    }
+
+    @media (max-width: 600px) {
+      #assessment-selection-container {
+        padding: 20px;
+      }
+
+      .assessment-title {
+        font-size: 15px;
+      }
+
+      .assessment-meta-item {
+        font-size: 13px;
+      }
+    }
+
 
   </style>
 </head>
@@ -1173,6 +1291,15 @@
     <input type="email" id="email-input" placeholder="Enter your school email" autocomplete="email">
     <input type="password" id="password-input" placeholder="Enter the assessment password">
     <button id="load-button" onclick="loadAssessment()">Load Assessment</button>
+  </div>
+
+  <div id="assessment-selection-container" style="display: none;">
+    <h2>Select Your Assessment</h2>
+    <p class="selection-subtitle">Choose which assessment you'd like to take</p>
+    <div id="assessment-grid" class="assessment-grid">
+      <!-- Assessment cards will be inserted here dynamically -->
+    </div>
+    <button class="back-to-login-btn" onclick="backToLogin()">Back to Login</button>
   </div>
 
   <div id="viewer-container" style="display: none;">
@@ -1271,9 +1398,10 @@
     const loadButton = document.getElementById('load-button');
     const pdfContainer = document.getElementById('pdf-container');
     const loginContainer = document.getElementById('login-container');
+    const assessmentSelectionContainer = document.getElementById('assessment-selection-container');
     const viewerContainer = document.getElementById('viewer-container');
     const loginErrorDiv = document.getElementById('login-error');
-    
+
     let globalAudioPlayer = new Audio();
     let currentlyPlayingChunk = null;
     let serverChunks = [];
@@ -1290,6 +1418,11 @@
     let totalChunks = 0; // Total number of audio chunks
     let chunksLoaded = 0; // Number of chunks currently loaded/cached
 
+    // Session storage for multi-assessment flow
+    let storedEmail = null;
+    let storedPassword = null;
+    let availableAssessments = [];
+
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
     function loadAssessment() {
@@ -1298,15 +1431,110 @@
         loginErrorDiv.textContent = 'Please enter both your email and the password.';
         return;
       }
-      
-      loginContainer.style.display = 'none';
-      viewerContainer.style.display = 'block';
+
       loadButton.disabled = true;
+      loadButton.textContent = 'Loading...';
+
+      // Store credentials for potential multi-assessment flow
+      storedEmail = emailInput.value;
+      storedPassword = passwordInput.value;
+
+      // Call new function to get list of assessments
+      google.script.run
+        .withSuccessHandler(onAssessmentsLoaded)
+        .withFailureHandler(onAssessmentLoadError)
+        .getStudentAssessments(emailInput.value, passwordInput.value);
+    }
+
+    function onAssessmentsLoaded(result) {
+      if (result.error) {
+        onAssessmentLoadError(result.error);
+        return;
+      }
+
+      availableAssessments = result.assessments;
+      console.log(`Loaded ${availableAssessments.length} assessment(s)`);
+
+      // If only one assessment, load it directly (ZERO REGRESSION)
+      if (availableAssessments.length === 1) {
+        console.log('Single assessment found, loading directly...');
+        loadSpecificAssessment(availableAssessments[0].assessmentUrl);
+      } else {
+        // Multiple assessments - show selection screen
+        console.log('Multiple assessments found, showing selection screen...');
+        showAssessmentSelection();
+      }
+    }
+
+    function showAssessmentSelection() {
+      loginContainer.style.display = 'none';
+      assessmentSelectionContainer.style.display = 'block';
+      loadButton.disabled = false;
+      loadButton.textContent = 'Load Assessment';
+
+      const assessmentGrid = document.getElementById('assessment-grid');
+      assessmentGrid.innerHTML = '';
+
+      availableAssessments.forEach((assessment, index) => {
+        const card = document.createElement('div');
+        card.className = 'assessment-card';
+        card.onclick = () => loadSpecificAssessment(assessment.assessmentUrl);
+
+        let metaHtml = '';
+        if (assessment.instructor) {
+          metaHtml += `<p class="assessment-meta-item"><span class="assessment-meta-label">Teacher:</span> ${escapeHtml(assessment.instructor)}</p>`;
+        }
+        if (assessment.className) {
+          metaHtml += `<p class="assessment-meta-item"><span class="assessment-meta-label">Class:</span> ${escapeHtml(assessment.className)}</p>`;
+        }
+
+        card.innerHTML = `
+          <h3 class="assessment-title">${escapeHtml(assessment.assessmentName)}</h3>
+          <div class="assessment-meta">
+            ${metaHtml}
+            <span class="assessment-status-badge">Ready</span>
+          </div>
+        `;
+
+        assessmentGrid.appendChild(card);
+      });
+    }
+
+    function loadSpecificAssessment(assessmentUrl) {
+      console.log(`Loading specific assessment: ${assessmentUrl}`);
+      assessmentSelectionContainer.style.display = 'none';
+      viewerContainer.style.display = 'block';
 
       google.script.run
         .withSuccessHandler(onPdfLoaded)
         .withFailureHandler(onPdfLoadError)
-        .getAssessmentPdf(emailInput.value, passwordInput.value);
+        .getAssessmentPdf(storedEmail, storedPassword, assessmentUrl);
+    }
+
+    function backToLogin() {
+      assessmentSelectionContainer.style.display = 'none';
+      loginContainer.style.display = 'block';
+      loadButton.disabled = false;
+      loadButton.textContent = 'Load Assessment';
+      storedEmail = null;
+      storedPassword = null;
+      availableAssessments = [];
+    }
+
+    function onAssessmentLoadError(error) {
+      console.error('Assessment load error:', error);
+      loginErrorDiv.textContent = error;
+      loginContainer.style.display = 'block';
+      assessmentSelectionContainer.style.display = 'none';
+      viewerContainer.style.display = 'none';
+      loadButton.disabled = false;
+      loadButton.textContent = 'Load Assessment';
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
 
     function onPdfLoaded(result) {

@@ -625,9 +625,9 @@ function extractTextFromFile(fileId) {
     // STEP 3: Split on numbered questions (handles both "1." and "1)" formats)
     // Pattern explanation:
     // - [\n\r]+ = one or more newlines (Unix or Windows)
-    // - (?=\d+[.)\]]\s+) = lookahead for digit(s) + period/paren/bracket + whitespace
-    // This is more lenient and handles questions starting at column 0
-    const chunks = plainText.split(/[\n\r]+(?=\d+[.)\]]\s+)/)
+    // - (?=\s*\d+[.)\]]\s+) = lookahead for optional spaces + digit(s) + period/paren/bracket + whitespace
+    // This handles questions with leading indentation/spaces
+    const chunks = plainText.split(/[\n\r]+(?=\s*\d+[.)\]]\s+)/)
       .map(chunk => chunk.trim())
       .filter(chunk => chunk);
 
@@ -862,15 +862,104 @@ function validateSessionToken(token) {
 }
 
 /**
+ * Retrieves list of all assessments assigned to a student.
+ * Used for multi-assessment selection landing page.
+ * @param {string} email Student email
+ * @param {string} password Assessment password
+ * @returns {Object} { success: true, assessments: [...] } or { error: "..." }
+ */
+function getStudentAssessments(email, password) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    if (!sheet) return { error: 'Backend Error: "Assessment Database" sheet not found.' };
+
+    const data = sheet.getDataRange().getValues();
+    const cleanEmail = email.toLowerCase().trim();
+    const matchingAssessments = [];
+    let passwordValidated = false;
+
+    // First pass: find all rows matching this student's email
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const pdfUrl = row[COL.PDF_URL];
+      const isComplete = row[COL.IS_COMPLETE];
+      const sheetPassword = row[COL.PASSWORD].toString().trim();
+      const studentEmailsRaw = row[COL.STUDENT_EMAILS].toString().toLowerCase();
+      const className = row[COL.CLASS_NAME] ? row[COL.CLASS_NAME].toString().trim() : '';
+      const instructor = row[COL.INSTRUCTOR] ? row[COL.INSTRUCTOR].toString().trim() : '';
+
+      if (!pdfUrl || !sheetPassword || !studentEmailsRaw) continue;
+
+      const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
+
+      // Check if student email matches
+      if (studentEmails.includes(cleanEmail)) {
+        // Validate password on first match
+        if (!passwordValidated) {
+          if (password !== sheetPassword) {
+            return { error: 'Assessment not found. Please check your email and password and try again.' };
+          }
+          passwordValidated = true;
+        }
+
+        // Only include completed assessments with matching password
+        if (isComplete === true && password === sheetPassword) {
+          try {
+            const fileId = getFileIdFromUrl(pdfUrl);
+            if (fileId) {
+              const file = DriveApp.getFileById(fileId);
+              const fileName = file.getName();
+
+              matchingAssessments.push({
+                assessmentName: fileName,
+                className: className,
+                instructor: instructor,
+                assessmentUrl: pdfUrl,
+                rowIndex: i
+              });
+            }
+          } catch (e) {
+            Logger.log(`Warning: Could not fetch file info for row ${i}: ${e.toString()}`);
+            // Continue processing other assessments
+          }
+        }
+      }
+    }
+
+    // If password was never validated, no matching email was found
+    if (!passwordValidated) {
+      return { error: 'Assessment not found. Please check your email and password and try again.' };
+    }
+
+    // Check if any completed assessments were found
+    if (matchingAssessments.length === 0) {
+      return { error: 'No ready assessments found. Your assessments may still be processing.' };
+    }
+
+    Logger.log(`Found ${matchingAssessments.length} assessment(s) for ${email}`);
+
+    return {
+      success: true,
+      assessments: matchingAssessments
+    };
+
+  } catch (e) {
+    Logger.log(`Error in getStudentAssessments: ${e.toString()}`);
+    return { error: 'An unexpected server error occurred.' };
+  }
+}
+
+/**
  * Retrieves assessment data for authenticated student.
  * Returns different data structures based on file type:
  * - PDFs: base64 pdfData for PDF.js rendering
  * - Docs/Word: assessmentHtml for native HTML rendering
  * @param {string} email Student email
  * @param {string} password Assessment password
+ * @param {string} assessmentUrl Optional - specific assessment URL to load (for multi-assessment selection)
  * @returns {Object} Assessment data or error (includes sessionToken for secure audio access)
  */
-function getAssessmentPdf(email, password) {
+function getAssessmentPdf(email, password, assessmentUrl) {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
     if (!sheet) return { error: 'Backend Error: "Assessment Database" sheet not found.' };
@@ -884,6 +973,9 @@ function getAssessmentPdf(email, password) {
       const studentEmailsRaw = row[COL.STUDENT_EMAILS].toString().toLowerCase();
 
       if (!pdfUrl || !sheetPassword || !studentEmailsRaw) continue;
+
+      // If assessmentUrl is provided, skip rows that don't match
+      if (assessmentUrl && pdfUrl !== assessmentUrl) continue;
 
       const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
       const cleanEmail = email.toLowerCase().trim();
