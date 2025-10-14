@@ -583,8 +583,21 @@ function extractTextFromFile(fileId) {
       return null;
     }
 
-    // Strip HTML tags and extract plain text (preserving structure)
-    const plainText = conversionResult.html
+    let htmlContent = conversionResult.html;
+    Logger.log(`→ Raw HTML length: ${htmlContent.length} chars`);
+    Logger.log(`→ HTML preview: ${htmlContent.substring(0, 500)}...`);
+
+    // STEP 1: Convert native numbered lists (<ol><li>) to explicit numbers
+    // This handles Google Docs numbered lists where numbers are CSS-generated
+    htmlContent = htmlContent.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, function(match, listContent) {
+      let itemNumber = 1;
+      return listContent.replace(/<li[^>]*>/gi, function() {
+        return `<p>${itemNumber++}. `;
+      }).replace(/<\/li>/gi, '</p>');
+    });
+
+    // STEP 2: Strip HTML tags and extract plain text (preserving structure)
+    let plainText = htmlContent
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove style blocks
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove scripts
       .replace(/<\/(tr|td|th|p|div|li|h[1-6])>/gi, '\n</$1>') // Preserve structure with newlines
@@ -598,12 +611,31 @@ function extractTextFromFile(fileId) {
       .replace(/&#39;/g, "'")
       .replace(/&[a-z]+;/gi, ' '); // Remove remaining entities
 
-    // Split on numbered questions (same pattern as PDFs)
-    const chunks = plainText.split(/\n(?=\s*\d+\.\s)/)
+    // Log text BEFORE normalization to debug
+    Logger.log(`→ Plain text BEFORE normalization (first 1500 chars): ${plainText.substring(0, 1500)}`);
+
+    // Now normalize whitespace
+    plainText = plainText
+      .replace(/\n\s*\n\s*\n/g, '\n\n') // Collapse 3+ newlines to 2
+      .replace(/[ \t]+/g, ' '); // Collapse multiple spaces/tabs to single space
+
+    Logger.log(`→ Plain text length: ${plainText.length} chars`);
+    Logger.log(`→ Plain text AFTER normalization (first 1500 chars): ${plainText.substring(0, 1500)}`);
+
+    // STEP 3: Split on numbered questions (handles both "1." and "1)" formats)
+    // Pattern explanation:
+    // - [\n\r]+ = one or more newlines (Unix or Windows)
+    // - (?=\d+[.)\]]\s+) = lookahead for digit(s) + period/paren/bracket + whitespace
+    // This is more lenient and handles questions starting at column 0
+    const chunks = plainText.split(/[\n\r]+(?=\d+[.)\]]\s+)/)
       .map(chunk => chunk.trim())
       .filter(chunk => chunk);
 
     Logger.log(`✓ Extracted ${chunks.length} chunks from HTML`);
+    chunks.forEach((chunk, i) => {
+      Logger.log(`  Chunk ${i + 1}: ${chunk.substring(0, 100)}...`);
+    });
+
     return chunks;
 
   } catch (e) {

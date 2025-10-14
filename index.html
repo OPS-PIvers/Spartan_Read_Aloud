@@ -5,9 +5,12 @@
   <base target="_top">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/text_layer_builder.css">
+  <!-- Material Icons for toolbar buttons -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <!-- Inter font for UI -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
     html, body {
       min-height: 100vh;
@@ -93,80 +96,128 @@
       bottom: 0;
       left: 0;
       right: 0;
-      transform: translateZ(0); /* Force hardware acceleration */
-      background: transparent;
-      padding: 16px;
-      backdrop-filter: blur(4px);
+      background: white;
+      border-top: 1px solid rgba(229, 231, 235, 1);
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+      padding: 8px 16px;
       z-index: 9999;
       display: flex;
       justify-content: center;
       align-items: center;
-      will-change: transform; /* Optimize for transform animations */
-      -webkit-transform: translateZ(0); /* iOS-specific fix */
     }
 
     .audio-toolbar-inner {
       width: 100%;
-      max-width: 512px; /* Tailwind's max-w-lg equivalent */
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25),
-                  0 0 0 1px rgba(0, 0, 0, 0.05);
-      border: 1px solid rgba(229, 231, 235, 1); /* border-border-light */
-      padding: 16px;
-    }
-
-    /* Toolbar Header with Title and Controls */
-    .toolbar-header {
+      max-width: 100%; /* Full width for single row layout */
       display: flex;
+      flex-direction: row;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
+      gap: 16px;
+      padding: 0;
     }
 
+    /* Left Zone: Title */
     .toolbar-title {
+      min-width: 180px;
+      max-width: 250px;
+      flex-shrink: 1;
       text-align: left;
+      overflow: hidden;
+      cursor: pointer;
+      padding: 4px 8px;
+      margin: -4px -8px;
+      border-radius: 8px;
+      transition: background-color 0.2s;
+      position: relative;
+    }
+
+    .toolbar-title:hover {
+      background-color: rgba(0, 0, 0, 0.05);
     }
 
     .toolbar-title-main {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
-      color: #1F2937; /* text-light */
-      line-height: 1.25;
+      color: #1F2937;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin: 0;
     }
 
     .toolbar-title-sub {
-      font-size: 12px;
-      color: #6B7280; /* subtle-light */
-      line-height: 1.25;
+      font-size: 10px;
+      color: #6B7280;
+      line-height: 1.2;
+      margin: 0;
+    }
+
+    /* Center Zone: Playback Controls */
+    .toolbar-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* Right Zone: Progress + Actions */
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .progress-compact {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .time-displays {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .time-separator {
+      color: #9CA3AF;
+      font-size: 11px;
     }
 
     .toolbar-actions {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      flex-shrink: 0;
     }
 
-    /* Control Buttons */
+    /* Control Buttons - Compact Sizes */
     .control-btn {
       background: transparent;
       border: none;
-      border-radius: 9999px; /* rounded-full */
+      border-radius: 9999px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: all 0.2s ease;
-      color: #6B7280; /* subtle-light */
+      color: #6B7280;
       padding: 0;
-      width: 40px;
-      height: 40px;
+      width: 32px;
+      height: 32px;
     }
 
     .control-btn:hover:not(:disabled) {
-      color: #4F46E5; /* primary */
-      background: #E5E7EB; /* border-light */
-      transform: scale(1.0);
+      color: #4F46E5;
+      background: #E5E7EB;
+      transform: scale(1.05);
     }
 
     .control-btn:active:not(:disabled) {
@@ -178,88 +229,61 @@
       cursor: not-allowed;
     }
 
-    /* Main Control Buttons (Core Row) */
-    .toolbar-core {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 12px;
-    }
-
     .control-skip {
-      width: 40px;
-      height: 40px;
+      width: 32px;
+      height: 32px;
     }
 
     .control-skip .material-icons {
-      font-size: 32px;
+      font-size: 24px;
     }
 
     .control-prev,
     .control-next {
-      width: 40px;
-      height: 40px;
+      width: 32px;
+      height: 32px;
     }
 
     .control-prev .material-icons,
     .control-next .material-icons {
-      font-size: 40px;
+      font-size: 28px;
     }
 
     .control-play {
-      width: 48px;
-      height: 48px;
-      background: #4F46E5; /* primary */
+      width: 40px;
+      height: 40px;
+      background: #4F46E5;
       color: white;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .control-play:hover:not(:disabled) {
-      background: #4338CA; /* darker primary */
-      transform: scale(1.05);
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      background: #4338CA;
+      transform: scale(1.08);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
     }
 
     .control-play .material-icons {
-      font-size: 40px;
+      font-size: 32px;
     }
 
-    /* Progress Section */
-    .toolbar-progress {
-      margin-bottom: 12px;
-    }
-
-    .progress-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 4px;
-      font-size: 12px;
-      color: #6B7280; /* subtle-light */
+    /* Progress Bar - Compact Inline */
+    .progress-bar-container {
+      position: relative;
+      height: 5px;
+      flex: 1;
+      min-width: 120px;
+      background: #E5E7EB;
+      border-radius: 9999px;
+      overflow: hidden;
+      cursor: pointer;
     }
 
     .time-display {
       font-family: 'Monaco', 'Consolas', monospace;
-      color: #6B7280; /* subtle-light */
-      font-size: 12px;
-      min-width: 36px;
-    }
-
-    .chunk-counter {
-      color: #6B7280; /* subtle-light */
-      font-weight: 500;
-      font-size: 12px;
-    }
-
-    .progress-bar-container {
-      position: relative;
-      height: 6px;
-      width: 100%;
-      background: #E5E7EB; /* border-light */
-      border-radius: 9999px; /* rounded-full */
-      overflow: hidden;
-      cursor: pointer;
+      color: #6B7280;
+      font-size: 10px;
+      min-width: 30px;
     }
 
     .progress-bar-bg {
@@ -299,7 +323,7 @@
       top: 0;
       left: 0;
       width: 100%;
-      height: 6px;
+      height: 5px;
       -webkit-appearance: none;
       appearance: none;
       background: transparent;
@@ -311,25 +335,25 @@
     .timeline-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
-      background: #4F46E5; /* primary */
+      background: #4F46E5;
       cursor: pointer;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
     .timeline-slider::-webkit-slider-thumb:hover {
-      transform: scale(1.15);
-      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.5);
+      transform: scale(1.2);
+      box-shadow: 0 2px 6px rgba(79, 70, 229, 0.5);
     }
 
     .timeline-slider::-moz-range-thumb {
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
-      background: #4F46E5; /* primary */
+      background: #4F46E5;
       cursor: pointer;
       border: none;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -337,8 +361,8 @@
     }
 
     .timeline-slider::-moz-range-thumb:hover {
-      transform: scale(1.15);
-      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.5);
+      transform: scale(1.2);
+      box-shadow: 0 2px 6px rgba(79, 70, 229, 0.5);
     }
 
     /* Tier 2: Secondary Controls */
@@ -586,8 +610,7 @@
       position: absolute;
       bottom: calc(100% + 12px);
       right: 0;
-      background: rgba(32, 33, 36, 0.95);
-      backdrop-filter: blur(10px);
+      background: rgba(32, 33, 36, 0.98); /* Increased opacity for solid background */
       color: white;
       border-radius: 12px;
       padding: 16px;
@@ -671,61 +694,65 @@
     /* Mobile Responsive */
     @media (max-width: 768px) {
       #audio-toolbar {
-        width: 95vw;
-        max-width: 95vw;
-        bottom: 10px;
+        padding: 6px 12px;
       }
 
-      .toolbar-core {
-        padding: 16px 12px 10px 12px;
-        gap: 10px;
+      .audio-toolbar-inner {
+        gap: 12px;
       }
 
-      .control-btn {
-        width: 56px;
-        height: 56px;
+      .toolbar-title {
+        min-width: 120px;
+        max-width: 150px;
       }
 
-      .control-play {
-        width: 72px;
-        height: 72px;
-      }
-
-      .control-prev,
-      .control-next {
-        width: 52px;
-        height: 52px;
-      }
-
-      .control-skip {
-        width: 48px;
-        height: 48px;
-      }
-
-      .toolbar-progress {
-        padding: 0 12px 12px 12px;
-      }
-
-      .secondary-panel {
-        padding: 12px;
-      }
-
-      .speed-controls {
-        gap: 4px;
-      }
-
-      .speed-preset {
-        min-width: 48px;
-        padding: 8px 10px;
+      .toolbar-title-main {
         font-size: 12px;
       }
 
-      .feature-toggles {
-        flex-direction: column;
+      .toolbar-title-sub {
+        font-size: 9px;
       }
 
-      .toggle-btn {
-        padding: 12px;
+      .toolbar-controls {
+        gap: 6px;
+      }
+
+      .control-btn {
+        width: 28px;
+        height: 28px;
+      }
+
+      .control-skip .material-icons {
+        font-size: 20px;
+      }
+
+      .control-prev .material-icons,
+      .control-next .material-icons {
+        font-size: 24px;
+      }
+
+      .control-play {
+        width: 36px;
+        height: 36px;
+      }
+
+      .control-play .material-icons {
+        font-size: 28px;
+      }
+
+      .progress-compact {
+        gap: 6px;
+        min-width: 100px;
+      }
+
+      .time-display {
+        font-size: 9px;
+        min-width: 26px;
+      }
+
+      .toolbar-actions {
+        gap: 4px;
       }
 
       .keyboard-hints {
@@ -737,62 +764,60 @@
 
     @media (max-width: 480px) {
       #audio-toolbar {
-        width: 98vw;
-        max-width: 98vw;
-        border-radius: 12px;
+        padding: 6px 8px;
       }
 
-      .toolbar-core {
-        padding: 14px 10px 8px 10px;
+      .audio-toolbar-inner {
         gap: 8px;
       }
 
-      .control-btn {
-        width: 48px;
-        height: 48px;
+      .toolbar-title {
+        min-width: 80px;
+        max-width: 120px;
       }
 
-      .control-play {
-        width: 64px;
-        height: 64px;
-      }
-
-      .control-prev,
-      .control-next {
-        width: 44px;
-        height: 44px;
-      }
-
-      .control-skip {
-        width: 40px;
-        height: 40px;
-      }
-
-      .toolbar-progress {
-        padding: 0 10px 10px 10px;
-      }
-
-      .progress-header {
-        font-size: 10px;
-      }
-
-      .time-display {
-        font-size: 10px;
-        min-width: 32px;
-      }
-
-      .chunk-counter {
+      .toolbar-title-main {
         font-size: 11px;
       }
 
-      .secondary-panel {
-        padding: 10px;
-        gap: 12px;
+      .toolbar-title-sub {
+        display: none; /* Hide chunk counter on very small screens */
       }
 
-      .speed-preset {
-        min-width: 44px;
-        padding: 6px 8px;
+      .toolbar-controls {
+        gap: 4px;
+      }
+
+      .control-btn {
+        width: 26px;
+        height: 26px;
+      }
+
+      .control-skip {
+        display: none; /* Hide skip buttons on small screens */
+      }
+
+      .control-prev .material-icons,
+      .control-next .material-icons {
+        font-size: 22px;
+      }
+
+      .control-play {
+        width: 34px;
+        height: 34px;
+      }
+
+      .control-play .material-icons {
+        font-size: 26px;
+      }
+
+      .progress-compact {
+        min-width: 80px;
+      }
+
+      .time-display {
+        font-size: 8px;
+        min-width: 24px;
       }
     }
 
@@ -870,9 +895,9 @@
 
     .html-assessment-container {
       padding: 50px 60px;
-      max-width: 700px; /* Narrower for better reading (70 chars/line) */
+      max-width: 900px; /* Wider for better space utilization while maintaining readability */
       margin: 0 auto;
-      background: #fafafa; /* Soft off-white, easier on eyes */
+      background: white; /* Match pdf-container background */
       line-height: 2.0; /* Generous spacing prevents line confusion */
       font-family: 'Inter', sans-serif;
       color: #4a4a4a; /* Soft dark gray, not harsh black */
@@ -1020,9 +1045,9 @@
        HIGHLIGHTING SYSTEM - SUBTLE & CALM
        ======================================== */
 
-    /* Highlighted elements - soft yellow, no outlines */
+    /* Highlighted elements - visible yellow highlight */
     .html-assessment-container .highlighted-element {
-      background-color: rgba(255, 251, 230, 0.6) !important; /* Soft pale yellow */
+      background-color: rgba(255, 235, 59, 0.45) !important; /* More saturated yellow for better visibility */
       opacity: 1 !important;
       transition: background-color 0.3s ease;
     }
@@ -1045,10 +1070,10 @@
       opacity: 1 !important;
     }
 
-    /* Highlighted table cells - same soft treatment */
+    /* Highlighted table cells - same visible treatment */
     .html-assessment-container td.highlighted-element,
     .html-assessment-container th.highlighted-element {
-      background-color: rgba(255, 251, 230, 0.6) !important;
+      background-color: rgba(255, 235, 59, 0.45) !important;
     }
 
     /* ========================================
@@ -1158,40 +1183,14 @@
 
   <div id="audio-toolbar" style="display: none;">
     <div class="audio-toolbar-inner">
-      <!-- Header: Title and Action Buttons -->
-      <div class="toolbar-header">
-        <div class="toolbar-title">
-          <p id="current-title-text" class="toolbar-title-main">Loading...</p>
-          <p id="chunk-counter" class="toolbar-title-sub">Chunk 1 of 1</p>
-        </div>
-        <div class="toolbar-actions">
-          <button id="speed-menu-btn" class="control-btn" title="Playback speed" aria-label="Playback speed">
-            <span id="speed-display" class="text-sm font-bold" style="font-size: 12px;">1.25x</span>
-          </button>
-          <button id="chunk-menu-btn" class="control-btn" title="Jump to chunk" aria-label="Jump to chunk">
-            <span class="material-icons">list_alt</span>
-          </button>
-        </div>
+      <!-- Left Zone: Title -->
+      <div class="toolbar-title">
+        <p id="current-title-text" class="toolbar-title-main">Loading...</p>
+        <p id="chunk-counter" class="toolbar-title-sub">Chunk 1 of 1</p>
       </div>
 
-      <!-- Progress Bar -->
-      <div class="toolbar-progress">
-        <div class="progress-bar-container">
-          <div id="progress-bar-bg" class="progress-bar-bg">
-            <div id="progress-bar-fill" class="progress-bar-fill"></div>
-            <div id="chunk-markers" class="chunk-markers"></div>
-          </div>
-          <input type="range" id="timeline" class="timeline-slider" min="0" max="100" value="0"
-                 title="Audio timeline" aria-label="Audio timeline slider">
-        </div>
-        <div class="progress-header">
-          <span id="current-time" class="time-display">01:02</span>
-          <span id="total-time" class="time-display">-01:34</span>
-        </div>
-      </div>
-
-      <!-- Main Controls -->
-      <div class="toolbar-core">
+      <!-- Center Zone: Playback Controls -->
+      <div class="toolbar-controls">
         <button id="skip-back-btn" class="control-btn control-skip" title="Skip back 10 seconds" aria-label="Skip back 10 seconds">
           <span class="material-icons">replay_10</span>
         </button>
@@ -1211,6 +1210,30 @@
         </button>
       </div>
 
+      <!-- Right Zone: Progress Bar + Actions -->
+      <div class="toolbar-right">
+        <div class="progress-compact">
+          <div class="progress-bar-container">
+            <div id="progress-bar-bg" class="progress-bar-bg">
+              <div id="progress-bar-fill" class="progress-bar-fill"></div>
+              <div id="chunk-markers" class="chunk-markers"></div>
+            </div>
+            <input type="range" id="timeline" class="timeline-slider" min="0" max="100" value="0"
+                   title="Audio timeline" aria-label="Audio timeline slider">
+          </div>
+          <div class="time-displays">
+            <span id="current-time" class="time-display">01:02</span>
+            <span class="time-separator">/</span>
+            <span id="total-time" class="time-display">-01:34</span>
+          </div>
+        </div>
+        <div class="toolbar-actions">
+          <button id="speed-menu-btn" class="control-btn" title="Playback speed" aria-label="Playback speed">
+            <span id="speed-display" class="text-sm font-bold" style="font-size: 11px;">1.25x</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Speed Menu Popup (Hidden by default) -->
       <div id="speed-popup" class="popup-menu" style="display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 12px; background: white; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #E5E7EB; padding: 16px; min-width: 200px; z-index: 100;">
         <p style="text-align: center; font-size: 14px; font-weight: 500; color: #1F2937; margin-bottom: 12px;">Playback Speed</p>
@@ -1224,8 +1247,8 @@
         </div>
       </div>
 
-      <!-- Chunk Menu Popup (Hidden by default) -->
-      <div id="chunk-popup" class="popup-menu" style="display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 12px; background: white; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #E5E7EB; padding: 16px; min-width: 300px; max-width: 400px; max-height: 256px; overflow-y: auto; z-index: 100;">
+      <!-- Chunk Menu Popup (Hidden by default) - Appears above title when clicked -->
+      <div id="chunk-popup" class="popup-menu" style="display: none; position: absolute; bottom: 100%; left: 0; margin-bottom: 12px; background: white; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #E5E7EB; padding: 16px; min-width: 300px; max-width: 400px; max-height: 256px; overflow-y: auto; z-index: 100;">
         <p style="text-align: center; font-size: 14px; font-weight: 500; color: #1F2937; margin-bottom: 12px;">Questions</p>
         <div id="title-dropdown" style="display: flex; flex-direction: column; gap: 8px;">
           <!-- Will be populated with chunks -->
@@ -1905,6 +1928,8 @@
         .then(() => {
           // Audio started playing successfully
           console.log('✓ Audio playing');
+          // Ensure play/pause button shows pause icon after loading completes
+          updatePlayPauseButton(true);
         })
         .catch(err => {
           // Handle errors
@@ -2003,6 +2028,15 @@
         };
       }
 
+      // Title click to open chunk list
+      const toolbarTitle = document.querySelector('.toolbar-title');
+      if (toolbarTitle) {
+        toolbarTitle.onclick = (e) => {
+          e.stopPropagation();
+          toggleChunkMenu();
+        };
+      }
+
       // Chunk list button (old compatibility)
       const oldTitleBtn = document.getElementById('current-title-btn');
       if (oldTitleBtn) {
@@ -2015,14 +2049,6 @@
         speedMenuBtn.onclick = (e) => {
           e.stopPropagation();
           toggleSpeedMenu();
-        };
-      }
-
-      const chunkMenuBtn = document.getElementById('chunk-menu-btn');
-      if (chunkMenuBtn) {
-        chunkMenuBtn.onclick = (e) => {
-          e.stopPropagation();
-          toggleChunkMenu();
         };
       }
 
@@ -2054,7 +2080,7 @@
           const speedPopup = document.getElementById('speed-popup');
           if (speedPopup) speedPopup.style.display = 'none';
         }
-        if (!e.target.closest('#chunk-menu-btn') && !e.target.closest('#chunk-popup')) {
+        if (!e.target.closest('.toolbar-title') && !e.target.closest('#chunk-popup')) {
           const chunkPopup = document.getElementById('chunk-popup');
           if (chunkPopup) chunkPopup.style.display = 'none';
         }
