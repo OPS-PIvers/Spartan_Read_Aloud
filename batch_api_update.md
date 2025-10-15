@@ -19,11 +19,16 @@ const COL = {
   INSTRUCTOR: 5,
   PASSWORD: 6,
   STUDENT_EMAILS: 7,
+  // processing status columns
+  PROCESSING_STATUS: 8,
+  CURRENT_CHUNK_INDEX: 9,
+  LAST_PROCESSED_TIME: 10,
+  ASYNC_MODE: 11, 
   // New batch processing columns
-  PROCESSING_STATUS: 8,    // NOT_STARTED, BATCH_SUBMITTED, BATCH_PROCESSING, BATCH_COMPLETED, BATCH_FAILED, MANUAL_PROCESSING
-  BATCH_JOB_ID: 9,         // Gemini Batch API job ID
-  LAST_PROCESSED_TIME: 10, // Timestamp of last processing attempt
-  PROCESSING_MODE: 11      // 'batch' or 'manual'
+  PROCESSING_STATUS: 12,    // NOT_STARTED, BATCH_SUBMITTED, BATCH_PROCESSING, BATCH_COMPLETED, BATCH_FAILED, MANUAL_PROCESSING
+  BATCH_JOB_ID: 13,         // Gemini Batch API job ID
+  LAST_PROCESSED_TIME: 14, // Timestamp of last processing attempt
+  PROCESSING_MODE: 15      // 'batch' or 'manual'
 };
 
 // --- TRIGGER & MENU --- 
@@ -66,7 +71,7 @@ function startBatchProcessing() {
 }
 
 /**
- * Initiates Gemini Batch API jobs for eligible PDFs.
+ * Initiates Gemini Batch API jobs for eligible files.
  */
 function initiateBatchJobs() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');

@@ -26,7 +26,41 @@ const SUPPORTED_MIME_TYPES = {
   MS_WORD_OLD: 'application/msword'
 };
 
-// --- TRIGGER & MENU --- 
+// --- UTILITY FUNCTIONS ---
+
+/**
+ * Parses a list of email addresses from various input formats.
+ * Handles comma-separated, tab-separated, newline-separated, semicolon-separated,
+ * and space-separated values (as copied from Google Sheets or other sources).
+ *
+ * @param {string} input - Raw input string containing email addresses
+ * @returns {string} - Comma-separated, deduplicated, normalized email list
+ */
+function parseStudentEmails(input) {
+  if (!input || typeof input !== 'string') {
+    return '';
+  }
+
+  // Email regex pattern (basic but robust)
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
+  // Extract all email addresses from the input
+  const emailMatches = input.match(emailRegex);
+
+  if (!emailMatches || emailMatches.length === 0) {
+    return '';
+  }
+
+  // Normalize: lowercase, trim, deduplicate
+  const uniqueEmails = [...new Set(
+    emailMatches.map(email => email.toLowerCase().trim())
+  )];
+
+  // Return as comma-separated string
+  return uniqueEmails.join(', ');
+}
+
+// --- TRIGGER & MENU ---
 
 /**
  * Adds a custom menu to the spreadsheet UI.
@@ -644,6 +678,463 @@ function extractTextFromFile(fileId) {
   }
 }
 
+// ========================================
+// ADMIN FUNCTIONS
+// ========================================
+
+/**
+ * Validates that a session token belongs to an admin user.
+ * @param {string} sessionToken The session token to validate
+ * @returns {Object|null} Token data if valid admin, null otherwise
+ */
+function validateAdminToken(sessionToken) {
+  const tokenData = validateSessionToken(sessionToken);
+  if (!tokenData || tokenData.role !== 'admin') {
+    Logger.log('Invalid or non-admin token');
+    return null;
+  }
+  return tokenData;
+}
+
+/**
+ * Retrieves all assessments from the Assessment Database.
+ * Admin-only function.
+ * @param {string} sessionToken Admin session token
+ * @returns {Object} { success: true, assessments: [...] } or { error: "..." }
+ */
+function getAllAssessments(sessionToken) {
+  try {
+    // Verify admin token
+    if (!validateAdminToken(sessionToken)) {
+      return { error: 'Unauthorized. Admin access required.' };
+    }
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    if (!sheet) {
+      return { error: 'Assessment Database sheet not found.' };
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const assessments = [];
+
+    // Skip header row
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const pdfUrl = row[COL.PDF_URL];
+
+      if (!pdfUrl) continue; // Skip empty rows
+
+      let fileName = '';
+      try {
+        const fileId = getFileIdFromUrl(pdfUrl);
+        if (fileId) {
+          fileName = DriveApp.getFileById(fileId).getName();
+        }
+      } catch (e) {
+        fileName = 'Unknown file';
+        Logger.log(`Could not fetch file name for row ${i}: ${e.toString()}`);
+      }
+
+      assessments.push({
+        rowIndex: i,
+        fileName: fileName,
+        pdfUrl: pdfUrl,
+        chunkCount: row[COL.CHUNK_COUNT] || 0,
+        audioJson: row[COL.AUDIO_JSON] || '',
+        isComplete: row[COL.IS_COMPLETE] === true,
+        className: row[COL.CLASS_NAME] || '',
+        instructor: row[COL.INSTRUCTOR] || '',
+        password: row[COL.PASSWORD] || '',
+        studentEmails: row[COL.STUDENT_EMAILS] || ''
+      });
+    }
+
+    Logger.log(`Retrieved ${assessments.length} assessments for admin`);
+    return {
+      success: true,
+      assessments: assessments
+    };
+
+  } catch (e) {
+    Logger.log(`Error in getAllAssessments: ${e.toString()}`);
+    return { error: 'Failed to retrieve assessments.' };
+  }
+}
+
+/**
+ * Updates an assessment row in the spreadsheet.
+ * Admin-only function.
+ * @param {string} sessionToken Admin session token
+ * @param {number} rowIndex Row index (1-based, excluding header)
+ * @param {Object} data Data to update { className, instructor, password, studentEmails }
+ * @returns {Object} { success: true } or { error: "..." }
+ */
+function updateAssessmentRow(sessionToken, rowIndex, data) {
+  try {
+    // Verify admin token
+    if (!validateAdminToken(sessionToken)) {
+      return { error: 'Unauthorized. Admin access required.' };
+    }
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    if (!sheet) {
+      return { error: 'Assessment Database sheet not found.' };
+    }
+
+    // Validate row index (add 1 because row 1 is header)
+    const actualRow = rowIndex + 1;
+    if (actualRow < 2 || actualRow > sheet.getLastRow()) {
+      return { error: 'Invalid row index.' };
+    }
+
+    // Update only the editable columns
+    if (data.className !== undefined) {
+      sheet.getRange(actualRow, COL.CLASS_NAME + 1).setValue(data.className);
+    }
+    if (data.instructor !== undefined) {
+      sheet.getRange(actualRow, COL.INSTRUCTOR + 1).setValue(data.instructor);
+    }
+    if (data.password !== undefined) {
+      sheet.getRange(actualRow, COL.PASSWORD + 1).setValue(data.password);
+    }
+    if (data.studentEmails !== undefined) {
+      sheet.getRange(actualRow, COL.STUDENT_EMAILS + 1).setValue(parseStudentEmails(data.studentEmails));
+    }
+
+    SpreadsheetApp.flush();
+    Logger.log(`Updated assessment at row ${rowIndex}`);
+
+    return { success: true };
+
+  } catch (e) {
+    Logger.log(`Error in updateAssessmentRow: ${e.toString()}`);
+    return { error: 'Failed to update assessment.' };
+  }
+}
+
+/**
+ * Deletes an assessment row from the spreadsheet.
+ * Admin-only function.
+ * @param {string} sessionToken Admin session token
+ * @param {number} rowIndex Row index (1-based, excluding header)
+ * @returns {Object} { success: true } or { error: "..." }
+ */
+function deleteAssessmentRow(sessionToken, rowIndex) {
+  try {
+    // Verify admin token
+    if (!validateAdminToken(sessionToken)) {
+      return { error: 'Unauthorized. Admin access required.' };
+    }
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    if (!sheet) {
+      return { error: 'Assessment Database sheet not found.' };
+    }
+
+    // Validate row index (add 1 because row 1 is header)
+    const actualRow = rowIndex + 1;
+    if (actualRow < 2 || actualRow > sheet.getLastRow()) {
+      return { error: 'Invalid row index.' };
+    }
+
+    sheet.deleteRow(actualRow);
+    SpreadsheetApp.flush();
+    Logger.log(`Deleted assessment at row ${rowIndex}`);
+
+    return { success: true };
+
+  } catch (e) {
+    Logger.log(`Error in deleteAssessmentRow: ${e.toString()}`);
+    return { error: 'Failed to delete assessment.' };
+  }
+}
+
+/**
+ * Uploads a PDF or Word file to the Assessment PDFs folder.
+ * Admin-only function.
+ * @param {string} sessionToken Admin session token
+ * @param {string} fileName File name
+ * @param {string} base64Data Base64 encoded file data
+ * @param {string} mimeType MIME type of the file
+ * @returns {Object} { success: true, fileUrl: "..." } or { error: "..." }
+ */
+function uploadAssessmentFile(sessionToken, fileName, base64Data, mimeType) {
+  try {
+    // Verify admin token
+    if (!validateAdminToken(sessionToken)) {
+      return { error: 'Unauthorized. Admin access required.' };
+    }
+
+    // Check file size (45MB limit)
+    const decodedSize = base64Data.length * 0.75; // Approximate decoded size
+    if (decodedSize > 45 * 1024 * 1024) {
+      return { error: 'File too large. Maximum size is 45MB.' };
+    }
+
+    const mainAudioFolder = getOrCreateFolder(AUDIO_DRIVE_FOLDER_NAME);
+    if (!mainAudioFolder) {
+      return { error: 'Could not access main audio folder.' };
+    }
+
+    const pdfSourceFolderName = "Assessment PDFs";
+    let pdfFolder = null;
+    const pdfFolders = mainAudioFolder.getFoldersByName(pdfSourceFolderName);
+    if (pdfFolders.hasNext()) {
+      pdfFolder = pdfFolders.next();
+    } else {
+      pdfFolder = mainAudioFolder.createFolder(pdfSourceFolderName);
+    }
+
+    // Decode base64 and create blob
+    const bytes = Utilities.base64Decode(base64Data);
+    const blob = Utilities.newBlob(bytes, mimeType, fileName);
+
+    // Upload file
+    const uploadedFile = pdfFolder.createFile(blob);
+    const fileUrl = uploadedFile.getUrl();
+
+    Logger.log(`Uploaded file: ${fileName} (${fileUrl})`);
+
+    return {
+      success: true,
+      fileUrl: fileUrl,
+      fileId: uploadedFile.getId()
+    };
+
+  } catch (e) {
+    Logger.log(`Error in uploadAssessmentFile: ${e.toString()}`);
+    return { error: 'Failed to upload file: ' + e.toString() };
+  }
+}
+
+/**
+ * Handles a Google Doc URL by creating a copy or shortcut.
+ * Admin-only function.
+ * @param {string} sessionToken Admin session token
+ * @param {string} docUrl Google Doc URL
+ * @returns {Object} { success: true, fileUrl: "...", isCopy: boolean } or { error: "..." }
+ */
+function handleGoogleDocUrl(sessionToken, docUrl) {
+  try {
+    // Verify admin token
+    if (!validateAdminToken(sessionToken)) {
+      return { error: 'Unauthorized. Admin access required.' };
+    }
+
+    // Extract file ID from URL
+    const fileId = getFileIdFromUrl(docUrl);
+    if (!fileId) {
+      return { error: 'Invalid Google Doc URL.' };
+    }
+
+    const mainAudioFolder = getOrCreateFolder(AUDIO_DRIVE_FOLDER_NAME);
+    if (!mainAudioFolder) {
+      return { error: 'Could not access main audio folder.' };
+    }
+
+    const pdfSourceFolderName = "Assessment PDFs";
+    let pdfFolder = null;
+    const pdfFolders = mainAudioFolder.getFoldersByName(pdfSourceFolderName);
+    if (pdfFolders.hasNext()) {
+      pdfFolder = pdfFolders.next();
+    } else {
+      pdfFolder = mainAudioFolder.createFolder(pdfSourceFolderName);
+    }
+
+    // Try to make a copy first
+    try {
+      const originalFile = DriveApp.getFileById(fileId);
+      const copiedFile = originalFile.makeCopy(originalFile.getName() + ' (Copy)', pdfFolder);
+      const copiedUrl = copiedFile.getUrl();
+
+      Logger.log(`Created copy of Google Doc: ${copiedUrl}`);
+      return {
+        success: true,
+        fileUrl: copiedUrl,
+        isCopy: true,
+        message: 'Successfully created a copy of the document.'
+      };
+
+    } catch (copyError) {
+      Logger.log(`Could not copy file (viewer-only?): ${copyError.toString()}`);
+
+      // Create shortcut instead
+      try {
+        const originalFile = DriveApp.getFileById(fileId);
+        const shortcut = pdfFolder.createShortcut(fileId);
+        const shortcutUrl = shortcut.getUrl();
+
+        Logger.log(`Created shortcut to Google Doc: ${shortcutUrl}`);
+        return {
+          success: true,
+          fileUrl: docUrl, // Use original URL for shortcut
+          isCopy: false,
+          message: 'Could not copy document (viewer-only). Using original document. Note: You must maintain access to this document.'
+        };
+
+      } catch (shortcutError) {
+        Logger.log(`Could not create shortcut: ${shortcutError.toString()}`);
+        return { error: 'Could not access document. Please check sharing permissions.' };
+      }
+    }
+
+  } catch (e) {
+    Logger.log(`Error in handleGoogleDocUrl: ${e.toString()}`);
+    return { error: 'Failed to process Google Doc: ' + e.toString() };
+  }
+}
+
+/**
+ * Adds a new assessment to the spreadsheet and triggers processing.
+ * Admin-only function.
+ * @param {string} sessionToken Admin session token
+ * @param {string} fileUrl Google Drive URL of the assessment file
+ * @param {Object} metadata { className, instructor, password, studentEmails }
+ * @returns {Object} { success: true, rowIndex: number } or { error: "..." }
+ */
+function addNewAssessment(sessionToken, fileUrl, metadata) {
+  try {
+    // Verify admin token
+    if (!validateAdminToken(sessionToken)) {
+      return { error: 'Unauthorized. Admin access required.' };
+    }
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    if (!sheet) {
+      return { error: 'Assessment Database sheet not found.' };
+    }
+
+    // Validate file URL
+    const fileId = getFileIdFromUrl(fileUrl);
+    if (!fileId) {
+      return { error: 'Invalid file URL.' };
+    }
+
+    // Check if URL already exists
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][COL.PDF_URL] === fileUrl) {
+        return { error: 'This file is already in the database.' };
+      }
+    }
+
+    // Add new row with file URL and metadata
+    const newRow = new Array(8).fill(''); // 8 columns
+    newRow[COL.PDF_URL] = fileUrl;
+    newRow[COL.CLASS_NAME] = metadata.className || '';
+    newRow[COL.INSTRUCTOR] = metadata.instructor || '';
+    newRow[COL.PASSWORD] = metadata.password || '';
+    newRow[COL.STUDENT_EMAILS] = parseStudentEmails(metadata.studentEmails || '');
+
+    sheet.appendRow(newRow);
+    SpreadsheetApp.flush();
+
+    const rowIndex = sheet.getLastRow() - 1; // Subtract 1 for header
+    Logger.log(`Added new assessment at row ${rowIndex}`);
+
+    // Trigger processing asynchronously
+    try {
+      processNewAssessment(fileUrl);
+    } catch (processError) {
+      Logger.log(`Processing error (non-fatal): ${processError.toString()}`);
+    }
+
+    return {
+      success: true,
+      rowIndex: rowIndex,
+      message: 'Assessment added successfully. Processing has been started.'
+    };
+
+  } catch (e) {
+    Logger.log(`Error in addNewAssessment: ${e.toString()}`);
+    return { error: 'Failed to add assessment: ' + e.toString() };
+  }
+}
+
+/**
+ * Processes a specific assessment (runs steps 1 and 2).
+ * Internal function called after adding new assessment.
+ * @param {string} fileUrl File URL to process
+ */
+function processNewAssessment(fileUrl) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+  if (!sheet) return;
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][COL.PDF_URL] === fileUrl && !data[i][COL.CHUNK_COUNT]) {
+      // Found the new row - analyze it
+      const fileId = getFileIdFromUrl(fileUrl);
+      if (!fileId) continue;
+
+      Logger.log(`Processing new assessment: ${fileUrl}`);
+
+      // Step 1: Extract text and count chunks
+      const textChunks = extractTextFromFile(fileId);
+      if (textChunks && textChunks.length > 0) {
+        sheet.getRange(i + 1, COL.CHUNK_COUNT + 1).setValue(textChunks.length);
+        sheet.getRange(i + 1, COL.IS_COMPLETE + 1).setValue(false);
+        SpreadsheetApp.flush();
+        Logger.log(`Step 1 complete: ${textChunks.length} chunks`);
+
+        // Step 2 would normally run here but requires audio generation
+        // For now, mark as ready for manual step 2 trigger
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * Manually re-processes an assessment (runs steps 1 and 2).
+ * Admin-only function.
+ * @param {string} sessionToken Admin session token
+ * @param {number} rowIndex Row index (1-based, excluding header)
+ * @returns {Object} { success: true } or { error: "..." }
+ */
+function reprocessAssessment(sessionToken, rowIndex) {
+  try {
+    // Verify admin token
+    if (!validateAdminToken(sessionToken)) {
+      return { error: 'Unauthorized. Admin access required.' };
+    }
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    if (!sheet) {
+      return { error: 'Assessment Database sheet not found.' };
+    }
+
+    const actualRow = rowIndex + 1;
+    if (actualRow < 2 || actualRow > sheet.getLastRow()) {
+      return { error: 'Invalid row index.' };
+    }
+
+    const pdfUrl = sheet.getRange(actualRow, COL.PDF_URL + 1).getValue();
+    if (!pdfUrl) {
+      return { error: 'No file URL found in this row.' };
+    }
+
+    // Clear existing processing data
+    sheet.getRange(actualRow, COL.CHUNK_COUNT + 1).setValue('');
+    sheet.getRange(actualRow, COL.AUDIO_JSON + 1).setValue('');
+    sheet.getRange(actualRow, COL.IS_COMPLETE + 1).setValue(false);
+    SpreadsheetApp.flush();
+
+    // Trigger processing
+    processNewAssessment(pdfUrl);
+
+    Logger.log(`Reprocessing assessment at row ${rowIndex}`);
+    return {
+      success: true,
+      message: 'Assessment reprocessing started.'
+    };
+
+  } catch (e) {
+    Logger.log(`Error in reprocessAssessment: ${e.toString()}`);
+    return { error: 'Failed to reprocess assessment: ' + e.toString() };
+  }
+}
+
 function getOrCreateFolder(folderName) {
   try {
     const folders = DriveApp.getFoldersByName(folderName);
@@ -770,13 +1261,13 @@ function getBulkAudioData(sessionToken, fileIds) {
 
 /**
  * Generates a secure session token for authenticated access.
- * Token format: base64(email|assessmentUrl|timestamp|random)
- * @param {string} email Student email
- * @param {string} assessmentUrl The PDF/Doc URL
+ * Token format: base64(email|assessmentUrl|timestamp|random|role)
+ * @param {string} email User email
+ * @param {string} assessmentUrlOrRole The PDF/Doc URL (for students) or 'admin' (for admins)
  * @param {number} expiryMinutes Token validity period (default: 180 min = 3 hours)
  * @returns {string} Session token
  */
-function generateSessionToken(email, assessmentUrl, expiryMinutes) {
+function generateSessionToken(email, assessmentUrlOrRole, expiryMinutes) {
   if (!expiryMinutes) expiryMinutes = 180; // 3 hour default
 
   const timestamp = Date.now();
@@ -785,9 +1276,10 @@ function generateSessionToken(email, assessmentUrl, expiryMinutes) {
 
   const tokenData = {
     email: email.toLowerCase().trim(),
-    url: assessmentUrl,
+    url: assessmentUrlOrRole, // Can be 'admin' for admin users
     exp: expiryTime,
-    rnd: random
+    rnd: random,
+    role: assessmentUrlOrRole === 'admin' ? 'admin' : 'student'
   };
 
   const tokenString = JSON.stringify(tokenData);
@@ -797,7 +1289,7 @@ function generateSessionToken(email, assessmentUrl, expiryMinutes) {
   const props = PropertiesService.getUserProperties();
   props.setProperty('session_' + token, tokenString);
 
-  Logger.log(`Generated session token for ${email}, expires: ${new Date(expiryTime)}`);
+  Logger.log(`Generated session token for ${email} (${tokenData.role}), expires: ${new Date(expiryTime)}`);
   return token;
 }
 
@@ -827,7 +1319,13 @@ function validateSessionToken(token) {
       return null;
     }
 
-    // Additional check: verify email still has access to this assessment
+    // For admin tokens, skip assessment-specific validation
+    if (tokenData.role === 'admin') {
+      Logger.log(`Valid admin token for ${tokenData.email}`);
+      return tokenData; // Admin tokens are valid if not expired and in PropertiesService
+    }
+
+    // Additional check for student tokens: verify email still has access to this assessment
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
     if (!sheet) return null;
 
@@ -858,6 +1356,59 @@ function validateSessionToken(token) {
   } catch (e) {
     Logger.log(`Token validation error: ${e.toString()}`);
     return null;
+  }
+}
+
+/**
+ * Unified authentication: checks Admin sheet first, then student assessments.
+ * @param {string} email User email
+ * @param {string} password Password
+ * @returns {Object} { userType: 'admin'|'student', data: {...} } or { error: "..." }
+ */
+function authenticateUser(email, password) {
+  try {
+    const cleanEmail = email.toLowerCase().trim();
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. Check Admin sheet first
+    const adminSheet = spreadsheet.getSheetByName('Admin');
+    if (adminSheet) {
+      const adminData = adminSheet.getDataRange().getValues();
+      for (let i = 1; i < adminData.length; i++) { // Skip header row
+        const row = adminData[i];
+        const adminName = row[0] ? row[0].toString().trim() : '';
+        const adminEmail = row[1] ? row[1].toString().toLowerCase().trim() : '';
+        const adminPassword = row[2] ? row[2].toString().trim() : '';
+
+        if (adminEmail === cleanEmail && adminPassword === password) {
+          // Admin login successful
+          Logger.log(`Admin login successful: ${adminEmail}`);
+          const sessionToken = generateSessionToken(cleanEmail, 'admin', 360); // 6 hour token
+          return {
+            userType: 'admin',
+            name: adminName,
+            email: cleanEmail,
+            sessionToken: sessionToken
+          };
+        }
+      }
+    }
+
+    // 2. Not admin - check student assessments
+    const studentResult = getStudentAssessments(email, password);
+    if (!studentResult.error) {
+      return {
+        userType: 'student',
+        ...studentResult
+      };
+    }
+
+    // 3. Neither admin nor valid student
+    return { error: 'Invalid email or password.' };
+
+  } catch (e) {
+    Logger.log(`Error in authenticateUser: ${e.toString()}`);
+    return { error: 'An unexpected server error occurred.' };
   }
 }
 
