@@ -7,12 +7,12 @@
  */
 function generateAudioFromTextChunk(text, fileName, folder) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  const model = 'gemini-2.5-flash-preview-tts';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const model = CONSTANTS.GEMINI_TTS_MODEL;
+  const url = `${CONSTANTS.GEMINI_API_BASE_URL}models/${model}:generateContent?key=${apiKey}`;
 
   // --- FIX: Corrected the payload structure ---
   const payload = {
-    model: "gemini-2.5-flash-preview-tts",
+    model: CONSTANTS.GEMINI_TTS_MODEL,
     contents: [{
       parts: [{
         text: `Read the following text in a clear, neutral, and steady voice: ${text}`
@@ -22,7 +22,7 @@ function generateAudioFromTextChunk(text, fileName, folder) {
       responseModalities: ["AUDIO"],
       speechConfig: { // Moved speechConfig inside generationConfig
         voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: "Kore" }
+          prebuiltVoiceConfig: { voiceName: CONSTANTS.GEMINI_VOICE_NAME }
         }
       }
     }
@@ -70,9 +70,9 @@ function generateAudioFromTextChunk(text, fileName, folder) {
  * @return {GoogleAppsScript.Base.Blob} A blob representing the WAV file.
  */
 function createWavBlob(pcmData) {
-  const sampleRate = 24000; // Gemini TTS standard sample rate
-  const numChannels = 1;
-  const bitsPerSample = 16;
+  const sampleRate = CONSTANTS.WAV_SAMPLE_RATE; // Gemini TTS standard sample rate
+  const numChannels = CONSTANTS.WAV_NUM_CHANNELS;
+  const bitsPerSample = CONSTANTS.WAV_BITS_PER_SAMPLE;
   const byteRate = sampleRate * numChannels * bitsPerSample / 8;
   const blockAlign = numChannels * bitsPerSample / 8;
   const dataSize = pcmData.length;
