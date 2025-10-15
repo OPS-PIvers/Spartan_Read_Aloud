@@ -1264,6 +1264,86 @@
       border-color: #dadce0;
     }
 
+    /* Loading overlay for assessment cards */
+    .assessment-card-loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 20px;
+      z-index: 10;
+    }
+
+    .assessment-card {
+      position: relative;
+    }
+
+    /* Loading spinner */
+    .skeleton-loader {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e8eaed;
+      border-top-color: #1a73e8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Progress meter container */
+    .progress-meter-container {
+      width: 100%;
+      max-width: 250px;
+      height: 8px;
+      background: #e8eaed;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Progress meter fill */
+    .progress-meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #1a73e8 0%, #4285f4 100%);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    /* Begin Assessment button */
+    .begin-assessment-btn {
+      padding: 12px 32px;
+      font-size: 15px;
+      font-weight: 600;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    }
+
+    .begin-assessment-btn:hover {
+      background: #1557b0;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .begin-assessment-btn:active {
+      transform: translateY(0);
+    }
+
     @media (max-width: 600px) {
       #assessment-selection-container {
         padding: 20px;
@@ -1276,6 +1356,15 @@
       .assessment-meta-item {
         font-size: 13px;
       }
+
+      .progress-meter-container {
+        max-width: 200px;
+      }
+
+      .skeleton-loader {
+        width: 32px;
+        height: 32px;
+      }
     }
 
 
@@ -1283,9 +1372,8 @@
 </head>
 
 <body>
-  <h1>Assessment Reader</h1>
-
   <div id="login-container">
+    <h1>Assessment Reader</h1>
     <h2>Assessment Reader Login</h2>
     <div id="login-error"></div>
     <input type="email" id="email-input" placeholder="Enter your email" autocomplete="email">
@@ -1525,6 +1613,11 @@
     let adminName = null;
     let allAssessments = []; // Admin view: all assessments
 
+    // Loading state for assessment preloading
+    let currentLoadingCard = null; // Reference to the card currently being loaded
+    let currentLoadingOverlay = null; // Reference to the loading overlay element
+    let pendingAssessmentData = null; // Stores PDF data while preloading audio
+
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
     /**
@@ -1631,18 +1724,71 @@
       console.log(`Loaded ${availableAssessments.length} assessment(s)`);
       console.log('Assessment data:', availableAssessments);
 
-      // If only one assessment, load it directly (ZERO REGRESSION)
-      if (availableAssessments.length === 1) {
-        console.log('Single assessment found, loading directly...');
-        loadSpecificAssessment(availableAssessments[0].assessmentUrl);
-      } else if (availableAssessments.length > 1) {
-        // Multiple assessments - show selection screen
-        console.log('Multiple assessments found, showing selection screen...');
+      // Always show assessment selection screen for consistent UX
+      if (availableAssessments.length > 0) {
+        console.log('Showing assessment selection screen...');
         showAssessmentSelection();
       } else {
         console.error('No assessments in array - this should not happen');
         onAssessmentLoadError('No assessments found in response');
       }
+    }
+
+    /**
+     * Creates and displays a loading overlay on an assessment card
+     * @param {HTMLElement} cardElement - The assessment card to show loading on
+     * @returns {Object} - Object containing overlay element and update function
+     */
+    function showLoadingOverlay(cardElement) {
+      // Create overlay container
+      const overlay = document.createElement('div');
+      overlay.className = 'assessment-card-loading-overlay';
+
+      // Create spinner
+      const spinner = document.createElement('div');
+      spinner.className = 'skeleton-loader';
+
+      // Create progress meter container
+      const meterContainer = document.createElement('div');
+      meterContainer.className = 'progress-meter-container';
+
+      // Create progress meter fill
+      const meterFill = document.createElement('div');
+      meterFill.className = 'progress-meter-fill';
+      meterContainer.appendChild(meterFill);
+
+      // Append elements
+      overlay.appendChild(spinner);
+      overlay.appendChild(meterContainer);
+      cardElement.appendChild(overlay);
+
+      return {
+        overlay: overlay,
+        spinner: spinner,
+        meterFill: meterFill,
+        updateProgress: (percent) => {
+          meterFill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+        },
+        showBeginButton: (onClickCallback) => {
+          // Remove spinner and meter
+          spinner.remove();
+          meterContainer.remove();
+
+          // Create Begin Assessment button
+          const beginBtn = document.createElement('button');
+          beginBtn.className = 'begin-assessment-btn';
+          beginBtn.textContent = 'Begin Assessment';
+          beginBtn.onclick = (e) => {
+            e.stopPropagation(); // Prevent card click event
+            onClickCallback();
+          };
+
+          overlay.appendChild(beginBtn);
+        },
+        remove: () => {
+          overlay.remove();
+        }
+      };
     }
 
     function showAssessmentSelection() {
@@ -1657,7 +1803,7 @@
       availableAssessments.forEach((assessment, index) => {
         const card = document.createElement('div');
         card.className = 'assessment-card';
-        card.onclick = () => loadSpecificAssessment(assessment.assessmentUrl);
+        card.onclick = () => loadSpecificAssessment(assessment.assessmentUrl, card);
 
         let metaHtml = '';
         if (assessment.instructor) {
@@ -1679,13 +1825,25 @@
       });
     }
 
-    function loadSpecificAssessment(assessmentUrl) {
+    function loadSpecificAssessment(assessmentUrl, cardElement) {
       console.log(`Loading specific assessment: ${assessmentUrl}`);
-      assessmentSelectionContainer.style.display = 'none';
-      viewerContainer.style.display = 'block';
 
+      // Store reference to card and show loading overlay
+      currentLoadingCard = cardElement;
+      currentLoadingOverlay = showLoadingOverlay(cardElement);
+
+      // Disable other cards while loading
+      const allCards = document.querySelectorAll('.assessment-card');
+      allCards.forEach(card => {
+        if (card !== cardElement) {
+          card.style.pointerEvents = 'none';
+          card.style.opacity = '0.5';
+        }
+      });
+
+      // Fetch PDF data but don't show viewer yet
       google.script.run
-        .withSuccessHandler(onPdfLoaded)
+        .withSuccessHandler(onPdfLoadedForPreload)
         .withFailureHandler(onPdfLoadError)
         .getAssessmentPdf(storedEmail, storedPassword, assessmentUrl);
     }
@@ -1714,6 +1872,70 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    /**
+     * Handles PDF load for preload flow - stores data and starts audio preloading
+     * without displaying the viewer yet.
+     */
+    function onPdfLoadedForPreload(result) {
+      if (result.error) {
+        onPdfLoadError(result.error);
+        return;
+      }
+
+      console.log('PDF data received, starting audio preload...');
+
+      // Store data for later rendering
+      pendingAssessmentData = result;
+      serverChunks = result.audioChunks;
+      totalChunks = serverChunks.length;
+      sessionToken = result.sessionToken;
+      chunksLoaded = 0; // Reset counter
+      audioCache.clear(); // Clear any old cache
+
+      console.log(`Starting preload for ${totalChunks} audio chunks`);
+
+      // Start preloading with progress callback
+      bulkPreloadAudioWithProgress((progress) => {
+        // Update progress meter
+        if (currentLoadingOverlay) {
+          currentLoadingOverlay.updateProgress(progress);
+        }
+      }, () => {
+        // On complete: show Begin Assessment button
+        console.log('✓ All audio preloaded!');
+        if (currentLoadingOverlay) {
+          currentLoadingOverlay.showBeginButton(() => {
+            // When Begin Assessment is clicked
+            beginAssessment();
+          });
+        }
+      });
+    }
+
+    /**
+     * Called when user clicks "Begin Assessment" button after preloading completes
+     */
+    function beginAssessment() {
+      console.log('Beginning assessment with preloaded data...');
+
+      // Hide assessment selection, show viewer
+      loginContainer.style.display = 'none';
+      assessmentSelectionContainer.style.display = 'none';
+      viewerContainer.style.display = 'block';
+
+      // Remove loading overlay
+      if (currentLoadingOverlay) {
+        currentLoadingOverlay.remove();
+        currentLoadingOverlay = null;
+      }
+
+      // Now render the PDF/HTML using stored data
+      if (pendingAssessmentData) {
+        onPdfLoaded(pendingAssessmentData);
+        pendingAssessmentData = null; // Clear stored data
+      }
     }
 
     function onPdfLoaded(result) {
@@ -1746,8 +1968,13 @@
             console.log("✓ PDF rendered successfully");
             initializeAudioToolbar();
             setupEventListeners();
-            // NEW: Start bulk preloading audio after UI is ready
-            bulkPreloadAudio();
+            // Only preload audio if not already loaded (backward compatibility for direct loads)
+            if (chunksLoaded < totalChunks) {
+              console.log('Starting background audio preload...');
+              bulkPreloadAudio();
+            } else {
+              console.log('✓ Audio already preloaded, ready to play!');
+            }
           });
         }).catch(onPdfLoadError);
 
@@ -1757,8 +1984,13 @@
         renderHtmlAssessment(result.assessmentHtml);
         initializeAudioToolbar();
         setupEventListeners();
-        // NEW: Start bulk preloading audio after UI is ready
-        bulkPreloadAudio();
+        // Only preload audio if not already loaded (backward compatibility for direct loads)
+        if (chunksLoaded < totalChunks) {
+          console.log('Starting background audio preload...');
+          bulkPreloadAudio();
+        } else {
+          console.log('✓ Audio already preloaded, ready to play!');
+        }
 
       } else {
         onPdfLoadError(`Unknown file type received: ${result.fileType}`);
@@ -1984,7 +2216,28 @@
     }
 
     function onPdfLoadError(error) {
+      console.error('PDF Load Error:', error);
+
+      // Clean up loading overlay if present
+      if (currentLoadingOverlay) {
+        currentLoadingOverlay.remove();
+        currentLoadingOverlay = null;
+      }
+
+      // Re-enable all cards
+      const allCards = document.querySelectorAll('.assessment-card');
+      allCards.forEach(card => {
+        card.style.pointerEvents = '';
+        card.style.opacity = '';
+      });
+
+      // Reset state
+      currentLoadingCard = null;
+      pendingAssessmentData = null;
+
+      // Show error
       viewerContainer.style.display = 'none';
+      assessmentSelectionContainer.style.display = 'none';
       loginContainer.style.display = 'block';
       loadButton.disabled = false;
       loginErrorDiv.textContent = 'Error: ' + error;
@@ -2004,6 +2257,75 @@
     function getFileIdFromAudioUrl(audioUrl) {
       const fileIdMatch = audioUrl.match(/id=([a-zA-Z0-9_-]+)/);
       return fileIdMatch ? fileIdMatch[1] : null;
+    }
+
+    /**
+     * Enhanced bulk preload with progress tracking.
+     * @param {Function} onProgressCallback - Called with progress percentage (0-100)
+     * @param {Function} onCompleteCallback - Called when all audio is loaded
+     */
+    function bulkPreloadAudioWithProgress(onProgressCallback, onCompleteCallback) {
+      if (!sessionToken || serverChunks.length === 0) {
+        console.warn('Cannot preload audio: missing session token or chunks');
+        onCompleteCallback && onCompleteCallback();
+        return;
+      }
+
+      console.log('=== BULK AUDIO PRELOAD WITH PROGRESS ===');
+
+      // Get all file IDs
+      const allFileIds = serverChunks.map(c => getFileIdFromAudioUrl(c.audioUrl)).filter(id => id);
+
+      if (allFileIds.length === 0) {
+        console.warn('No valid file IDs found');
+        onCompleteCallback && onCompleteCallback();
+        return;
+      }
+
+      // Report initial progress
+      onProgressCallback && onProgressCallback(0);
+
+      // Load all chunks in batches of 5
+      loadInBatchesWithProgress(allFileIds, 5, onProgressCallback, onCompleteCallback);
+    }
+
+    /**
+     * Loads file IDs in batches with progress reporting.
+     * @param {Array<string>} fileIds - Array of file IDs
+     * @param {number} batchSize - Number of files per batch
+     * @param {Function} onProgressCallback - Progress callback
+     * @param {Function} onCompleteCallback - Completion callback
+     */
+    function loadInBatchesWithProgress(fileIds, batchSize, onProgressCallback, onCompleteCallback) {
+      if (fileIds.length === 0) {
+        console.log('✓ All chunks loaded with progress tracking');
+        onProgressCallback && onProgressCallback(100);
+        onCompleteCallback && onCompleteCallback();
+        return;
+      }
+
+      const batch = fileIds.slice(0, batchSize);
+      const remaining = fileIds.slice(batchSize);
+
+      bulkFetchAndCache(batch)
+        .then(() => {
+          // Calculate and report progress
+          const progress = (chunksLoaded / totalChunks) * 100;
+          console.log(`→ Progress: ${chunksLoaded}/${totalChunks} (${Math.round(progress)}%)`);
+          onProgressCallback && onProgressCallback(progress);
+
+          // Continue with next batch
+          setTimeout(() => {
+            loadInBatchesWithProgress(remaining, batchSize, onProgressCallback, onCompleteCallback);
+          }, 200); // Small delay between batches
+        })
+        .catch(err => {
+          console.error('Batch loading failed:', err);
+          // Continue anyway
+          setTimeout(() => {
+            loadInBatchesWithProgress(remaining, batchSize, onProgressCallback, onCompleteCallback);
+          }, 500);
+        });
     }
 
     /**
