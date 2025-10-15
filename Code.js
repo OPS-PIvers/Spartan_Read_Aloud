@@ -1621,9 +1621,60 @@ function getOrCreateSubfolder(parentFolder, subfolderName) {
 }
 
 function doGet(e) {
-  return HtmlService.createHtmlOutputFromFile('index.html')
-    .setTitle('Orono Schools Assessment Reader')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+  var template = HtmlService.createTemplateFromFile('index');
+  return template.evaluate()
+      .setTitle('Orono Schools Assessment Reader')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+function loadView(adminToken) {
+  if (adminToken) {
+    const tokenData = validateAdminToken(adminToken);
+    if (tokenData) {
+      return getTeacherView(adminToken, tokenData);
+    }
+  }
+  return getLoginView();
+}
+
+function getLoginView() {
+  let content = HtmlService.createHtmlOutputFromFile('login.html').getContent();
+  content += '<script>' + HtmlService.createHtmlOutputFromFile('login.js').getContent() + '</script>';
+  return content;
+}
+
+function getTeacherView(token, tokenData) {
+    let content = HtmlService.createHtmlOutputFromFile('teacher.html').getContent();
+    content += '<script>' + HtmlService.createHtmlOutputFromFile('teacher.js').getContent() + '</script>';
+    content += `<script>
+        adminSessionToken = "${token}";
+        adminName = "${tokenData.name}";
+        userRole = "${tokenData.role}";
+        showAdminDashboard();
+    </script>`;
+    return content;
+}
+
+function getStudentView(authResult, email, password) {
+  let content = HtmlService.createHtmlOutputFromFile('student.html').getContent();
+  content += '<script>' + HtmlService.createHtmlOutputFromFile('student.js').getContent() + '</script>';
+
+  const studentData = {
+    assessments: authResult.assessments,
+    email: email,
+    password: password
+  };
+
+  content += '<script>initializeStudentView(' + JSON.stringify(studentData) + ');</script>';
+  return content;
+}
+
+function getStudentViewContent(authResult, email, password) {
+  return getStudentView(authResult, email, password);
 }
 
 /**
