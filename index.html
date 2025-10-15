@@ -1407,8 +1407,8 @@
         </div>
       </div>
 
-      <!-- Upload Section -->
-      <div style="background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;">
+      <!-- Upload Section (Super Admin only) -->
+      <div id="add-assessment-section" style="background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;">
         <h3 style="margin-top: 0; margin-bottom: 20px; color: #202124;">Add New Assessment</h3>
 
         <!-- Tab Toggle -->
@@ -1444,8 +1444,8 @@
             <input type="text" id="new-class-name" placeholder="e.g., Grade 4 Math" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
           </div>
           <div>
-            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Instructor</label>
-            <input type="text" id="new-instructor" placeholder="e.g., Mrs. Smith" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Instructor Last Name</label>
+            <input type="text" id="new-instructor" placeholder="e.g., Smith" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
           </div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-bottom: 20px;">
@@ -1475,7 +1475,7 @@
                 <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">File Name</th>
                 <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600; width: 100px;">Status</th>
                 <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Class</th>
-                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Instructor</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Instructor Last Name</th>
                 <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Password</th>
                 <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Students</th>
                 <th style="padding: 12px 8px; text-align: center; color: #5f6368; font-weight: 600; width: 140px;">Actions</th>
@@ -1608,10 +1608,11 @@
     let storedPassword = null;
     let availableAssessments = [];
 
-    // Admin session variables
+    // Admin/Staff session variables
     let adminSessionToken = null;
     let adminName = null;
-    let allAssessments = []; // Admin view: all assessments
+    let userRole = 'student'; // Can be: 'student', 'teacher', 'admin', 'super_admin'
+    let allAssessments = []; // Admin view: all assessments (filtered by role)
 
     // Loading state for assessment preloading
     let currentLoadingCard = null; // Reference to the card currently being loaded
@@ -1652,15 +1653,17 @@
       return uniqueEmails.join(', ');
     }
 
-    // Check for existing admin session on page load
+    // Check for existing staff session on page load
     (function checkStoredAdminSession() {
       const storedToken = localStorage.getItem('adminToken');
       const storedName = localStorage.getItem('adminName');
+      const storedRole = localStorage.getItem('userRole');
 
       if (storedToken && storedName) {
-        console.log('Found stored admin session, restoring...');
+        console.log('Found stored staff session, restoring...');
         adminSessionToken = storedToken;
         adminName = storedName;
+        userRole = storedRole || 'super_admin'; // Default to super_admin for backward compatibility
         // Show admin dashboard automatically
         showAdminDashboard();
       }
@@ -1696,16 +1699,21 @@
       }
 
       // Route based on user type
-      if (result.userType === 'admin') {
-        console.log('Admin login successful');
+      if (result.userType === 'teacher' || result.userType === 'admin' || result.userType === 'super_admin') {
+        console.log(`Staff login successful: ${result.userType} (${result.role})`);
         adminSessionToken = result.sessionToken;
         adminName = result.name;
-        // Store admin session in localStorage for persistence across page refreshes
+        userRole = result.userType; // Store the role for permission checks
+
+        // Store staff session in localStorage for persistence across page refreshes
         localStorage.setItem('adminToken', adminSessionToken);
         localStorage.setItem('adminName', adminName);
+        localStorage.setItem('userRole', userRole);
+
         showAdminDashboard();
       } else if (result.userType === 'student') {
         console.log('Student login successful');
+        userRole = 'student';
         onAssessmentsLoaded(result);
       } else {
         onAssessmentLoadError('Invalid authentication response');
@@ -3656,13 +3664,13 @@
     }
 
     function onAllAssessmentsLoaded(result) {
-      console.log('Admin assessments loaded:', result);
+      console.log('Staff assessments loaded:', result);
 
       if (result.error) {
         console.error('Error loading assessments:', result.error);
 
         // Check if error is due to unauthorized/expired token
-        if (result.error.includes('Unauthorized') || result.error.includes('Admin access required')) {
+        if (result.error.includes('Unauthorized') || result.error.includes('Staff access required') || result.error.includes('Admin access required')) {
           alert('Your session has expired. Please log in again.');
           logoutAdmin();
         } else {
@@ -3671,7 +3679,14 @@
         return;
       }
 
-      console.log(`Successfully loaded ${result.assessments.length} assessments`);
+      // Update userRole if backend returned it (more reliable than localStorage)
+      if (result.userRole) {
+        userRole = result.userRole;
+        localStorage.setItem('userRole', userRole);
+        console.log(`User role: ${userRole}`);
+      }
+
+      console.log(`Successfully loaded ${result.assessments.length} assessments for ${userRole}`);
       allAssessments = result.assessments;
       renderAssessmentTable();
     }
@@ -3679,6 +3694,16 @@
     function renderAssessmentTable() {
       const tbody = document.getElementById('admin-assessment-tbody');
       const noAssessmentsMsg = document.getElementById('no-assessments-message');
+      const addAssessmentSection = document.getElementById('add-assessment-section');
+
+      // Show/hide assessment upload section based on role
+      if (addAssessmentSection) {
+        if (userRole === 'super_admin' || userRole === 'admin' || userRole === 'teacher') {
+          addAssessmentSection.style.display = 'block';
+        } else {
+          addAssessmentSection.style.display = 'none';
+        }
+      }
 
       if (allAssessments.length === 0) {
         tbody.innerHTML = '';
@@ -3720,8 +3745,10 @@
             </td>
             <td style="padding: 12px 8px; text-align: center;">
               <button onclick="saveAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; margin-right: 4px; background: #34a853; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Save">✓</button>
-              <button onclick="deleteAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; margin-right: 4px; background: #d93025; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Delete">✕</button>
-              <button onclick="reprocessAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; background: #f8f9fa; color: #3c4043; border: 1px solid #dadce0; border-radius: 4px; cursor: pointer;" title="Re-run analysis and audio generation">⟳</button>
+              ${userRole === 'super_admin' ? `
+                <button onclick="deleteAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; margin-right: 4px; background: #d93025; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Delete">✕</button>
+                <button onclick="reprocessAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; background: #f8f9fa; color: #3c4043; border: 1px solid #dadce0; border-radius: 4px; cursor: pointer;" title="Re-run analysis and audio generation">⟳</button>
+              ` : ''}
             </td>
           </tr>
         `;

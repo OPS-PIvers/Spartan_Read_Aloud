@@ -1141,14 +1141,29 @@ function extractTextFromFile(fileId) {
 // ========================================
 
 /**
- * Validates that a session token belongs to an admin user.
+ * Validates that a session token belongs to a staff user (teacher, admin, or super admin).
  * @param {string} sessionToken The session token to validate
- * @returns {Object|null} Token data if valid admin, null otherwise
+ * @returns {Object|null} Token data if valid staff user, null otherwise
  */
 function validateAdminToken(sessionToken) {
   const tokenData = validateSessionToken(sessionToken);
-  if (!tokenData || tokenData.role !== 'admin') {
-    Logger.log('Invalid or non-admin token');
+  if (!tokenData || !['admin', 'super_admin', 'teacher'].includes(tokenData.role)) {
+    Logger.log('Invalid or non-staff token');
+    return null;
+  }
+  return tokenData;
+}
+
+/**
+ * Validates that a session token belongs to a Super Admin user.
+ * Used for destructive operations like delete and reprocess.
+ * @param {string} sessionToken The session token to validate
+ * @returns {Object|null} Token data if valid super admin, null otherwise
+ */
+function validateSuperAdminToken(sessionToken) {
+  const tokenData = validateSessionToken(sessionToken);
+  if (!tokenData || tokenData.role !== 'super_admin') {
+    Logger.log('Invalid or non-super-admin token');
     return null;
   }
   return tokenData;
@@ -1156,15 +1171,16 @@ function validateAdminToken(sessionToken) {
 
 /**
  * Retrieves all assessments from the Assessment Database.
- * Admin-only function.
- * @param {string} sessionToken Admin session token
- * @returns {Object} { success: true, assessments: [...] } or { error: "..." }
+ * Staff-only function. Teachers see only their assessments, admins/super admins see all.
+ * @param {string} sessionToken Staff session token
+ * @returns {Object} { success: true, assessments: [...], userRole: "..." } or { error: "..." }
  */
 function getAllAssessments(sessionToken) {
   try {
-    // Verify admin token
-    if (!validateAdminToken(sessionToken)) {
-      return { error: 'Unauthorized. Admin access required.' };
+    // Verify staff token (teacher, admin, or super_admin)
+    const tokenData = validateAdminToken(sessionToken);
+    if (!tokenData) {
+      return { error: 'Unauthorized. Staff access required.' };
     }
 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -1173,7 +1189,7 @@ function getAllAssessments(sessionToken) {
     }
 
     const data = sheet.getDataRange().getValues();
-    const assessments = [];
+    let assessments = [];
 
     // Skip header row
     for (let i = 1; i < data.length; i++) {
@@ -1207,10 +1223,27 @@ function getAllAssessments(sessionToken) {
       });
     }
 
-    Logger.log(`Retrieved ${assessments.length} assessments for admin`);
+    // Filter assessments for teachers (only show their own)
+    if (tokenData.role === 'teacher') {
+      const teacherName = tokenData.name || tokenData.email;
+      Logger.log(`Filtering assessments for teacher: ${teacherName}`);
+
+      assessments = assessments.filter(assessment => {
+        const instructorLower = (assessment.instructor || '').toLowerCase();
+        const teacherLower = teacherName.toLowerCase();
+
+        // Match if instructor field contains the teacher's name
+        return instructorLower.includes(teacherLower);
+      });
+
+      Logger.log(`Teacher ${teacherName} has ${assessments.length} assessment(s)`);
+    }
+
+    Logger.log(`Retrieved ${assessments.length} assessments for ${tokenData.role}`);
     return {
       success: true,
-      assessments: assessments
+      assessments: assessments,
+      userRole: tokenData.role // Return role so frontend knows what permissions to show
     };
 
   } catch (e) {
@@ -1272,16 +1305,16 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
 
 /**
  * Deletes an assessment row from the spreadsheet.
- * Admin-only function.
- * @param {string} sessionToken Admin session token
+ * Super Admin-only function.
+ * @param {string} sessionToken Super Admin session token
  * @param {number} rowIndex Row index (1-based, excluding header)
  * @returns {Object} { success: true } or { error: "..." }
  */
 function deleteAssessmentRow(sessionToken, rowIndex) {
   try {
-    // Verify admin token
-    if (!validateAdminToken(sessionToken)) {
-      return { error: 'Unauthorized. Admin access required.' };
+    // Verify super admin token
+    if (!validateSuperAdminToken(sessionToken)) {
+      return { error: 'Unauthorized. Super Admin access required.' };
     }
 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -1545,16 +1578,16 @@ function processNewAssessment(fileUrl) {
 
 /**
  * Manually re-processes an assessment (runs steps 1 and 2).
- * Admin-only function.
- * @param {string} sessionToken Admin session token
+ * Super Admin-only function.
+ * @param {string} sessionToken Super Admin session token
  * @param {number} rowIndex Row index (1-based, excluding header)
  * @returns {Object} { success: true } or { error: "..." }
  */
 function reprocessAssessment(sessionToken, rowIndex) {
   try {
-    // Verify admin token
-    if (!validateAdminToken(sessionToken)) {
-      return { error: 'Unauthorized. Admin access required.' };
+    // Verify super admin token
+    if (!validateSuperAdminToken(sessionToken)) {
+      return { error: 'Unauthorized. Super Admin access required.' };
     }
 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -1719,13 +1752,14 @@ function getBulkAudioData(sessionToken, fileIds) {
 
 /**
  * Generates a secure session token for authenticated access.
- * Token format: base64(email|assessmentUrl|timestamp|random|role)
+ * Token format: base64(email|assessmentUrl|timestamp|random|role|name)
  * @param {string} email User email
- * @param {string} assessmentUrlOrRole The PDF/Doc URL (for students) or 'admin' (for admins)
+ * @param {string} assessmentUrlOrRole The PDF/Doc URL (for students) or 'admin'/'super_admin'/'teacher' for staff
  * @param {number} expiryMinutes Token validity period (default: 180 min = 3 hours)
+ * @param {string} name Optional user name (for staff users)
  * @returns {string} Session token
  */
-function generateSessionToken(email, assessmentUrlOrRole, expiryMinutes) {
+function generateSessionToken(email, assessmentUrlOrRole, expiryMinutes, name) {
   if (!expiryMinutes) expiryMinutes = 180; // 3 hour default
 
   const timestamp = Date.now();
@@ -1734,10 +1768,11 @@ function generateSessionToken(email, assessmentUrlOrRole, expiryMinutes) {
 
   const tokenData = {
     email: email.toLowerCase().trim(),
-    url: assessmentUrlOrRole, // Can be 'admin' for admin users
+    url: assessmentUrlOrRole, // Can be 'admin', 'super_admin', 'teacher' for staff users
     exp: expiryTime,
     rnd: random,
-    role: assessmentUrlOrRole === 'admin' ? 'admin' : 'student'
+    role: ['admin', 'super_admin', 'teacher'].includes(assessmentUrlOrRole) ? assessmentUrlOrRole : 'student',
+    name: name || email // Store name for later retrieval (useful for filtering teacher assessments)
   };
 
   const tokenString = JSON.stringify(tokenData);
@@ -1777,10 +1812,10 @@ function validateSessionToken(token) {
       return null;
     }
 
-    // For admin tokens, skip assessment-specific validation
-    if (tokenData.role === 'admin') {
-      Logger.log(`Valid admin token for ${tokenData.email}`);
-      return tokenData; // Admin tokens are valid if not expired and in PropertiesService
+    // For staff tokens (admin/super_admin/teacher), skip assessment-specific validation
+    if (['admin', 'super_admin', 'teacher'].includes(tokenData.role)) {
+      Logger.log(`Valid staff token for ${tokenData.email} (role: ${tokenData.role})`);
+      return tokenData; // Staff tokens are valid if not expired and in PropertiesService
     }
 
     // Additional check for student tokens: verify email still has access to this assessment
@@ -1828,23 +1863,38 @@ function authenticateUser(email, password) {
     const cleanEmail = email.toLowerCase().trim();
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
 
-    // 1. Check Admin sheet first
-    const adminSheet = spreadsheet.getSheetByName('Admin');
+    // 1. Check Teachers sheet first (formerly "Admin")
+    const adminSheet = spreadsheet.getSheetByName('Teachers');
     if (adminSheet) {
       const adminData = adminSheet.getDataRange().getValues();
       for (let i = 1; i < adminData.length; i++) { // Skip header row
         const row = adminData[i];
-        const adminName = row[0] ? row[0].toString().trim() : '';
-        const adminEmail = row[1] ? row[1].toString().toLowerCase().trim() : '';
-        const adminPassword = row[2] ? row[2].toString().trim() : '';
+        const teacherFirst = row[0] ? row[0].toString().trim() : '';
+        const teacherLast = row[1] ? row[1].toString().trim() : '';
+        const adminEmail = row[2] ? row[2].toString().toLowerCase().trim() : '';
+        const adminPassword = row[3] ? row[3].toString().trim() : '';
+        const teacherRole = row[4] ? row[4].toString().trim() : 'Teacher'; // Column E: Role (default to Teacher if not set)
 
         if (adminEmail === cleanEmail && adminPassword === password) {
-          // Admin login successful
-          Logger.log(`Admin login successful: ${adminEmail}`);
-          const sessionToken = generateSessionToken(cleanEmail, 'admin', 360); // 6 hour token
+          // Staff login successful (Teacher/Admin/Super Admin)
+          Logger.log(`Staff login successful: ${adminEmail} (Role: ${teacherRole})`);
+
+          // Determine userType based on role
+          let userType = 'teacher'; // Default
+          if (teacherRole === 'Super Admin') {
+            userType = 'super_admin';
+          } else if (teacherRole === 'Admin') {
+            userType = 'admin';
+          }
+          
+          const displayName = `${teacherFirst} ${teacherLast}`.trim();
+          const lastNameForFiltering = teacherLast;
+
+          const sessionToken = generateSessionToken(cleanEmail, userType, 360, lastNameForFiltering); // 6 hour token, use last name for filtering
           return {
-            userType: 'admin',
-            name: adminName,
+            userType: userType,
+            role: teacherRole, // Store the actual role string for display purposes
+            name: displayName, // Return full name for UI display
             email: cleanEmail,
             sessionToken: sessionToken
           };
