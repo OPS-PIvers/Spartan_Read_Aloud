@@ -5,6 +5,8 @@
 // --- CONFIGURATION ---
 const AUDIO_DRIVE_FOLDER_NAME = "Assessment Audio Files";
 const BATCH_API_ENABLED = true; // Set to false to use fallback manual processing
+                                // NOTE: As of Oct 2025, Batch API is NOT supported for TTS models
+                                // System will auto-fallback to manual processing
 const BATCH_CHECK_INTERVAL_MINUTES = 30; // Check batch jobs every 30 minutes 
 
 // --- NEW SPREADSHEET COLUMN MAPPING ---
@@ -96,13 +98,15 @@ function runAllStepsManual() {
 
 /**
  * Starts batch processing for all pending assessments.
+ * Note: Batch API is currently not supported for TTS models (as of Oct 2025).
+ * Will automatically fall back to manual processing if batch API returns 404.
  */
 function startBatchProcessing() {
   step0_addNewPdfs();
   step1_AnalyzePdfsAndCountChunks();
 
   if (BATCH_API_ENABLED) {
-    initiateBatchJobs();
+    initiateBatchJobs(); // Will auto-fallback to manual if batch not supported
   } else {
     SpreadsheetApp.getUi().alert('Batch API is disabled. Use manual processing instead.');
   }
@@ -110,6 +114,7 @@ function startBatchProcessing() {
 
 /**
  * Initiates Gemini Batch API jobs for eligible files.
+ * Falls back to manual processing if batch API is not supported.
  */
 function initiateBatchJobs() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -117,6 +122,7 @@ function initiateBatchJobs() {
 
   const data = sheet.getDataRange().getValues();
   let batchJobsCreated = 0;
+  let batchNotSupported = false;
 
   for (let i = 1; i < data.length; i++) {
     const pdfUrl = data[i][COL.PDF_URL];
@@ -133,11 +139,22 @@ function initiateBatchJobs() {
         sheet.getRange(i + 1, COL.PROCESSING_MODE + 1).setValue('batch');
         sheet.getRange(i + 1, COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
         batchJobsCreated++;
+      } else {
+        // Batch job creation returned null - API not supported
+        batchNotSupported = true;
+        break; // Stop trying batch jobs
       }
     }
   }
 
-  if (batchJobsCreated > 0) {
+  SpreadsheetApp.flush();
+
+  // Handle results
+  if (batchNotSupported) {
+    SpreadsheetApp.getUi().alert('Batch API is not currently supported for text-to-speech models.\n\nFalling back to manual processing mode. This will process assessments in real-time.');
+    // Automatically trigger manual processing
+    step2_GenerateMissingAudioAndFinalize();
+  } else if (batchJobsCreated > 0) {
     setupBatchCheckTrigger();
     SpreadsheetApp.getUi().alert(`Started ${batchJobsCreated} batch job(s). Processing will continue automatically at 50% cost savings.\n\nJobs typically complete within 24 hours. Use "Check Batch Status" to monitor progress.`);
   } else {
@@ -168,10 +185,8 @@ function createBatchJobForFile(rowIndex, rowData) {
 
   // Create JSONL content for batch processing
   const batchRequests = textChunks.map((chunkText, index) => ({
-    custom_id: `${fileId}_chunk_${index}`,
-    method: "POST",
-    url: "/v1beta/models/gemini-2.5-flash-preview-tts:generateContent",
-    body: {
+    key: `${fileId}_chunk_${index}`,
+    request: {
       contents: [{
         parts: [{
           text: `Read the following text in a clear, neutral, and steady voice: ${chunkText}`
@@ -210,6 +225,7 @@ function createBatchJobForFile(rowIndex, rowData) {
 
 /**
  * Submits a batch job to the Gemini API.
+ * Returns null if batch API is not supported (404 error), allowing fallback to manual processing.
  */
 function submitGeminiBatchJob(jsonlFile, displayName) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
@@ -226,18 +242,20 @@ function submitGeminiBatchJob(jsonlFile, displayName) {
       'X-Goog-Upload-Header-Content-Type': 'application/jsonlines',
       'Content-Type': 'application/jsonlines'
     },
-    'payload': fileBlob.getBytes()
+    'payload': fileBlob.getBytes(),
+    'muteHttpExceptions': true
   };
 
   const uploadResponse = UrlFetchApp.fetch(uploadUrl, uploadPayload);
   const uploadResult = JSON.parse(uploadResponse.getContentText());
+
 
   if (uploadResponse.getResponseCode() !== 200) {
     throw new Error(`File upload failed: ${uploadResult.error?.message || 'Unknown error'}`);
   }
 
   // Create the batch job using the uploaded file
-  const batchUrl = `https://generativelanguage.googleapis.com/v1beta/batches?key=${apiKey}`;
+  const batchUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:batchGenerateContent?key=${apiKey}`;
 
   const batchPayload = {
     'method': 'POST',
@@ -245,18 +263,28 @@ function submitGeminiBatchJob(jsonlFile, displayName) {
       'Content-Type': 'application/json'
     },
     'payload': JSON.stringify({
-      requests_file: uploadResult.name,
-      model: "gemini-2.5-flash-preview-tts",
-      config: {
-        display_name: `TTS_Batch_${displayName}_${new Date().getTime()}`
+      "batch": {
+        "displayName": `TTS_Batch_${displayName}_${new Date().getTime()}`,
+        "model": "models/gemini-2.5-flash-preview-tts",
+        "inputConfig": {
+          "fileName": uploadResult.file.name // Use the file name from the upload response
+        }
       }
-    })
+    }),
+    'muteHttpExceptions': true
   };
 
   const batchResponse = UrlFetchApp.fetch(batchUrl, batchPayload);
   const batchResult = JSON.parse(batchResponse.getContentText());
+  const responseCode = batchResponse.getResponseCode();
 
-  if (batchResponse.getResponseCode() !== 200) {
+  // Check for 404 - model not supported for batch API
+  if (responseCode === 404) {
+    Logger.log(`Batch API not supported for TTS model (404). Fallback to manual processing required.`);
+    return null; // Signal that batch is not supported
+  }
+
+  if (responseCode !== 200) {
     throw new Error(`Batch job creation failed: ${batchResult.error?.message || 'Unknown error'}`);
   }
 
@@ -410,8 +438,8 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
 
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
-      const customId = result.custom_id;
-      const chunkIndex = parseInt(customId.split('_chunk_')[1]);
+      const key = result.key;
+      const chunkIndex = parseInt(key.split('_chunk_')[1]);
 
       if (result.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
         const audioData = result.response.candidates[0].content.parts[0].inlineData.data;
