@@ -1447,6 +1447,8 @@
     }
 
     function onAssessmentsLoaded(result) {
+      console.log('onAssessmentsLoaded called with result:', result);
+
       if (result.error) {
         onAssessmentLoadError(result.error);
         return;
@@ -1454,15 +1456,19 @@
 
       availableAssessments = result.assessments;
       console.log(`Loaded ${availableAssessments.length} assessment(s)`);
+      console.log('Assessment data:', availableAssessments);
 
       // If only one assessment, load it directly (ZERO REGRESSION)
       if (availableAssessments.length === 1) {
         console.log('Single assessment found, loading directly...');
         loadSpecificAssessment(availableAssessments[0].assessmentUrl);
-      } else {
+      } else if (availableAssessments.length > 1) {
         // Multiple assessments - show selection screen
         console.log('Multiple assessments found, showing selection screen...');
         showAssessmentSelection();
+      } else {
+        console.error('No assessments in array - this should not happen');
+        onAssessmentLoadError('No assessments found in response');
       }
     }
 
@@ -1588,7 +1594,8 @@
 
     function processPage(pdfDocument, pageNum) {
       return pdfDocument.getPage(pageNum).then(page => {
-        const viewport = page.getViewport({ scale: 1.0 });
+        // Use scale 1.5 for high-quality rendering with good layout balance
+        const viewport = page.getViewport({ scale: 1.5 });
 
         // Create page container
         const pageContainer = document.createElement('div');
@@ -2112,9 +2119,13 @@
       updateToolbarDisplay();
 
       // Use searchWords for current chunk and next chunk as boundaries
-      const currentSearchWords = chunk.searchWords;
+      // Fallback: generate searchWords from text for backward compatibility with old assessments
+      const currentSearchWords = chunk.searchWords ||
+        (chunk.text ? chunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : '');
       const nextChunk = serverChunks[index + 1];
-      const nextSearchWords = nextChunk ? nextChunk.searchWords : null;
+      const nextSearchWords = nextChunk ?
+        (nextChunk.searchWords || (nextChunk.text ? nextChunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : ''))
+        : null;
 
       console.log('Audio title displayed:', getCleanedChunkText(chunk.text));
       console.log('Current chunk searchWords:', currentSearchWords);
