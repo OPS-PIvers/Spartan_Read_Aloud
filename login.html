@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <base target="_top">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f0f2f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    #login-container {
+      background-color: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      width: 100%;
+      max-width: 400px;
+    }
+    #login-container h2 {
+      margin-top: 0;
+      margin-bottom: 20px;
+      color: #1a73e8;
+    }
+    #login-error {
+      color: #d93025;
+      margin-bottom: 15px;
+      min-height: 1.2em;
+      text-align: left;
+    }
+    input[type="email"],
+    input[type="password"] {
+      width: calc(100% - 22px);
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    button {
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      width: 100%;
+    }
+    button:hover {
+      background-color: #155ab6;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div id="login-container">
+    <h1>Assessment Reader</h1>
+    <h2>Assessment Reader Login</h2>
+    <div id="login-error"></div>
+    <input type="email" id="email-input" placeholder="Enter your email" autocomplete="email">
+    <input type="password" id="password-input" placeholder="Enter your password">
+    <button id="load-button" onclick="loadAssessment()">Login</button>
+  </div>
+
+  <script>
+    const emailInput = document.getElementById('email-input');
+    const passwordInput = document.getElementById('password-input');
+    const loadButton = document.getElementById('load-button');
+    const loginErrorDiv = document.getElementById('login-error');
+
+    function loadAssessment() {
+      loginErrorDiv.textContent = '';
+      if (!emailInput.value || !passwordInput.value) {
+        loginErrorDiv.textContent = 'Please enter both your email and the password.';
+        return;
+      }
+
+      loadButton.disabled = true;
+      loadButton.textContent = 'Loading...';
+
+      google.script.run
+        .withSuccessHandler(onAuthenticationSuccess)
+        .withFailureHandler(onAssessmentLoadError)
+        .authenticateUser(emailInput.value, passwordInput.value);
+    }
+
+    function onAuthenticationSuccess(result) {
+      if (result.error) {
+        onAssessmentLoadError(result.error);
+        return;
+      }
+
+      let pageLoader;
+      switch(result.userType) {
+        case 'student':
+          google.script.run.withSuccessHandler(html => loadPage(html, result)).getStudentPage();
+          break;
+        case 'teacher':
+          google.script.run.withSuccessHandler(html => loadPage(html, result)).getTeacherPage();
+          break;
+        case 'admin':
+          google.script.run.withSuccessHandler(html => loadPage(html, result)).getAdminPage();
+          break;
+        case 'super_admin':
+          google.script.run.withSuccessHandler(html => loadPage(html, result)).getSuperAdminPage();
+          break;
+        default:
+          onAssessmentLoadError('Invalid user type received.');
+          return;
+      }
+    }
+
+    function loadPage(html, authResult) {
+      localStorage.setItem('authResult', JSON.stringify(authResult));
+      document.open();
+      document.write(html);
+      document.close();
+    }
+
+    function onAssessmentLoadError(error) {
+      loginErrorDiv.textContent = error;
+      loadButton.disabled = false;
+      loadButton.textContent = 'Login';
+    }
+
+    passwordInput.addEventListener('keypress', function(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        loadButton.click();
+      }
+    });
+
+    emailInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            passwordInput.focus();
+        }
+    });
+  </script>
+</body>
+</html>

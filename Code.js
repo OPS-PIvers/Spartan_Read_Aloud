@@ -1621,9 +1621,25 @@ function getOrCreateSubfolder(parentFolder, subfolderName) {
 }
 
 function doGet(e) {
-  return HtmlService.createHtmlOutputFromFile('index.html')
+  return HtmlService.createHtmlOutputFromFile('login.html')
     .setTitle('Orono Schools Assessment Reader')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+}
+
+function getStudentPage() {
+  return HtmlService.createHtmlOutputFromFile('student.html').getContent();
+}
+
+function getTeacherPage() {
+  return HtmlService.createHtmlOutputFromFile('teacher.html').getContent();
+}
+
+function getAdminPage() {
+  return HtmlService.createHtmlOutputFromFile('admin.html').getContent();
+}
+
+function getSuperAdminPage() {
+  return HtmlService.createHtmlOutputFromFile('super_admin.html').getContent();
 }
 
 /**

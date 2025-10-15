@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <base target="_top">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
+  <style>
+    /* Basic styles for the page */
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f0f2f5;
+      margin: 0;
+    }
+    button {
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #155ab6;
+    }
+    input, textarea {
+        width: calc(100% - 22px);
+        padding: 10px;
+        margin-bottom: 15px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="admin-dashboard-container">
+    <div style="max-width: 1400px; margin: 0 auto; padding: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+        <h2 style="margin: 0; color: #1a73e8;">Super Admin Dashboard</h2>
+        <div style="display: flex; align-items: center; gap: 15px;">
+          <span id="admin-name-display" style="color: #5f6368; font-size: 14px;"></span>
+          <button onclick="logoutAdmin()" style="width: auto; padding: 8px 16px; background-color: #f8f9fa; color: #3c4043; border: 1px solid #dadce0;">Logout</button>
+        </div>
+      </div>
+
+      <!-- Upload Section -->
+      <div id="add-assessment-section" style="background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;">
+        <h3 style="margin-top: 0; margin-bottom: 20px; color: #202124;">Add New Assessment</h3>
+        <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e8eaed;">
+          <button id="upload-tab-file" onclick="showUploadTab('file')" style="width: auto; padding: 12px 20px; background: transparent; border: none; border-bottom: 3px solid #1a73e8; color: #1a73e8; font-weight: 600; margin-bottom: -2px;">Upload PDF/Word</button>
+          <button id="upload-tab-gdoc" onclick="showUploadTab('gdoc')" style="width: auto; padding: 12px 20px; background: transparent; border: none; border-bottom: 3px solid transparent; color: #5f6368; font-weight: 500; margin-bottom: -2px;">Add Google Doc</button>
+        </div>
+        <div id="upload-section-file" style="display: block;">
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Select File (PDF, .docx, .doc - Max 45MB)</label>
+            <input type="file" id="file-upload-input" accept=".pdf,.docx,.doc" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+          </div>
+        </div>
+        <div id="upload-section-gdoc" style="display: none;">
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Google Doc URL</label>
+            <input type="url" id="gdoc-url-input" placeholder="https://docs.google.com/document/d/..." style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+          <div>
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Class Name</label>
+            <input type="text" id="new-class-name" placeholder="e.g., Grade 4 Math">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Instructor Last Name</label>
+            <input type="text" id="new-instructor" placeholder="e.g., Smith">
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-bottom: 20px;">
+          <div>
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Password</label>
+            <input type="text" id="new-password" placeholder="Student password">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Student Emails</label>
+            <textarea id="new-student-emails" placeholder="student1@school.com, student2@school.com"></textarea>
+          </div>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <button id="add-assessment-btn" onclick="addNewAssessment()">Add Assessment & Process</button>
+          <div id="upload-message" style="color: #5f6368; font-size: 14px;"></div>
+        </div>
+      </div>
+
+      <!-- Assessment Table -->
+      <div style="background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h3 style="margin-top: 0; margin-bottom: 20px; color: #202124;">All Assessments</h3>
+        <div style="overflow-x: auto;">
+          <table id="admin-assessment-table" style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="background: #f8f9fa; border-bottom: 2px solid #e8eaed;">
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">File Name</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600; width: 100px;">Status</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Class</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Instructor</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Password</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Students</th>
+                <th style="padding: 12px 8px; text-align: center; color: #5f6368; font-weight: 600; width: 140px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-assessment-tbody"></tbody>
+          </table>
+        </div>
+        <div id="no-assessments-message" style="display: none; text-align: center; padding: 40px; color: #5f6368;">
+          No assessments found.
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+        const authResult = JSON.parse(localStorage.getItem('authResult'));
+        if (authResult) {
+            adminSessionToken = authResult.sessionToken;
+            adminName = authResult.name;
+            userRole = authResult.userType;
+            showAdminDashboard();
+        } else {
+            window.location.reload();
+        }
+    });
+
+    let adminSessionToken = null;
+    let adminName = null;
+    let userRole = 'super_admin';
+    let allAssessments = [];
+
+    function showAdminDashboard() {
+      const adminDashboard = document.getElementById('admin-dashboard-container');
+      adminDashboard.style.display = 'block';
+      document.getElementById('admin-name-display').textContent = `Welcome, ${adminName}`;
+      loadAllAssessments();
+    }
+
+    function logoutAdmin() {
+      localStorage.removeItem('authResult');
+      window.location.reload();
+    }
+
+    function loadAllAssessments() {
+      google.script.run
+        .withSuccessHandler(onAllAssessmentsLoaded)
+        .withFailureHandler((error) => {
+          alert('Failed to load assessments: ' + error.message);
+          logoutAdmin();
+        })
+        .getAllAssessments(adminSessionToken);
+    }
+
+    function onAllAssessmentsLoaded(result) {
+      if (result.error) {
+        if (result.error.includes('Unauthorized')) {
+          alert('Your session has expired. Please log in again.');
+          logoutAdmin();
+        } else {
+          alert('Error: ' + result.error);
+        }
+        return;
+      }
+      allAssessments = result.assessments;
+      renderAssessmentTable();
+    }
+
+    function renderAssessmentTable() {
+      const tbody = document.getElementById('admin-assessment-tbody');
+      const noAssessmentsMsg = document.getElementById('no-assessments-message');
+      if (allAssessments.length === 0) {
+        tbody.innerHTML = '';
+        noAssessmentsMsg.style.display = 'block';
+        return;
+      }
+      noAssessmentsMsg.style.display = 'none';
+      tbody.innerHTML = allAssessments.map((assessment, index) => {
+        let statusBadge;
+        if (assessment.isComplete === true) {
+          statusBadge = '<span style="background: #e6f4ea; color: #137333; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">✓ Ready</span>';
+        } else if (assessment.chunkCount > 0) {
+          statusBadge = '<span style="background: #fef7e0; color: #ea8600; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">⏳ Processing</span>';
+        } else {
+          statusBadge = '<span style="background: #e8f0fe; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">📋 Queued</span>';
+        }
+
+        return `
+          <tr style="border-bottom: 1px solid #e8eaed;" data-row-index="${assessment.rowIndex}">
+            <td style="padding: 12px 8px;">${escapeHtml(assessment.fileName)}</td>
+            <td style="padding: 12px 8px;">${statusBadge}</td>
+            <td style="padding: 12px 8px;">
+              <input type="text" value="${escapeHtml(assessment.className)}" data-field="className" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px;">
+            </td>
+            <td style="padding: 12px 8px;">
+              <input type="text" value="${escapeHtml(assessment.instructor)}" data-field="instructor" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px;">
+            </td>
+            <td style="padding: 12px 8px;">
+              <input type="text" value="${escapeHtml(assessment.password)}" data-field="password" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px;">
+            </td>
+            <td style="padding: 12px 8px;">
+              <textarea data-field="studentEmails" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px; resize: vertical; min-height: 32px;">${escapeHtml(assessment.studentEmails)}</textarea>
+            </td>
+            <td style="padding: 12px 8px; text-align: center;">
+              <button onclick="saveAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; margin-right: 4px; background: #34a853; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Save">✓</button>
+              <button onclick="deleteAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; margin-right: 4px; background: #d93025; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Delete">✕</button>
+              <button onclick="reprocessAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; background: #f8f9fa; color: #3c4043; border: 1px solid #dadce0; border-radius: 4px; cursor: pointer;" title="Re-run analysis and audio generation">⟳</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function saveAssessmentRow(rowIndex) {
+      const row = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+      if (!row) return;
+
+      const className = row.querySelector('[data-field="className"]').value.trim();
+      const instructor = row.querySelector('[data-field="instructor"]').value.trim();
+      const password = row.querySelector('[data-field="password"]').value.trim();
+      const studentEmails = row.querySelector('[data-field="studentEmails"]').value;
+
+      google.script.run
+        .withSuccessHandler((result) => {
+          if (result.error) {
+            alert('Error: ' + result.error);
+            return;
+          }
+          alert('Assessment updated successfully!');
+          loadAllAssessments();
+        })
+        .withFailureHandler((error) => {
+          alert('Failed to update: ' + error.message);
+        })
+        .updateAssessmentRow(adminSessionToken, rowIndex, {
+          className: className,
+          instructor: instructor,
+          password: password,
+          studentEmails: studentEmails
+        });
+    }
+
+    function deleteAssessmentRow(rowIndex) {
+      if (!confirm('Are you sure you want to delete this assessment? This cannot be undone.')) {
+        return;
+      }
+      google.script.run
+        .withSuccessHandler((result) => {
+          if (result.error) {
+            alert('Error: ' + result.error);
+            return;
+          }
+          alert('Assessment deleted successfully!');
+          loadAllAssessments();
+        })
+        .withFailureHandler((error) => {
+          alert('Failed to delete: ' + error.message);
+        })
+        .deleteAssessmentRow(adminSessionToken, rowIndex);
+    }
+
+    function reprocessAssessmentRow(rowIndex) {
+      if (!confirm('Re-process this assessment? This will clear existing audio data and regenerate it.')) {
+        return;
+      }
+      google.script.run
+        .withSuccessHandler((result) => {
+          if (result.error) {
+            alert('Error: ' + result.error);
+            return;
+          }
+          alert(result.message || 'Assessment reprocessing started!');
+          loadAllAssessments();
+        })
+        .withFailureHandler((error) => {
+          alert('Failed to reprocess: ' + error.message);
+        })
+        .reprocessAssessment(adminSessionToken, rowIndex);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function showUploadTab(tab) {
+        // This function would toggle visibility of upload sections
+    }
+
+    function addNewAssessment() {
+        // This function would handle adding a new assessment
+    }
+  </script>
+</body>
+</html>
