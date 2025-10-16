@@ -551,12 +551,10 @@ function onPdfLoadError(error) {
   currentLoadingCard = null;
   pendingAssessmentData = null;
 
-  // Show error
-  viewerContainer.style.display = 'none';
-  assessmentSelectionContainer.style.display = 'none';
-  loginContainer.style.display = 'block';
-  loadButton.disabled = false;
-  loginErrorDiv.textContent = 'Error: ' + error;
+    // Instead of manipulating login DOM (not present in student view), trigger error UI
+  if (typeof onAssessmentLoadError === 'function') {
+    onAssessmentLoadError(error);
+  }
 }
 
 

@@ -192,7 +192,7 @@ function renderAssessmentTable() {
           <input type="text" value="${escapeHtml(assessment.instructor)}" data-field="instructor" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px;">
         </td>
         <td style="padding: 12px 8px;">
-          <input type="text" value="${escapeHtml(assessment.password)}" data-field="password" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px;">
+          <input type="password" value="${escapeHtml(assessment.password)}" data-field="password" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px;">
         </td>
         <td style="padding: 12px 8px;">
           <textarea data-field="studentEmails" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px; resize: vertical; min-height: 32px;">${escapeHtml(assessment.studentEmails)}</textarea>

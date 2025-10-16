@@ -1651,9 +1651,9 @@ function getTeacherView(token, tokenData) {
     let content = HtmlService.createHtmlOutputFromFile('teacher.html').getContent();
     content += '<script>' + HtmlService.createHtmlOutputFromFile('teacher.js').getContent() + '</script>';
     content += `<script>
-        adminSessionToken = "${token}";
-        adminName = "${tokenData.name}";
-        userRole = "${tokenData.role}";
+        adminSessionToken = ${JSON.stringify(token)};
+        adminName = ${JSON.stringify(tokenData.name)};
+        userRole = ${JSON.stringify(tokenData.role)};
         showAdminDashboard();
     </script>`;
     return content;
