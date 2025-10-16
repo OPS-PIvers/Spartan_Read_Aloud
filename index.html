@@ -10,11 +10,6 @@
   <?!= include('styles'); ?>
 </head>
 <body>
-  <div id="app-container">Loading...</div>
-  <script>
-    google.script.run.withSuccessHandler(function(html) {
-      document.getElementById('app-container').innerHTML = html;
-    }).loadView();
-  </script>
+  <?!= loadView(); ?>
 </body>
 </html>
