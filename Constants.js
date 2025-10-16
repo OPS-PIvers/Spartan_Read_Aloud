@@ -39,7 +39,7 @@ const CONSTANTS = {
   SCRIPT_TIMEOUT_MINUTES: 5,
 
   // --- Text & Audio Processing ---
-  CHUNK_SPLIT_REGEX: /\n(?=\s*\d+\.\s)/,
+  CHUNK_SPLIT_REGEX: /[\n\r]+(?=\s*\d+[.)\]]\s+)/,
   SEARCH_WORDS_COUNT: 8,
   SAFE_FILENAME_WORD_COUNT: 6,
 

@@ -35,7 +35,7 @@ function onAuthenticationSuccess(result) {
   } else if (result.userType === 'student') {
     google.script.run.withSuccessHandler(function(html) {
       document.getElementById('app-container').innerHTML = html;
-    }).getStudentViewContent(result, emailInput.value, passwordInput.value);
+    }).getStudentView(result, emailInput.value, passwordInput.value);
   } else {
     onAssessmentLoadError('Invalid authentication response');
   }

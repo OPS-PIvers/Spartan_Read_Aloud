@@ -37,37 +37,6 @@ function initializeStudentView(studentData) {
   onAssessmentsLoaded({ assessments: studentData.assessments });
 }
 
-/**
- * Parses a list of email addresses from various input formats.
- * Handles comma-separated, tab-separated, newline-separated, semicolon-separated,
- * and space-separated values (as copied from Google Sheets or other sources).
- *
- * @param {string} input - Raw input string containing email addresses
- * @returns {string} - Comma-separated, deduplicated, normalized email list
- */
-function parseEmailList(input) {
-  if (!input || typeof input !== 'string') {
-    return '';
-  }
-
-  // Email regex pattern (basic but robust)
-  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-
-  // Extract all email addresses from the input
-  const emailMatches = input.match(emailRegex);
-
-  if (!emailMatches || emailMatches.length === 0) {
-    return '';
-  }
-
-  // Normalize: lowercase, trim, deduplicate
-  const uniqueEmails = [...new Set(
-    emailMatches.map(email => email.toLowerCase().trim())
-  )];
-
-  // Return as comma-separated string
-  return uniqueEmails.join(', ');
-}
 
 function onAssessmentsLoaded(result) {
   console.log('onAssessmentsLoaded called with result:', result);
@@ -209,9 +178,11 @@ function backToLogin() {
 }
 
 function onAssessmentLoadError(error) {
-  console.error('Assessment load error:', error);
-  assessmentSelectionContainer.style.display = 'none';
-  viewerContainer.style.display = 'none';
+    console.error('Assessment load error:', error);
+    // Show error inline in the viewer container
+    viewerContainer.style.display = 'block';
+    assessmentSelectionContainer.style.display = 'none';
+    viewerContainer.innerHTML = '<div class="error-message" style="color: red; font-weight: bold; margin: 2em;">Error loading PDF: ' + String(error) + '</div>';
 }
 
 function escapeHtml(text) {
@@ -822,7 +793,7 @@ function fetchAndCacheAudio(audioUrl) {
       .withFailureHandler(err => {
         reject(err);
       })
-      .getAudioDataAsBase64(fileId);
+          .getAudioDataAsBase64(sessionToken, fileId);
   });
 }
 

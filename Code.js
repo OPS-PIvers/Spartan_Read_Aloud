@@ -1673,17 +1673,19 @@ function getStudentView(authResult, email, password) {
   return content;
 }
 
-function getStudentViewContent(authResult, email, password) {
-  return getStudentView(authResult, email, password);
-}
 
 /**
  * Gets the base64 encoded data for an audio file.
  * @param {string} fileId The ID of the audio file.
  * @returns {string|null} The base64 encoded data or null on failure.
  */
-function getAudioDataAsBase64(fileId) {
+function getAudioDataAsBase64(sessionToken, fileId) {
   try {
+    const tokenData = validateSessionToken(sessionToken);
+    if (!tokenData) {
+      return null;
+    }
+
     const file = DriveApp.getFileById(fileId);
     const blob = file.getBlob();
     return Utilities.base64Encode(blob.getBytes());
@@ -1710,6 +1712,29 @@ function getBulkAudioData(sessionToken, fileIds) {
         success: false,
         error: 'Session expired or invalid. Please refresh the page and log in again.'
       };
+    }
+
+    if (tokenData.role === 'student') {
+        const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+        const data = sheet.getDataRange().getValues();
+        const assessmentUrl = tokenData.url;
+        let audioFileIds = [];
+
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
+                const audioData = JSON.parse(data[i][CONSTANTS.COL.AUDIO_JSON]);
+                audioFileIds = audioData.map(chunk => getFileIdFromUrl(chunk.audioUrl));
+                break;
+            }
+        }
+
+        const unauthorizedFiles = fileIds.filter(id => !audioFileIds.includes(id));
+        if (unauthorizedFiles.length > 0) {
+            return {
+                success: false,
+                error: 'Unauthorized access to one or more audio files.'
+            };
+        }
     }
 
     Logger.log(`Bulk fetching ${fileIds.length} audio files for ${tokenData.email}`);

@@ -4,6 +4,36 @@ let adminName = null;
 let userRole = 'student'; // Default, will be updated on successful login
 let allAssessments = [];
 
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function parseEmailList(input) {
+  if (!input || typeof input !== 'string') {
+    return '';
+  }
+
+  // Email regex pattern (basic but robust)
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
+  // Extract all email addresses from the input
+  const emailMatches = input.match(emailRegex);
+
+  if (!emailMatches || emailMatches.length === 0) {
+    return '';
+  }
+
+  // Normalize: lowercase, trim, deduplicate
+  const uniqueEmails = [...new Set(
+    emailMatches.map(email => email.toLowerCase().trim())
+  )];
+
+  // Return as comma-separated string
+  return uniqueEmails.join(', ');
+}
+
 (function checkStoredAdminSession() {
   const storedToken = localStorage.getItem('adminToken');
   const storedName = localStorage.getItem('adminName');
@@ -13,7 +43,7 @@ let allAssessments = [];
     console.log('Found stored staff session, restoring...');
     adminSessionToken = storedToken;
     adminName = storedName;
-    userRole = storedRole || 'super_admin'; // Default to super_admin for backward compatibility
+    userRole = storedRole || 'teacher'; // Default to least-privileged role for safety
     // Show admin dashboard automatically
     showAdminDashboard();
   }
@@ -40,6 +70,7 @@ function logoutAdmin() {
   // Clear stored session from localStorage
   localStorage.removeItem('adminToken');
   localStorage.removeItem('adminName');
+  localStorage.removeItem('userRole');
 
   google.script.run.withSuccessHandler(function(html) {
     document.getElementById('app-container').innerHTML = html;
