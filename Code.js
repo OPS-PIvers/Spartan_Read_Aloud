@@ -1642,35 +1642,19 @@ function loadView(adminToken) {
 }
 
 function getLoginView() {
-  let content = HtmlService.createHtmlOutputFromFile('loginController.html').getContent();
-  content += HtmlService.createHtmlOutputFromFile('login.html').getContent();
-  return content;
+  return HtmlService.createHtmlOutputFromFile('login.html').getContent();
 }
 
 function getTeacherView(token, tokenData) {
-    let content = HtmlService.createHtmlOutputFromFile('teacherController.html').getContent();
-    content += HtmlService.createHtmlOutputFromFile('teacher.html').getContent();
-    content += `<script>
-        adminSessionToken = ${JSON.stringify(token)};
-        adminName = ${JSON.stringify(tokenData.name)};
-        userRole = ${JSON.stringify(tokenData.role)};
-        showAdminDashboard();
-    </script>`;
-    return content;
+    // Note: Scripts in innerHTML are not executed by the browser for security reasons.
+    // The initialization is handled client-side in login.html after HTML injection.
+    return HtmlService.createHtmlOutputFromFile('teacher.html').getContent();
 }
 
 function getStudentView(authResult, email, password) {
-  let content = HtmlService.createHtmlOutputFromFile('studentController.html').getContent();
-  content += HtmlService.createHtmlOutputFromFile('student.html').getContent();
-
-  const studentData = {
-    assessments: authResult.assessments,
-    email: email,
-    password: password
-  };
-
-  content += '<script>initializeStudentView(' + JSON.stringify(studentData) + ');</script>';
-  return content;
+  // Note: Scripts in innerHTML are not executed by the browser for security reasons.
+  // The initialization is handled client-side in login.html after HTML injection.
+  return HtmlService.createHtmlOutputFromFile('student.html').getContent();
 }
 
 
@@ -1994,7 +1978,7 @@ function authenticateUser(email, password) {
           } else if (teacherRole === CONSTANTS.ROLE_ADMIN) {
             userType = CONSTANTS.ROLE_TOKEN_ADMIN;
           }
-          
+
           const displayName = `${teacherFirst} ${teacherLast}`.trim();
           const lastNameForFiltering = teacherLast;
 

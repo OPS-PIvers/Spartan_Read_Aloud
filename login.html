@@ -6,3 +6,120 @@
     <input type="password" id="password-input" placeholder="Enter your password">
     <button id="load-button" onclick="loadAssessment()">Login</button>
 </div>
+
+<script>
+const emailInput = document.getElementById('email-input');
+const passwordInput = document.getElementById('password-input');
+const loadButton = document.getElementById('load-button');
+const loginErrorDiv = document.getElementById('login-error');
+
+function loadAssessment() {
+  loginErrorDiv.textContent = '';
+  if (!emailInput.value || !passwordInput.value) {
+    loginErrorDiv.textContent = 'Please enter both your email and the password.';
+    return;
+  }
+
+  loadButton.disabled = true;
+  loadButton.textContent = 'Loading...';
+
+  google.script.run
+    .withSuccessHandler(onAuthenticationSuccess)
+    .withFailureHandler(onAssessmentLoadError)
+    .authenticateUser(emailInput.value, passwordInput.value);
+}
+
+function onAuthenticationSuccess(result) {
+  console.log('Authentication result:', result);
+
+  if (result.error) {
+    onAssessmentLoadError(result.error);
+    return;
+  }
+
+  // Route based on user type
+  if (result.userType === 'teacher' || result.userType === 'admin' || result.userType === 'super_admin') {
+    // Teacher/Admin login
+    google.script.run.withSuccessHandler(function(html) {
+      // Inject HTML
+      const appContainer = document.getElementById('app-container');
+      appContainer.innerHTML = html;
+
+      // Extract and execute scripts from the injected HTML
+      const scripts = appContainer.querySelectorAll('script');
+      scripts.forEach(oldScript => {
+        const newScript = document.createElement('script');
+        if (oldScript.src) {
+          newScript.src = oldScript.src;
+        } else {
+          newScript.textContent = oldScript.textContent;
+        }
+        document.body.appendChild(newScript);
+        oldScript.remove();
+      });
+
+      // Wait a tick for scripts to be parsed, then call initialization
+      setTimeout(() => {
+        if (typeof initializeAdminView === 'function') {
+          initializeAdminView(result.sessionToken, result.name, result.userType);
+        } else {
+          console.error('initializeAdminView function not found after HTML injection');
+        }
+      }, 0);
+    }).getTeacherView(result.sessionToken, result);
+  } else if (result.userType === 'student') {
+    // Student login
+    google.script.run.withSuccessHandler(function(html) {
+      // Inject HTML
+      const appContainer = document.getElementById('app-container');
+      appContainer.innerHTML = html;
+
+      // Extract and execute scripts from the injected HTML
+      const scripts = appContainer.querySelectorAll('script');
+      scripts.forEach(oldScript => {
+        const newScript = document.createElement('script');
+        if (oldScript.src) {
+          newScript.src = oldScript.src;
+        } else {
+          newScript.textContent = oldScript.textContent;
+        }
+        document.body.appendChild(newScript);
+        oldScript.remove();
+      });
+
+      // Wait a tick for scripts to be parsed, then call initialization
+      setTimeout(() => {
+        if (typeof initializeStudentView === 'function') {
+          initializeStudentView(result, emailInput.value, passwordInput.value);
+        } else {
+          console.error('initializeStudentView function not found after HTML injection');
+        }
+      }, 0);
+    }).getStudentView(result, emailInput.value, passwordInput.value);
+  } else {
+    onAssessmentLoadError('Invalid authentication response');
+  }
+}
+
+function onAssessmentLoadError(error) {
+  console.error('Assessment load error:', error);
+  // Use error.message if available, otherwise convert to string to avoid "[object Object]"
+  loginErrorDiv.textContent = error?.message || String(error);
+  loadButton.disabled = false;
+  loadButton.textContent = 'Login';
+}
+
+passwordInput.addEventListener('keypress', function(event) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    loadButton.click();
+  }
+});
+
+emailInput.addEventListener('keypress', function(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        passwordInput.focus();
+    }
+});
+</script>
