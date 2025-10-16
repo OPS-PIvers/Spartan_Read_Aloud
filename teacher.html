@@ -1,0 +1,95 @@
+<div id="admin-dashboard-container" style="display: none;">
+    <div style="max-width: 1400px; margin: 0 auto; padding: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+        <h2 style="margin: 0; color: #1a73e8;">Admin Dashboard</h2>
+        <div style="display: flex; align-items: center; gap: 15px;">
+          <span id="admin-name-display" style="color: #5f6368; font-size: 14px;"></span>
+          <button onclick="logoutAdmin()" style="width: auto; padding: 8px 16px; background-color: #f8f9fa; color: #3c4043; border: 1px solid #dadce0;">Logout</button>
+        </div>
+      </div>
+
+      <!-- Upload Section (Super Admin, Admin, and Teacher) -->
+      <div id="add-assessment-section" style="background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;">
+        <h3 style="margin-top: 0; margin-bottom: 20px; color: #202124;">Add New Assessment</h3>
+
+        <!-- Tab Toggle -->
+        <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e8eaed;">
+          <button id="upload-tab-file" onclick="showUploadTab('file')" style="width: auto; padding: 12px 20px; background: transparent; border: none; border-bottom: 3px solid #1a73e8; color: #1a73e8; font-weight: 600; margin-bottom: -2px;">Upload PDF/Word</button>
+          <button id="upload-tab-gdoc" onclick="showUploadTab('gdoc')" style="width: auto; padding: 12px 20px; background: transparent; border: none; border-bottom: 3px solid transparent; color: #5f6368; font-weight: 500; margin-bottom: -2px;">Add Google Doc</button>
+        </div>
+
+        <!-- File Upload Tab -->
+        <div id="upload-section-file" style="display: block;">
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Select File (PDF, .docx, .doc - Max 45MB)</label>
+            <input type="file" id="file-upload-input" accept=".pdf,.docx,.doc" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+            <div id="file-upload-status" style="margin-top: 8px; font-size: 13px; color: #5f6368;"></div>
+          </div>
+        </div>
+
+        <!-- Google Doc URL Tab -->
+        <div id="upload-section-gdoc" style="display: none;">
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Google Doc URL</label>
+            <input type="url" id="gdoc-url-input" placeholder="https://docs.google.com/document/d/..." style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+            <div style="margin-top: 8px; font-size: 12px; color: #5f6368;">
+              Note: If you only have view access, a shortcut will be created. Ensure you maintain access to the document.
+            </div>
+          </div>
+        </div>
+
+        <!-- Metadata Fields (shared between tabs) -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+          <div>
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Class Name</label>
+            <input type="text" id="new-class-name" placeholder="e.g., Grade 4 Math" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Instructor Last Name</label>
+            <input type="text" id="new-instructor" placeholder="e.g., Smith" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-bottom: 20px;">
+          <div>
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Password</label>
+            <input type="password" id="new-password" placeholder="Student password" autocomplete="new-password" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Student Emails (paste from Google Sheets or enter comma-separated)</label>
+            <textarea id="new-student-emails" placeholder="student1@school.com, student2@school.com&#10;Or paste from Google Sheets" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; min-height: 60px; resize: vertical; font-family: inherit;"></textarea>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <button id="add-assessment-btn" onclick="addNewAssessment()" style="padding: 12px 24px; font-size: 15px; font-weight: 600;">Add Assessment & Process</button>
+          <div id="upload-message" style="color: #5f6368; font-size: 14px;"></div>
+        </div>
+      </div>
+
+      <!-- Assessment Table -->
+      <div style="background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h3 style="margin-top: 0; margin-bottom: 20px; color: #202124;">All Assessments</h3>
+        <div style="overflow-x: auto;">
+          <table id="admin-assessment-table" style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="background: #f8f9fa; border-bottom: 2px solid #e8eaed;">
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">File Name</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600; width: 100px;">Status</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Class</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Instructor Last Name</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Password</th>
+                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Students</th>
+                <th style="padding: 12px 8px; text-align: center; color: #5f6368; font-weight: 600; width: 140px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-assessment-tbody">
+              <!-- Assessment rows will be inserted here -->
+            </tbody>
+          </table>
+        </div>
+        <div id="no-assessments-message" style="display: none; text-align: center; padding: 40px; color: #5f6368;">
+          No assessments found. Add your first assessment above.
+        </div>
+      </div>
+    </div>
+</div>

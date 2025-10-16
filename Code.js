@@ -2,39 +2,6 @@
  * @OnlyCurrentDoc
  */
 
-// --- CONFIGURATION ---
-const AUDIO_DRIVE_FOLDER_NAME = "Assessment Audio Files";
-const BATCH_API_ENABLED = true; // Set to false to use fallback manual processing
-                                // NOTE: As of Oct 2025, Batch API is NOT supported for TTS models
-                                // System will auto-fallback to manual processing
-const BATCH_CHECK_INTERVAL_MINUTES = 30; // Check batch jobs every 30 minutes 
-
-// --- NEW SPREADSHEET COLUMN MAPPING ---
-// A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8, J=9, K=10, L=11
-const COL = {
-  PDF_URL: 0,
-  CHUNK_COUNT: 1,
-  AUDIO_JSON: 2,
-  IS_COMPLETE: 3,
-  CLASS_NAME: 4,
-  INSTRUCTOR: 5,
-  PASSWORD: 6,
-  STUDENT_EMAILS: 7,
-  // Batch processing tracking columns
-  PROCESSING_STATUS: 8,    // '', 'BATCH_SUBMITTED', 'BATCH_PROCESSING', 'BATCH_COMPLETED', 'BATCH_FAILED'
-  BATCH_JOB_ID: 9,         // Gemini Batch API job ID (e.g., 'batches/abc123')
-  LAST_PROCESSED_TIME: 10, // Timestamp of last status check
-  PROCESSING_MODE: 11      // 'batch' or 'manual'
-};
-
-// --- SUPPORTED FILE FORMATS ---
-const SUPPORTED_MIME_TYPES = {
-  PDF: MimeType.PDF,
-  GOOGLE_DOCS: MimeType.GOOGLE_DOCS,
-  MS_WORD: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  MS_WORD_OLD: 'application/msword'
-};
-
 // --- UTILITY FUNCTIONS ---
 
 /**
@@ -76,12 +43,12 @@ function parseStudentEmails(input) {
  */
 function onOpen() {
   SpreadsheetApp.getUi()
-      .createMenu('Spartan Read Aloud')
-      .addItem('Run All Steps (Manual)', 'runAllStepsManual')
+      .createMenu(CONSTANTS.MENU_NAME)
+      .addItem(CONSTANTS.MENU_ITEMS.RUN_MANUAL, 'runAllStepsManual')
       .addSeparator()
-      .addItem('Start Batch Processing', 'startBatchProcessing')
-      .addItem('Check Batch Status', 'checkBatchStatus')
-      .addItem('Stop Batch Processing', 'stopBatchProcessing')
+      .addItem(CONSTANTS.MENU_ITEMS.START_BATCH, 'startBatchProcessing')
+      .addItem(CONSTANTS.MENU_ITEMS.CHECK_BATCH, 'checkBatchStatus')
+      .addItem(CONSTANTS.MENU_ITEMS.STOP_BATCH, 'stopBatchProcessing')
       .addToUi();
 }
 
@@ -105,7 +72,7 @@ function startBatchProcessing() {
   step0_addNewPdfs();
   step1_AnalyzePdfsAndCountChunks();
 
-  if (BATCH_API_ENABLED) {
+  if (CONSTANTS.BATCH_API_ENABLED) {
     initiateBatchJobs(); // Will auto-fallback to manual if batch not supported
   } else {
     SpreadsheetApp.getUi().alert('Batch API is disabled. Use manual processing instead.');
@@ -125,19 +92,19 @@ function initiateBatchJobs() {
   let batchNotSupported = false;
 
   for (let i = 1; i < data.length; i++) {
-    const pdfUrl = data[i][COL.PDF_URL];
-    const chunkCount = data[i][COL.CHUNK_COUNT];
-    const isComplete = data[i][COL.IS_COMPLETE];
-    const processingStatus = data[i][COL.PROCESSING_STATUS];
+    const pdfUrl = data[i][CONSTANTS.COL.PDF_URL];
+    const chunkCount = data[i][CONSTANTS.COL.CHUNK_COUNT];
+    const isComplete = data[i][CONSTANTS.COL.IS_COMPLETE];
+    const processingStatus = data[i][CONSTANTS.COL.PROCESSING_STATUS];
 
     // Only process rows that have chunks, aren't complete, and haven't been submitted yet
     if (pdfUrl && chunkCount > 0 && !isComplete && !processingStatus) {
       const batchJobId = createBatchJobForFile(i + 1, data[i]);
       if (batchJobId) {
-        sheet.getRange(i + 1, COL.PROCESSING_STATUS + 1).setValue('BATCH_SUBMITTED');
-        sheet.getRange(i + 1, COL.BATCH_JOB_ID + 1).setValue(batchJobId);
-        sheet.getRange(i + 1, COL.PROCESSING_MODE + 1).setValue('batch');
-        sheet.getRange(i + 1, COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
+        sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_SUBMITTED');
+        sheet.getRange(i + 1, CONSTANTS.COL.BATCH_JOB_ID + 1).setValue(batchJobId);
+        sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_MODE + 1).setValue('batch');
+        sheet.getRange(i + 1, CONSTANTS.COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
         batchJobsCreated++;
       } else {
         // Batch job creation returned null - API not supported
@@ -167,8 +134,8 @@ function initiateBatchJobs() {
  * Supports PDFs, Google Docs, and Word documents.
  */
 function createBatchJobForFile(rowIndex, rowData) {
-  const fileUrl = rowData[COL.PDF_URL];
-  const totalChunks = rowData[COL.CHUNK_COUNT];
+  const fileUrl = rowData[CONSTANTS.COL.PDF_URL];
+  const totalChunks = rowData[CONSTANTS.COL.CHUNK_COUNT];
 
   const fileId = getFileIdFromUrl(fileUrl);
   if (!fileId) return null;
@@ -196,7 +163,7 @@ function createBatchJobForFile(rowIndex, rowData) {
         responseModalities: ["AUDIO"],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: "Kore" }
+            prebuiltVoiceConfig: { voiceName: CONSTANTS.GEMINI_VOICE_NAME }
           }
         }
       }
@@ -255,7 +222,7 @@ function submitGeminiBatchJob(jsonlFile, displayName) {
   }
 
   // Create the batch job using the uploaded file
-  const batchUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:batchGenerateContent?key=${apiKey}`;
+  const batchUrl = `${CONSTANTS.GEMINI_API_BASE_URL}models/${CONSTANTS.GEMINI_TTS_MODEL}:batchGenerateContent?key=${apiKey}`;
 
   const batchPayload = {
     'method': 'POST',
@@ -265,7 +232,7 @@ function submitGeminiBatchJob(jsonlFile, displayName) {
     'payload': JSON.stringify({
       "batch": {
         "displayName": `TTS_Batch_${displayName}_${new Date().getTime()}`,
-        "model": "models/gemini-2.5-flash-preview-tts",
+        "model": `models/${CONSTANTS.GEMINI_TTS_MODEL}`,
         "inputConfig": {
           "fileName": uploadResult.file.name // Use the file name from the upload response
         }
@@ -302,7 +269,7 @@ function setupBatchCheckTrigger() {
   // Create new trigger
   ScriptApp.newTrigger('checkBatchJobsStatus')
     .timeBased()
-    .everyMinutes(BATCH_CHECK_INTERVAL_MINUTES)
+    .everyMinutes(CONSTANTS.BATCH_CHECK_INTERVAL_MINUTES)
     .create();
 
   Logger.log('Batch check trigger created');
@@ -332,9 +299,9 @@ function checkBatchJobsStatus() {
   let activeJobs = 0;
 
   for (let i = 1; i < data.length; i++) {
-    const processingStatus = data[i][COL.PROCESSING_STATUS];
-    const batchJobId = data[i][COL.BATCH_JOB_ID];
-    const processingMode = data[i][COL.PROCESSING_MODE];
+    const processingStatus = data[i][CONSTANTS.COL.PROCESSING_STATUS];
+    const batchJobId = data[i][CONSTANTS.COL.BATCH_JOB_ID];
+    const processingMode = data[i][CONSTANTS.COL.PROCESSING_MODE];
 
     if (processingMode === 'batch' && batchJobId &&
         (processingStatus === 'BATCH_SUBMITTED' || processingStatus === 'BATCH_PROCESSING')) {
@@ -347,19 +314,19 @@ function checkBatchJobsStatus() {
           // Process completed batch job
           const success = processBatchJobResults(i + 1, data[i], jobStatus);
           if (success) {
-            sheet.getRange(i + 1, COL.PROCESSING_STATUS + 1).setValue('BATCH_COMPLETED');
-            sheet.getRange(i + 1, COL.IS_COMPLETE + 1).setValue(true);
+            sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_COMPLETED');
+            sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
           } else {
-            sheet.getRange(i + 1, COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
+            sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
           }
         } else if (jobStatus.state === 'JOB_STATE_FAILED') {
-          sheet.getRange(i + 1, COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
+          sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
           Logger.log(`Batch job failed: ${batchJobId}`);
         } else if (jobStatus.state === 'JOB_STATE_RUNNING') {
-          sheet.getRange(i + 1, COL.PROCESSING_STATUS + 1).setValue('BATCH_PROCESSING');
+          sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_PROCESSING');
         }
 
-        sheet.getRange(i + 1, COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
+        sheet.getRange(i + 1, CONSTANTS.COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
       } catch (error) {
         Logger.log(`Error checking batch job ${batchJobId}: ${error.toString()}`);
       }
@@ -380,7 +347,7 @@ function checkBatchJobsStatus() {
  */
 function checkGeminiBatchJobStatus(batchJobId) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  const url = `https://generativelanguage.googleapis.com/v1beta/${batchJobId}?key=${apiKey}`;
+  const url = `${CONSTANTS.GEMINI_API_BASE_URL}${batchJobId}?key=${apiKey}`;
 
   const response = UrlFetchApp.fetch(url, {
     method: 'GET',
@@ -397,7 +364,7 @@ function checkGeminiBatchJobStatus(batchJobId) {
  * Processes the results of a completed batch job.
  */
 function processBatchJobResults(rowIndex, rowData, jobStatus) {
-  const fileUrl = rowData[COL.PDF_URL];
+  const fileUrl = rowData[CONSTANTS.COL.PDF_URL];
   const fileId = getFileIdFromUrl(fileUrl);
   const file = DriveApp.getFileById(fileId);
   const fileName = file.getName();
@@ -405,7 +372,7 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
   // Remove any file extension for subfolder name
   const baseName = fileName.replace(/\.[^.]+$/i, '').trim();
 
-  const mainAudioFolder = getOrCreateFolder(AUDIO_DRIVE_FOLDER_NAME);
+  const mainAudioFolder = getOrCreateFolder(CONSTANTS.AUDIO_DRIVE_FOLDER_NAME);
   const assessmentSubfolder = getOrCreateSubfolder(mainAudioFolder, baseName);
 
   if (!assessmentSubfolder) return false;
@@ -453,7 +420,7 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
 
         // Generate searchWords (first 8 words)
         const words = chunkText.trim().split(/\s+/);
-        const searchWords = words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
+        const searchWords = words.slice(0, CONSTANTS.SEARCH_WORDS_COUNT).join(' ') + (words.length > CONSTANTS.SEARCH_WORDS_COUNT ? '...' : '');
 
         audioFileObjects[chunkIndex] = {
           text: chunkText,
@@ -466,7 +433,7 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
 
     // Save final JSON
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
-    sheet.getRange(rowIndex, COL.AUDIO_JSON + 1).setValue(JSON.stringify(audioFileObjects, null, 2));
+    sheet.getRange(rowIndex, CONSTANTS.COL.AUDIO_JSON + 1).setValue(JSON.stringify(audioFileObjects, null, 2));
 
     Logger.log(`Successfully processed batch results for ${fileName}`);
     return true;
@@ -482,7 +449,7 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
  */
 function downloadGeminiBatchResults(fileId) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  const url = `https://generativelanguage.googleapis.com/v1beta/files/${fileId}?key=${apiKey}&alt=media`;
+  const url = `${CONSTANTS.GEMINI_API_BASE_URL}files/${fileId}?key=${apiKey}&alt=media`;
 
   const response = UrlFetchApp.fetch(url, {
     method: 'GET',
@@ -507,8 +474,8 @@ function checkBatchStatus() {
   let submitted = 0, processing = 0, completed = 0, failed = 0;
 
   for (let i = 1; i < data.length; i++) {
-    const status = data[i][COL.PROCESSING_STATUS];
-    const mode = data[i][COL.PROCESSING_MODE];
+    const status = data[i][CONSTANTS.COL.PROCESSING_STATUS];
+    const mode = data[i][CONSTANTS.COL.PROCESSING_MODE];
 
     if (mode === 'batch') {
       switch (status) {
@@ -551,27 +518,26 @@ function step0_addNewPdfs() {
     return;
   }
 
-  const mainAudioFolder = getOrCreateFolder(AUDIO_DRIVE_FOLDER_NAME);
+  const mainAudioFolder = getOrCreateFolder(CONSTANTS.AUDIO_DRIVE_FOLDER_NAME);
   if (!mainAudioFolder) return;
 
-  const pdfSourceFolderName = "Assessment PDFs";
-  const pdfFolders = mainAudioFolder.getFoldersByName(pdfSourceFolderName);
+  const pdfFolders = mainAudioFolder.getFoldersByName(CONSTANTS.PDF_SOURCE_FOLDER_NAME);
   if (!pdfFolders.hasNext()) {
-    Logger.log(`ERROR: Source folder "${pdfSourceFolderName}" not found inside "${AUDIO_DRIVE_FOLDER_NAME}".`);
+    Logger.log(`ERROR: Source folder "${CONSTANTS.PDF_SOURCE_FOLDER_NAME}" not found inside "${CONSTANTS.AUDIO_DRIVE_FOLDER_NAME}".`);
     return;
   }
   const pdfFolder = pdfFolders.next();
 
   // Get existing URLs to prevent duplicates
   const data = sheet.getDataRange().getValues();
-  const existingUrls = new Set(data.map(row => row[COL.PDF_URL]));
+  const existingUrls = new Set(data.map(row => row[CONSTANTS.COL.PDF_URL]));
 
   let addedCount = 0;
   const pdfFolderId = pdfFolder.getId();
 
   // Search for all supported file types in the folder using Drive API
   // This includes Google Docs (which getFiles() doesn't return)
-  const mimeTypeQuery = Object.values(SUPPORTED_MIME_TYPES)
+  const mimeTypeQuery = Object.values(CONSTANTS.SUPPORTED_MIME_TYPES)
     .map(type => `mimeType='${type}'`)
     .join(' or ');
 
@@ -626,8 +592,8 @@ function step1_AnalyzePdfsAndCountChunks() {
   Logger.log('Starting Step 1: Analyzing new PDFs...');
 
   for (let i = 1; i < data.length; i++) {
-    const pdfUrl = data[i][COL.PDF_URL];
-    const chunkCount = data[i][COL.CHUNK_COUNT];
+    const pdfUrl = data[i][CONSTANTS.COL.PDF_URL];
+    const chunkCount = data[i][CONSTANTS.COL.CHUNK_COUNT];
 
     if (pdfUrl && !chunkCount) {
       const fileId = getFileIdFromUrl(pdfUrl);
@@ -640,8 +606,8 @@ function step1_AnalyzePdfsAndCountChunks() {
 
       const textChunks = extractTextFromFile(fileId);
       if (textChunks && textChunks.length > 0) {
-        sheet.getRange(i + 1, COL.CHUNK_COUNT + 1).setValue(textChunks.length);
-        sheet.getRange(i + 1, COL.IS_COMPLETE + 1).setValue(false);
+        sheet.getRange(i + 1, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(textChunks.length);
+        sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(false);
         Logger.log(`--> Found ${textChunks.length} chunks. Updated sheet.`);
       } else {
         Logger.log(`--> No text chunks found for '${fileName}'.`);
@@ -659,9 +625,9 @@ function step1_AnalyzePdfsAndCountChunks() {
  */
 function step2_GenerateMissingAudioAndFinalize() {
   const SCRIPT_START_TIME = new Date();
-  const SCRIPT_TIMEOUT_MS = 5 * 60 * 1000;
+  const SCRIPT_TIMEOUT_MS = CONSTANTS.SCRIPT_TIMEOUT_MINUTES * 60 * 1000;
 
-  const mainAudioFolder = getOrCreateFolder(AUDIO_DRIVE_FOLDER_NAME);
+  const mainAudioFolder = getOrCreateFolder(CONSTANTS.AUDIO_DRIVE_FOLDER_NAME);
   if (!mainAudioFolder) return;
 
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -677,9 +643,9 @@ function step2_GenerateMissingAudioAndFinalize() {
       break;
     }
 
-    const isComplete = data[i][COL.IS_COMPLETE];
-    const pdfUrl = data[i][COL.PDF_URL];
-    const totalChunks = data[i][COL.CHUNK_COUNT];
+    const isComplete = data[i][CONSTANTS.COL.IS_COMPLETE];
+    const pdfUrl = data[i][CONSTANTS.COL.PDF_URL];
+    const totalChunks = data[i][CONSTANTS.COL.CHUNK_COUNT];
 
     if (pdfUrl && totalChunks > 0 && !isComplete) {
       const fileId = getFileIdFromUrl(pdfUrl);
@@ -748,7 +714,7 @@ function step2_GenerateMissingAudioAndFinalize() {
            const audioFile = audioFileObjects[j];
            // Generate searchWords: first 8 words to match frontend display
            const words = chunkText.trim().split(/\s+/);
-           const searchWords = words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
+           const searchWords = words.slice(0, CONSTANTS.SEARCH_WORDS_COUNT).join(' ') + (words.length > CONSTANTS.SEARCH_WORDS_COUNT ? '...' : '');
 
            audioDataForSheet.push({
              text: chunkText,
@@ -757,8 +723,8 @@ function step2_GenerateMissingAudioAndFinalize() {
              audioFilename: audioFile.getName()
            });
         }
-        sheet.getRange(i + 1, COL.AUDIO_JSON + 1).setValue(JSON.stringify(audioDataForSheet, null, 2));
-        sheet.getRange(i + 1, COL.IS_COMPLETE + 1).setValue(true);
+        sheet.getRange(i + 1, CONSTANTS.COL.AUDIO_JSON + 1).setValue(JSON.stringify(audioDataForSheet, null, 2));
+        sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
         Logger.log(`--> Successfully created JSON and marked as complete.`);
       } else {
         Logger.log(`--> Process for '${fileName}' partially complete. Will resume on next run.`);
@@ -780,12 +746,12 @@ function step2_GenerateMissingAudioAndFinalize() {
  */
 function generateSafeFilenameFromText(text, chunkIndex) {
   // Get first 6 words
-  const firstWords = text.split(/\s+/).slice(0, 6).join(' ');
+  const firstWords = text.split(/\s+/).slice(0, CONSTANTS.SAFE_FILENAME_WORD_COUNT).join(' ');
   // Sanitize: remove non-alphanumerics (but keep hyphens), and replace spaces with hyphens
   const sanitized = firstWords.replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
   // Add chunk index for uniqueness and the extension, ensuring it's not too long
   const fullName = `${sanitized}-chunk-${chunkIndex + 1}.wav`;
-  return fullName.substring(0, 250); // Trim to a safe length
+  return fullName.substring(0, CONSTANTS.MAX_FILENAME_LENGTH); // Trim to a safe length
 }
 
 /**
@@ -803,29 +769,29 @@ function convertFileToHtml(fileId) {
     Logger.log(`Converting file: ${file.getName()} (${mimeType}, ${fileSize} bytes)`);
 
     // Check file size (warn if >10MB, reject if >45MB to stay under GAS limits)
-    if (fileSize > 45 * 1024 * 1024) {
+    if (fileSize > CONSTANTS.MAX_FILE_SIZE_MB * 1024 * 1024) {
       Logger.log(`✗ File too large: ${fileSize} bytes`);
-      return { error: 'File too large (>45MB). Please use a smaller file.' };
+      return { error: `File too large (>${CONSTANTS.MAX_FILE_SIZE_MB}MB). Please use a smaller file.` };
     }
 
-    if (fileSize > 10 * 1024 * 1024) {
+    if (fileSize > CONSTANTS.LARGE_FILE_WARNING_MB * 1024 * 1024) {
       Logger.log(`⚠ Large file warning: ${fileSize} bytes - may be slow`);
     }
 
     let htmlContent = null;
 
     // Handle Google Docs
-    if (mimeType === SUPPORTED_MIME_TYPES.GOOGLE_DOCS) {
+    if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.GOOGLE_DOCS) {
       Logger.log('→ Converting Google Doc to HTML via Drive API export');
       htmlContent = exportDocToHtml(fileId);
     }
     // Handle Microsoft Word (.docx and .doc)
-    else if (mimeType === SUPPORTED_MIME_TYPES.MS_WORD || mimeType === SUPPORTED_MIME_TYPES.MS_WORD_OLD) {
+    else if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.MS_WORD || mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.MS_WORD_OLD) {
       Logger.log('→ Converting Word doc: First to Google Doc, then to HTML');
       htmlContent = convertWordToHtml(fileId, file);
     }
     // Handle PDFs
-    else if (mimeType === SUPPORTED_MIME_TYPES.PDF) {
+    else if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.PDF) {
       Logger.log('→ Converting PDF: OCR to Google Doc, then to HTML');
       htmlContent = convertPdfToHtml(fileId, file);
     }
@@ -1042,7 +1008,7 @@ function extractTextFromFile(fileId) {
     Logger.log(`Extracting text from: ${file.getName()} (${mimeType})`);
 
     // For PDFs: Use existing OCR method (fast, optimized)
-    if (mimeType === MimeType.PDF) {
+    if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.PDF) {
       Logger.log('→ Using OCR extraction for PDF');
       const blob = file.getBlob();
       const metadata = {
@@ -1062,7 +1028,7 @@ function extractTextFromFile(fileId) {
       const text = doc.getBody().getText();
       Drive.Files.remove(tempDoc.id);
 
-      const chunks = text.split(/\n(?=\s*\d+\.\s)/).map(chunk => chunk.trim()).filter(chunk => chunk);
+      const chunks = text.split(CONSTANTS.CHUNK_SPLIT_REGEX).map(chunk => chunk.trim()).filter(chunk => chunk);
       Logger.log(`✓ Extracted ${chunks.length} chunks from PDF`);
       return chunks;
     }
@@ -1147,7 +1113,7 @@ function extractTextFromFile(fileId) {
  */
 function validateAdminToken(sessionToken) {
   const tokenData = validateSessionToken(sessionToken);
-  if (!tokenData || !['admin', 'super_admin', 'teacher'].includes(tokenData.role)) {
+  if (!tokenData || !CONSTANTS.STAFF_ROLES.includes(tokenData.role)) {
     Logger.log('Invalid or non-staff token');
     return null;
   }
@@ -1162,7 +1128,7 @@ function validateAdminToken(sessionToken) {
  */
 function validateSuperAdminToken(sessionToken) {
   const tokenData = validateSessionToken(sessionToken);
-  if (!tokenData || tokenData.role !== 'super_admin') {
+  if (!tokenData || tokenData.role !== CONSTANTS.ROLE_TOKEN_SUPER_ADMIN) {
     Logger.log('Invalid or non-super-admin token');
     return null;
   }
@@ -1194,7 +1160,7 @@ function getAllAssessments(sessionToken) {
     // Skip header row
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      const pdfUrl = row[COL.PDF_URL];
+      const pdfUrl = row[CONSTANTS.COL.PDF_URL];
 
       if (!pdfUrl) continue; // Skip empty rows
 
@@ -1213,18 +1179,18 @@ function getAllAssessments(sessionToken) {
         rowIndex: i,
         fileName: fileName,
         pdfUrl: pdfUrl,
-        chunkCount: row[COL.CHUNK_COUNT] || 0,
-        audioJson: row[COL.AUDIO_JSON] || '',
-        isComplete: row[COL.IS_COMPLETE] === true,
-        className: row[COL.CLASS_NAME] || '',
-        instructor: row[COL.INSTRUCTOR] || '',
-        password: row[COL.PASSWORD] || '',
-        studentEmails: row[COL.STUDENT_EMAILS] || ''
+        chunkCount: row[CONSTANTS.COL.CHUNK_COUNT] || 0,
+        audioJson: row[CONSTANTS.COL.AUDIO_JSON] || '',
+        isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
+        className: row[CONSTANTS.COL.CLASS_NAME] || '',
+        instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
+        password: row[CONSTANTS.COL.PASSWORD] || '',
+        studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || ''
       });
     }
 
     // Filter assessments for teachers (only show their own)
-    if (tokenData.role === 'teacher') {
+    if (tokenData.role === CONSTANTS.ROLE_TOKEN_TEACHER) {
       const teacherName = tokenData.name || tokenData.email;
       Logger.log(`Filtering assessments for teacher: ${teacherName}`);
 
@@ -1280,16 +1246,16 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
 
     // Update only the editable columns
     if (data.className !== undefined) {
-      sheet.getRange(actualRow, COL.CLASS_NAME + 1).setValue(data.className);
+      sheet.getRange(actualRow, CONSTANTS.COL.CLASS_NAME + 1).setValue(data.className);
     }
     if (data.instructor !== undefined) {
-      sheet.getRange(actualRow, COL.INSTRUCTOR + 1).setValue(data.instructor);
+      sheet.getRange(actualRow, CONSTANTS.COL.INSTRUCTOR + 1).setValue(data.instructor);
     }
     if (data.password !== undefined) {
-      sheet.getRange(actualRow, COL.PASSWORD + 1).setValue(data.password);
+      sheet.getRange(actualRow, CONSTANTS.COL.PASSWORD + 1).setValue(data.password);
     }
     if (data.studentEmails !== undefined) {
-      sheet.getRange(actualRow, COL.STUDENT_EMAILS + 1).setValue(parseStudentEmails(data.studentEmails));
+      sheet.getRange(actualRow, CONSTANTS.COL.STUDENT_EMAILS + 1).setValue(parseStudentEmails(data.studentEmails));
     }
 
     SpreadsheetApp.flush();
@@ -1358,22 +1324,21 @@ function uploadAssessmentFile(sessionToken, fileName, base64Data, mimeType) {
 
     // Check file size (45MB limit)
     const decodedSize = base64Data.length * 0.75; // Approximate decoded size
-    if (decodedSize > 45 * 1024 * 1024) {
-      return { error: 'File too large. Maximum size is 45MB.' };
+    if (decodedSize > CONSTANTS.MAX_FILE_SIZE_MB * 1024 * 1024) {
+      return { error: `File too large. Maximum size is ${CONSTANTS.MAX_FILE_SIZE_MB}MB.` };
     }
 
-    const mainAudioFolder = getOrCreateFolder(AUDIO_DRIVE_FOLDER_NAME);
+    const mainAudioFolder = getOrCreateFolder(CONSTANTS.AUDIO_DRIVE_FOLDER_NAME);
     if (!mainAudioFolder) {
       return { error: 'Could not access main audio folder.' };
     }
 
-    const pdfSourceFolderName = "Assessment PDFs";
     let pdfFolder = null;
-    const pdfFolders = mainAudioFolder.getFoldersByName(pdfSourceFolderName);
+    const pdfFolders = mainAudioFolder.getFoldersByName(CONSTANTS.PDF_SOURCE_FOLDER_NAME);
     if (pdfFolders.hasNext()) {
       pdfFolder = pdfFolders.next();
     } else {
-      pdfFolder = mainAudioFolder.createFolder(pdfSourceFolderName);
+      pdfFolder = mainAudioFolder.createFolder(CONSTANTS.PDF_SOURCE_FOLDER_NAME);
     }
 
     // Decode base64 and create blob
@@ -1418,18 +1383,17 @@ function handleGoogleDocUrl(sessionToken, docUrl) {
       return { error: 'Invalid Google Doc URL.' };
     }
 
-    const mainAudioFolder = getOrCreateFolder(AUDIO_DRIVE_FOLDER_NAME);
+    const mainAudioFolder = getOrCreateFolder(CONSTANTS.AUDIO_DRIVE_FOLDER_NAME);
     if (!mainAudioFolder) {
       return { error: 'Could not access main audio folder.' };
     }
 
-    const pdfSourceFolderName = "Assessment PDFs";
     let pdfFolder = null;
-    const pdfFolders = mainAudioFolder.getFoldersByName(pdfSourceFolderName);
+    const pdfFolders = mainAudioFolder.getFoldersByName(CONSTANTS.PDF_SOURCE_FOLDER_NAME);
     if (pdfFolders.hasNext()) {
       pdfFolder = pdfFolders.next();
     } else {
-      pdfFolder = mainAudioFolder.createFolder(pdfSourceFolderName);
+      pdfFolder = mainAudioFolder.createFolder(CONSTANTS.PDF_SOURCE_FOLDER_NAME);
     }
 
     // Try to make a copy first
@@ -1504,18 +1468,18 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     // Check if URL already exists
     const data = sheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
-      if (data[i][COL.PDF_URL] === fileUrl) {
+      if (data[i][CONSTANTS.COL.PDF_URL] === fileUrl) {
         return { error: 'This file is already in the database.' };
       }
     }
 
     // Add new row with file URL and metadata
     const newRow = new Array(8).fill(''); // 8 columns
-    newRow[COL.PDF_URL] = fileUrl;
-    newRow[COL.CLASS_NAME] = metadata.className || '';
-    newRow[COL.INSTRUCTOR] = metadata.instructor || '';
-    newRow[COL.PASSWORD] = metadata.password || '';
-    newRow[COL.STUDENT_EMAILS] = parseStudentEmails(metadata.studentEmails || '');
+    newRow[CONSTANTS.COL.PDF_URL] = fileUrl;
+    newRow[CONSTANTS.COL.CLASS_NAME] = metadata.className || '';
+    newRow[CONSTANTS.COL.INSTRUCTOR] = metadata.instructor || '';
+    newRow[CONSTANTS.COL.PASSWORD] = metadata.password || '';
+    newRow[CONSTANTS.COL.STUDENT_EMAILS] = parseStudentEmails(metadata.studentEmails || '');
 
     sheet.appendRow(newRow);
     SpreadsheetApp.flush();
@@ -1553,7 +1517,7 @@ function processNewAssessment(fileUrl) {
 
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
-    if (data[i][COL.PDF_URL] === fileUrl && !data[i][COL.CHUNK_COUNT]) {
+    if (data[i][CONSTANTS.COL.PDF_URL] === fileUrl && !data[i][CONSTANTS.COL.CHUNK_COUNT]) {
       // Found the new row - analyze it
       const fileId = getFileIdFromUrl(fileUrl);
       if (!fileId) continue;
@@ -1563,8 +1527,8 @@ function processNewAssessment(fileUrl) {
       // Step 1: Extract text and count chunks
       const textChunks = extractTextFromFile(fileId);
       if (textChunks && textChunks.length > 0) {
-        sheet.getRange(i + 1, COL.CHUNK_COUNT + 1).setValue(textChunks.length);
-        sheet.getRange(i + 1, COL.IS_COMPLETE + 1).setValue(false);
+        sheet.getRange(i + 1, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(textChunks.length);
+        sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(false);
         SpreadsheetApp.flush();
         Logger.log(`Step 1 complete: ${textChunks.length} chunks`);
 
@@ -1600,15 +1564,15 @@ function reprocessAssessment(sessionToken, rowIndex) {
       return { error: 'Invalid row index.' };
     }
 
-    const pdfUrl = sheet.getRange(actualRow, COL.PDF_URL + 1).getValue();
+    const pdfUrl = sheet.getRange(actualRow, CONSTANTS.COL.PDF_URL + 1).getValue();
     if (!pdfUrl) {
       return { error: 'No file URL found in this row.' };
     }
 
     // Clear existing processing data
-    sheet.getRange(actualRow, COL.CHUNK_COUNT + 1).setValue('');
-    sheet.getRange(actualRow, COL.AUDIO_JSON + 1).setValue('');
-    sheet.getRange(actualRow, COL.IS_COMPLETE + 1).setValue(false);
+    sheet.getRange(actualRow, CONSTANTS.COL.CHUNK_COUNT + 1).setValue('');
+    sheet.getRange(actualRow, CONSTANTS.COL.AUDIO_JSON + 1).setValue('');
+    sheet.getRange(actualRow, CONSTANTS.COL.IS_COMPLETE + 1).setValue(false);
     SpreadsheetApp.flush();
 
     // Trigger processing
@@ -1657,21 +1621,121 @@ function getOrCreateSubfolder(parentFolder, subfolderName) {
 }
 
 function doGet(e) {
-  return HtmlService.createHtmlOutputFromFile('index.html')
-    .setTitle('Orono Schools Assessment Reader')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+  var template = HtmlService.createTemplateFromFile('index');
+  return template.evaluate()
+      .setTitle('Orono Schools Assessment Reader')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+function loadView(adminToken) {
+  if (adminToken) {
+    const tokenData = validateAdminToken(adminToken);
+    if (tokenData) {
+      return getTeacherView(adminToken, tokenData);
+    }
+  }
+  return getLoginView();
+}
+
+function getLoginView() {
+  let content = HtmlService.createHtmlOutputFromFile('login.html').getContent();
+  content += '<script>' + HtmlService.createHtmlOutputFromFile('login.js').getContent() + '</script>';
+  return content;
+}
+
+function getTeacherView(token, tokenData) {
+    let content = HtmlService.createHtmlOutputFromFile('teacher.html').getContent();
+    content += '<script>' + HtmlService.createHtmlOutputFromFile('teacher.js').getContent() + '</script>';
+    content += `<script>
+        adminSessionToken = ${JSON.stringify(token)};
+        adminName = ${JSON.stringify(tokenData.name)};
+        userRole = ${JSON.stringify(tokenData.role)};
+        showAdminDashboard();
+    </script>`;
+    return content;
+}
+
+function getStudentView(authResult, email, password) {
+  let content = HtmlService.createHtmlOutputFromFile('student.html').getContent();
+  content += '<script>' + HtmlService.createHtmlOutputFromFile('student.js').getContent() + '</script>';
+
+  const studentData = {
+    assessments: authResult.assessments,
+    email: email,
+    password: password
+  };
+
+  content += '<script>initializeStudentView(' + JSON.stringify(studentData) + ');</script>';
+  return content;
+}
+
 
 /**
  * Gets the base64 encoded data for an audio file.
- * @param {string} fileId The ID of the audio file.
- * @returns {string|null} The base64 encoded data or null on failure.
+ * SECURITY: Validates that the user has permission to access this file.
+ * @param {string} sessionToken Session token for authentication
+ * @param {string} fileId The ID of the audio file
+ * @returns {string|null} The base64 encoded data or null on failure
  */
-function getAudioDataAsBase64(fileId) {
+function getAudioDataAsBase64(sessionToken, fileId) {
   try {
+    const tokenData = validateSessionToken(sessionToken);
+    if (!tokenData) {
+      Logger.log('Invalid session token for audio fetch');
+      return null;
+    }
+
+    // For staff roles, allow access to any audio file
+    if (CONSTANTS.STAFF_ROLES.includes(tokenData.role)) {
+      Logger.log(`Staff user ${tokenData.email} accessing audio file ${fileId}`);
+      const file = DriveApp.getFileById(fileId);
+      const blob = file.getBlob();
+      return Utilities.base64Encode(blob.getBytes());
+    }
+
+    // For students, validate fileId belongs to their assessment
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    if (!sheet) {
+      Logger.log('Assessment Database sheet not found');
+      return null;
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const assessmentUrl = tokenData.url;
+    let authorizedFileIds = [];
+
+    // Find the student's assessment and get authorized audio file IDs
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
+        const audioJson = data[i][CONSTANTS.COL.AUDIO_JSON];
+        if (audioJson) {
+          try {
+            const audioChunks = JSON.parse(audioJson);
+            authorizedFileIds = audioChunks.map(chunk => getFileIdFromUrl(chunk.audioUrl)).filter(id => id);
+            break;
+          } catch (e) {
+            Logger.log(`Error parsing audio JSON for assessment: ${e.toString()}`);
+            return null;
+          }
+        }
+      }
+    }
+
+    // Check if requested fileId is in the authorized list
+    if (!authorizedFileIds.includes(fileId)) {
+      Logger.log(`Unauthorized access attempt: student ${tokenData.email} tried to access file ${fileId}`);
+      return null;
+    }
+
+    // Access granted
     const file = DriveApp.getFileById(fileId);
     const blob = file.getBlob();
     return Utilities.base64Encode(blob.getBytes());
+
   } catch (e) {
     Logger.log(`Failed to get audio data for file ID ${fileId}. Error: ${e.toString()}`);
     return null;
@@ -1696,6 +1760,50 @@ function getBulkAudioData(sessionToken, fileIds) {
         error: 'Session expired or invalid. Please refresh the page and log in again.'
       };
     }
+
+    // For students, validate all fileIds belong to their assessment
+    if (tokenData.role === CONSTANTS.ROLE_TOKEN_STUDENT) {
+        const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+        if (!sheet) {
+          return {
+            success: false,
+            error: 'Assessment Database not found.'
+          };
+        }
+
+        const data = sheet.getDataRange().getValues();
+        const assessmentUrl = tokenData.url;
+        let audioFileIds = [];
+
+        for (let i = 1; i < data.length; i++) {
+            if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
+                const audioJson = data[i][CONSTANTS.COL.AUDIO_JSON];
+                if (audioJson) {
+                  try {
+                    const audioData = JSON.parse(audioJson);
+                    audioFileIds = audioData.map(chunk => getFileIdFromUrl(chunk.audioUrl)).filter(id => id);
+                    break;
+                  } catch (e) {
+                    Logger.log(`Error parsing audio JSON: ${e.toString()}`);
+                    return {
+                      success: false,
+                      error: 'Error loading audio data.'
+                    };
+                  }
+                }
+            }
+        }
+
+        const unauthorizedFiles = fileIds.filter(id => !audioFileIds.includes(id));
+        if (unauthorizedFiles.length > 0) {
+            Logger.log(`Unauthorized bulk access: student ${tokenData.email} tried to access files: ${unauthorizedFiles.join(', ')}`);
+            return {
+                success: false,
+                error: 'Unauthorized access to one or more audio files.'
+            };
+        }
+    }
+    // Staff roles have access to all audio files - no additional validation needed
 
     Logger.log(`Bulk fetching ${fileIds.length} audio files for ${tokenData.email}`);
 
@@ -1760,7 +1868,7 @@ function getBulkAudioData(sessionToken, fileIds) {
  * @returns {string} Session token
  */
 function generateSessionToken(email, assessmentUrlOrRole, expiryMinutes, name) {
-  if (!expiryMinutes) expiryMinutes = 180; // 3 hour default
+  if (!expiryMinutes) expiryMinutes = CONSTANTS.SESSION_TOKEN_DEFAULT_EXPIRY_MINUTES; // 3 hour default
 
   const timestamp = Date.now();
   const expiryTime = timestamp + (expiryMinutes * 60 * 1000);
@@ -1771,7 +1879,7 @@ function generateSessionToken(email, assessmentUrlOrRole, expiryMinutes, name) {
     url: assessmentUrlOrRole, // Can be 'admin', 'super_admin', 'teacher' for staff users
     exp: expiryTime,
     rnd: random,
-    role: ['admin', 'super_admin', 'teacher'].includes(assessmentUrlOrRole) ? assessmentUrlOrRole : 'student',
+    role: CONSTANTS.STAFF_ROLES.includes(assessmentUrlOrRole) ? assessmentUrlOrRole : CONSTANTS.ROLE_TOKEN_STUDENT,
     name: name || email // Store name for later retrieval (useful for filtering teacher assessments)
   };
 
@@ -1813,7 +1921,7 @@ function validateSessionToken(token) {
     }
 
     // For staff tokens (admin/super_admin/teacher), skip assessment-specific validation
-    if (['admin', 'super_admin', 'teacher'].includes(tokenData.role)) {
+    if (CONSTANTS.STAFF_ROLES.includes(tokenData.role)) {
       Logger.log(`Valid staff token for ${tokenData.email} (role: ${tokenData.role})`);
       return tokenData; // Staff tokens are valid if not expired and in PropertiesService
     }
@@ -1828,8 +1936,8 @@ function validateSessionToken(token) {
 
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      const pdfUrl = row[COL.PDF_URL];
-      const studentEmailsRaw = row[COL.STUDENT_EMAILS].toString().toLowerCase();
+      const pdfUrl = row[CONSTANTS.COL.PDF_URL];
+      const studentEmailsRaw = row[CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
 
       if (pdfUrl === assessmentUrl) {
         const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
@@ -1864,7 +1972,7 @@ function authenticateUser(email, password) {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
 
     // 1. Check Teachers sheet first (formerly "Admin")
-    const adminSheet = spreadsheet.getSheetByName('Teachers');
+    const adminSheet = spreadsheet.getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
     if (adminSheet) {
       const adminData = adminSheet.getDataRange().getValues();
       for (let i = 1; i < adminData.length; i++) { // Skip header row
@@ -1873,24 +1981,24 @@ function authenticateUser(email, password) {
         const teacherLast = row[1] ? row[1].toString().trim() : '';
         const adminEmail = row[2] ? row[2].toString().toLowerCase().trim() : '';
         const adminPassword = row[3] ? row[3].toString().trim() : '';
-        const teacherRole = row[4] ? row[4].toString().trim() : 'Teacher'; // Column E: Role (default to Teacher if not set)
+        const teacherRole = row[4] ? row[4].toString().trim() : CONSTANTS.ROLE_TEACHER; // Column E: Role (default to Teacher if not set)
 
         if (adminEmail === cleanEmail && adminPassword === password) {
           // Staff login successful (Teacher/Admin/Super Admin)
           Logger.log(`Staff login successful: ${adminEmail} (Role: ${teacherRole})`);
 
-          // Determine userType based on role
-          let userType = 'teacher'; // Default
-          if (teacherRole === 'Super Admin') {
-            userType = 'super_admin';
-          } else if (teacherRole === 'Admin') {
-            userType = 'admin';
+          // Determine userType token based on display role
+          let userType = CONSTANTS.ROLE_TOKEN_TEACHER; // Default
+          if (teacherRole === CONSTANTS.ROLE_SUPER_ADMIN) {
+            userType = CONSTANTS.ROLE_TOKEN_SUPER_ADMIN;
+          } else if (teacherRole === CONSTANTS.ROLE_ADMIN) {
+            userType = CONSTANTS.ROLE_TOKEN_ADMIN;
           }
           
           const displayName = `${teacherFirst} ${teacherLast}`.trim();
           const lastNameForFiltering = teacherLast;
 
-          const sessionToken = generateSessionToken(cleanEmail, userType, 360, lastNameForFiltering); // 6 hour token, use last name for filtering
+          const sessionToken = generateSessionToken(cleanEmail, userType, CONSTANTS.SESSION_TOKEN_STAFF_EXPIRY_MINUTES, lastNameForFiltering); // 6 hour token, use last name for filtering
           return {
             userType: userType,
             role: teacherRole, // Store the actual role string for display purposes
@@ -1906,7 +2014,7 @@ function authenticateUser(email, password) {
     const studentResult = getStudentAssessments(email, password);
     if (!studentResult.error) {
       return {
-        userType: 'student',
+        userType: CONSTANTS.ROLE_TOKEN_STUDENT,
         ...studentResult
       };
     }
@@ -1940,12 +2048,12 @@ function getStudentAssessments(email, password) {
     // First pass: find all rows matching this student's email
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      const pdfUrl = row[COL.PDF_URL];
-      const isComplete = row[COL.IS_COMPLETE];
-      const sheetPassword = row[COL.PASSWORD].toString().trim();
-      const studentEmailsRaw = row[COL.STUDENT_EMAILS].toString().toLowerCase();
-      const className = row[COL.CLASS_NAME] ? row[COL.CLASS_NAME].toString().trim() : '';
-      const instructor = row[COL.INSTRUCTOR] ? row[COL.INSTRUCTOR].toString().trim() : '';
+      const pdfUrl = row[CONSTANTS.COL.PDF_URL];
+      const isComplete = row[CONSTANTS.COL.IS_COMPLETE];
+      const sheetPassword = row[CONSTANTS.COL.PASSWORD].toString().trim();
+      const studentEmailsRaw = row[CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
+      const className = row[CONSTANTS.COL.CLASS_NAME] ? row[CONSTANTS.COL.CLASS_NAME].toString().trim() : '';
+      const instructor = row[CONSTANTS.COL.INSTRUCTOR] ? row[CONSTANTS.COL.INSTRUCTOR].toString().trim() : '';
 
       if (!pdfUrl || !sheetPassword || !studentEmailsRaw) continue;
 
@@ -2026,10 +2134,10 @@ function getAssessmentPdf(email, password, assessmentUrl) {
 
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      const pdfUrl = row[COL.PDF_URL];
-      const audioDataJson = row[COL.AUDIO_JSON];
-      const sheetPassword = row[COL.PASSWORD].toString().trim();
-      const studentEmailsRaw = row[COL.STUDENT_EMAILS].toString().toLowerCase();
+      const pdfUrl = row[CONSTANTS.COL.PDF_URL];
+      const audioDataJson = row[CONSTANTS.COL.AUDIO_JSON];
+      const sheetPassword = row[CONSTANTS.COL.PASSWORD].toString().trim();
+      const studentEmailsRaw = row[CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
 
       if (!pdfUrl || !sheetPassword || !studentEmailsRaw) continue;
 
@@ -2058,7 +2166,7 @@ function getAssessmentPdf(email, password, assessmentUrl) {
         const sessionToken = generateSessionToken(cleanEmail, pdfUrl);
 
         // PDFs: Return base64 data for PDF.js rendering (BACKWARDS COMPATIBLE)
-        if (mimeType === MimeType.PDF) {
+        if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.PDF) {
           Logger.log('→ Serving PDF with base64 encoding');
           return {
             fileType: 'pdf',
