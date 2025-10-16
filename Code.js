@@ -1643,13 +1643,13 @@ function loadView(adminToken) {
 
 function getLoginView() {
   let content = HtmlService.createHtmlOutputFromFile('login.html').getContent();
-  content += '<script>' + HtmlService.createHtmlOutputFromFile('loginController.js').getContent() + '</script>';
+  content += HtmlService.createHtmlOutputFromFile('loginController.html').getContent();
   return content;
 }
 
 function getTeacherView(token, tokenData) {
     let content = HtmlService.createHtmlOutputFromFile('teacher.html').getContent();
-    content += '<script>' + HtmlService.createHtmlOutputFromFile('teacherController.js').getContent() + '</script>';
+    content += HtmlService.createHtmlOutputFromFile('teacherController.html').getContent();
     content += `<script>
         adminSessionToken = ${JSON.stringify(token)};
         adminName = ${JSON.stringify(tokenData.name)};
@@ -1661,7 +1661,7 @@ function getTeacherView(token, tokenData) {
 
 function getStudentView(authResult, email, password) {
   let content = HtmlService.createHtmlOutputFromFile('student.html').getContent();
-  content += '<script>' + HtmlService.createHtmlOutputFromFile('studentController.js').getContent() + '</script>';
+  content += HtmlService.createHtmlOutputFromFile('studentController.html').getContent();
 
   const studentData = {
     assessments: authResult.assessments,
