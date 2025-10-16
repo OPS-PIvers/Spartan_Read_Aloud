@@ -1,10 +1,17 @@
-
 let adminSessionToken = null;
 let adminName = null;
 let userRole = 'student'; // Default, will be updated on successful login
 let allAssessments = [];
 
+/**
+ * Escapes HTML special characters to prevent XSS attacks
+ * @param {string} text - Text to escape
+ * @returns {string} - HTML-safe text
+ */
 function escapeHtml(text) {
+  if (text === null || text === undefined) {
+    return '';
+  }
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;

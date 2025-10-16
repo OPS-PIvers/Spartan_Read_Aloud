@@ -1128,7 +1128,7 @@ function validateAdminToken(sessionToken) {
  */
 function validateSuperAdminToken(sessionToken) {
   const tokenData = validateSessionToken(sessionToken);
-  if (!tokenData || tokenData.role !== CONSTANTS.ROLE_SUPER_ADMIN.replace(" ", "_").toLowerCase()) {
+  if (!tokenData || tokenData.role !== CONSTANTS.ROLE_TOKEN_SUPER_ADMIN) {
     Logger.log('Invalid or non-super-admin token');
     return null;
   }
@@ -1190,7 +1190,7 @@ function getAllAssessments(sessionToken) {
     }
 
     // Filter assessments for teachers (only show their own)
-    if (tokenData.role === CONSTANTS.ROLE_TEACHER.toLowerCase()) {
+    if (tokenData.role === CONSTANTS.ROLE_TOKEN_TEACHER) {
       const teacherName = tokenData.name || tokenData.email;
       Logger.log(`Filtering assessments for teacher: ${teacherName}`);
 
@@ -1676,19 +1676,66 @@ function getStudentView(authResult, email, password) {
 
 /**
  * Gets the base64 encoded data for an audio file.
- * @param {string} fileId The ID of the audio file.
- * @returns {string|null} The base64 encoded data or null on failure.
+ * SECURITY: Validates that the user has permission to access this file.
+ * @param {string} sessionToken Session token for authentication
+ * @param {string} fileId The ID of the audio file
+ * @returns {string|null} The base64 encoded data or null on failure
  */
 function getAudioDataAsBase64(sessionToken, fileId) {
   try {
     const tokenData = validateSessionToken(sessionToken);
     if (!tokenData) {
+      Logger.log('Invalid session token for audio fetch');
       return null;
     }
 
+    // For staff roles, allow access to any audio file
+    if (CONSTANTS.STAFF_ROLES.includes(tokenData.role)) {
+      Logger.log(`Staff user ${tokenData.email} accessing audio file ${fileId}`);
+      const file = DriveApp.getFileById(fileId);
+      const blob = file.getBlob();
+      return Utilities.base64Encode(blob.getBytes());
+    }
+
+    // For students, validate fileId belongs to their assessment
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    if (!sheet) {
+      Logger.log('Assessment Database sheet not found');
+      return null;
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const assessmentUrl = tokenData.url;
+    let authorizedFileIds = [];
+
+    // Find the student's assessment and get authorized audio file IDs
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
+        const audioJson = data[i][CONSTANTS.COL.AUDIO_JSON];
+        if (audioJson) {
+          try {
+            const audioChunks = JSON.parse(audioJson);
+            authorizedFileIds = audioChunks.map(chunk => getFileIdFromUrl(chunk.audioUrl)).filter(id => id);
+            break;
+          } catch (e) {
+            Logger.log(`Error parsing audio JSON for assessment: ${e.toString()}`);
+            return null;
+          }
+        }
+      }
+    }
+
+    // Check if requested fileId is in the authorized list
+    if (!authorizedFileIds.includes(fileId)) {
+      Logger.log(`Unauthorized access attempt: student ${tokenData.email} tried to access file ${fileId}`);
+      return null;
+    }
+
+    // Access granted
     const file = DriveApp.getFileById(fileId);
     const blob = file.getBlob();
     return Utilities.base64Encode(blob.getBytes());
+
   } catch (e) {
     Logger.log(`Failed to get audio data for file ID ${fileId}. Error: ${e.toString()}`);
     return null;
@@ -1714,28 +1761,49 @@ function getBulkAudioData(sessionToken, fileIds) {
       };
     }
 
-    if (tokenData.role === 'student') {
+    // For students, validate all fileIds belong to their assessment
+    if (tokenData.role === CONSTANTS.ROLE_TOKEN_STUDENT) {
         const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+        if (!sheet) {
+          return {
+            success: false,
+            error: 'Assessment Database not found.'
+          };
+        }
+
         const data = sheet.getDataRange().getValues();
         const assessmentUrl = tokenData.url;
         let audioFileIds = [];
 
         for (let i = 1; i < data.length; i++) {
             if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
-                const audioData = JSON.parse(data[i][CONSTANTS.COL.AUDIO_JSON]);
-                audioFileIds = audioData.map(chunk => getFileIdFromUrl(chunk.audioUrl));
-                break;
+                const audioJson = data[i][CONSTANTS.COL.AUDIO_JSON];
+                if (audioJson) {
+                  try {
+                    const audioData = JSON.parse(audioJson);
+                    audioFileIds = audioData.map(chunk => getFileIdFromUrl(chunk.audioUrl)).filter(id => id);
+                    break;
+                  } catch (e) {
+                    Logger.log(`Error parsing audio JSON: ${e.toString()}`);
+                    return {
+                      success: false,
+                      error: 'Error loading audio data.'
+                    };
+                  }
+                }
             }
         }
 
         const unauthorizedFiles = fileIds.filter(id => !audioFileIds.includes(id));
         if (unauthorizedFiles.length > 0) {
+            Logger.log(`Unauthorized bulk access: student ${tokenData.email} tried to access files: ${unauthorizedFiles.join(', ')}`);
             return {
                 success: false,
                 error: 'Unauthorized access to one or more audio files.'
             };
         }
     }
+    // Staff roles have access to all audio files - no additional validation needed
 
     Logger.log(`Bulk fetching ${fileIds.length} audio files for ${tokenData.email}`);
 
@@ -1811,7 +1879,7 @@ function generateSessionToken(email, assessmentUrlOrRole, expiryMinutes, name) {
     url: assessmentUrlOrRole, // Can be 'admin', 'super_admin', 'teacher' for staff users
     exp: expiryTime,
     rnd: random,
-    role: CONSTANTS.STAFF_ROLES.includes(assessmentUrlOrRole) ? assessmentUrlOrRole : CONSTANTS.ROLE_STUDENT,
+    role: CONSTANTS.STAFF_ROLES.includes(assessmentUrlOrRole) ? assessmentUrlOrRole : CONSTANTS.ROLE_TOKEN_STUDENT,
     name: name || email // Store name for later retrieval (useful for filtering teacher assessments)
   };
 
@@ -1919,12 +1987,12 @@ function authenticateUser(email, password) {
           // Staff login successful (Teacher/Admin/Super Admin)
           Logger.log(`Staff login successful: ${adminEmail} (Role: ${teacherRole})`);
 
-          // Determine userType based on role
-          let userType = CONSTANTS.ROLE_TEACHER.toLowerCase(); // Default
+          // Determine userType token based on display role
+          let userType = CONSTANTS.ROLE_TOKEN_TEACHER; // Default
           if (teacherRole === CONSTANTS.ROLE_SUPER_ADMIN) {
-            userType = CONSTANTS.ROLE_SUPER_ADMIN.replace(" ", "_").toLowerCase();
+            userType = CONSTANTS.ROLE_TOKEN_SUPER_ADMIN;
           } else if (teacherRole === CONSTANTS.ROLE_ADMIN) {
-            userType = CONSTANTS.ROLE_ADMIN.toLowerCase();
+            userType = CONSTANTS.ROLE_TOKEN_ADMIN;
           }
           
           const displayName = `${teacherFirst} ${teacherLast}`.trim();
@@ -1946,7 +2014,7 @@ function authenticateUser(email, password) {
     const studentResult = getStudentAssessments(email, password);
     if (!studentResult.error) {
       return {
-        userType: CONSTANTS.ROLE_STUDENT,
+        userType: CONSTANTS.ROLE_TOKEN_STUDENT,
         ...studentResult
       };
     }

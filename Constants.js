@@ -39,6 +39,7 @@ const CONSTANTS = {
   SCRIPT_TIMEOUT_MINUTES: 5,
 
   // --- Text & Audio Processing ---
+  // Robust regex that handles numbered list formats: "1.", "1)", "1]" with varying whitespace and line endings
   CHUNK_SPLIT_REGEX: /[\n\r]+(?=\s*\d+[.)\]]\s+)/,
   SEARCH_WORDS_COUNT: 8,
   SAFE_FILENAME_WORD_COUNT: 6,
@@ -56,11 +57,21 @@ const CONSTANTS = {
   // --- Authentication & Roles ---
   SESSION_TOKEN_DEFAULT_EXPIRY_MINUTES: 180, // 3 hours
   SESSION_TOKEN_STAFF_EXPIRY_MINUTES: 360,  // 6 hours
-  STAFF_ROLES: ['admin', 'super_admin', 'teacher'],
+
+  // Display roles (used in UI)
   ROLE_SUPER_ADMIN: 'Super Admin',
   ROLE_ADMIN: 'Admin',
   ROLE_TEACHER: 'Teacher',
   ROLE_STUDENT: 'student',
+
+  // Token roles (used in session tokens and validation)
+  ROLE_TOKEN_SUPER_ADMIN: 'super_admin',
+  ROLE_TOKEN_ADMIN: 'admin',
+  ROLE_TOKEN_TEACHER: 'teacher',
+  ROLE_TOKEN_STUDENT: 'student',
+
+  // List of staff token roles (for validation)
+  STAFF_ROLES: ['admin', 'super_admin', 'teacher'],
 
   // --- UI & Menu ---
   MENU_NAME: 'Spartan Read Aloud',

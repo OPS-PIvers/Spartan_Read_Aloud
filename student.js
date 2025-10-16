@@ -179,10 +179,17 @@ function backToLogin() {
 
 function onAssessmentLoadError(error) {
     console.error('Assessment load error:', error);
-    // Show error inline in the viewer container
+    // Show error inline in the viewer container (using textContent to prevent XSS)
     viewerContainer.style.display = 'block';
     assessmentSelectionContainer.style.display = 'none';
-    viewerContainer.innerHTML = '<div class="error-message" style="color: red; font-weight: bold; margin: 2em;">Error loading PDF: ' + String(error) + '</div>';
+    viewerContainer.innerHTML = '';
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.style.color = 'red';
+    errorDiv.style.fontWeight = 'bold';
+    errorDiv.style.margin = '2em';
+    errorDiv.textContent = 'Error loading PDF: ' + String(error);
+    viewerContainer.appendChild(errorDiv);
 }
 
 function escapeHtml(text) {

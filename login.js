@@ -43,7 +43,8 @@ function onAuthenticationSuccess(result) {
 
 function onAssessmentLoadError(error) {
   console.error('Assessment load error:', error);
-  loginErrorDiv.textContent = error;
+  // Use error.message if available, otherwise convert to string to avoid "[object Object]"
+  loginErrorDiv.textContent = error?.message || String(error);
   loadButton.disabled = false;
   loadButton.textContent = 'Login';
 }
