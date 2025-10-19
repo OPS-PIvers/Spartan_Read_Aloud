@@ -1,99 +1,103 @@
-<div id="admin-dashboard-container" style="display: none;">
-    <div style="max-width: 1400px; margin: 0 auto; padding: 20px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-        <h2 style="margin: 0; color: #1a73e8;">Admin Dashboard</h2>
-        <div style="display: flex; align-items: center; gap: 15px;">
-          <span id="admin-name-display" style="color: #5f6368; font-size: 14px;"></span>
-          <button onclick="logoutAdmin()" style="width: auto; padding: 8px 16px; background-color: #f8f9fa; color: #3c4043; border: 1px solid #dadce0;">Logout</button>
-        </div>
-      </div>
-
-      <!-- Upload Section (Super Admin, Admin, and Teacher) -->
-      <div id="add-assessment-section" style="background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;">
-        <h3 style="margin-top: 0; margin-bottom: 20px; color: #202124;">Add New Assessment</h3>
-
-        <!-- Tab Toggle -->
-        <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e8eaed;">
-          <button id="upload-tab-file" onclick="showUploadTab('file')" style="width: auto; padding: 12px 20px; background: transparent; border: none; border-bottom: 3px solid #1a73e8; color: #1a73e8; font-weight: 600; margin-bottom: -2px;">Upload PDF/Word</button>
-          <button id="upload-tab-gdoc" onclick="showUploadTab('gdoc')" style="width: auto; padding: 12px 20px; background: transparent; border: none; border-bottom: 3px solid transparent; color: #5f6368; font-weight: 500; margin-bottom: -2px;">Add Google Doc</button>
-        </div>
-
-        <!-- File Upload Tab -->
-        <div id="upload-section-file" style="display: block;">
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Select File (PDF, .docx, .doc - Max 45MB)</label>
-            <input type="file" id="file-upload-input" accept=".pdf,.docx,.doc" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-            <div id="file-upload-status" style="margin-top: 8px; font-size: 13px; color: #5f6368;"></div>
-          </div>
-        </div>
-
-        <!-- Google Doc URL Tab -->
-        <div id="upload-section-gdoc" style="display: none;">
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Google Doc URL</label>
-            <input type="url" id="gdoc-url-input" placeholder="https://docs.google.com/document/d/..." style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-            <div style="margin-top: 8px; font-size: 12px; color: #5f6368;">
-              Note: If you only have view access, a shortcut will be created. Ensure you maintain access to the document.
-            </div>
-          </div>
-        </div>
-
-        <!-- Metadata Fields (shared between tabs) -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-          <div>
-            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Class Name</label>
-            <input type="text" id="new-class-name" placeholder="e.g., Grade 4 Math" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-          </div>
-          <div>
-            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Instructor Last Name</label>
-            <input type="text" id="new-instructor" placeholder="e.g., Smith" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-          </div>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-bottom: 20px;">
-          <div>
-            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Password</label>
-            <input type="password" id="new-password" placeholder="Student password" autocomplete="new-password" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-          </div>
-          <div>
-            <label style="display: block; margin-bottom: 8px; color: #5f6368; font-size: 14px; font-weight: 500;">Student Emails (paste from Google Sheets or enter comma-separated)</label>
-            <textarea id="new-student-emails" placeholder="student1@school.com, student2@school.com&#10;Or paste from Google Sheets" style="width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; min-height: 60px; resize: vertical; font-family: inherit;"></textarea>
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 12px; align-items: center;">
-          <button id="add-assessment-btn" onclick="addNewAssessment()" style="padding: 12px 24px; font-size: 15px; font-weight: 600;">Add Assessment & Process</button>
-          <div id="upload-message" style="color: #5f6368; font-size: 14px;"></div>
-        </div>
-      </div>
-
-      <!-- Assessment Table -->
-      <div style="background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-        <h3 style="margin-top: 0; margin-bottom: 20px; color: #202124;">All Assessments</h3>
-        <div style="overflow-x: auto;">
-          <table id="admin-assessment-table" style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <thead>
-              <tr style="background: #f8f9fa; border-bottom: 2px solid #e8eaed;">
-                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">File Name</th>
-                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600; width: 100px;">Status</th>
-                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Class</th>
-                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Instructor Last Name</th>
-                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Password</th>
-                <th style="padding: 12px 8px; text-align: left; color: #5f6368; font-weight: 600;">Students</th>
-                <th style="padding: 12px 8px; text-align: center; color: #5f6368; font-weight: 600; width: 140px;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="admin-assessment-tbody">
-              <!-- Assessment rows will be inserted here -->
-            </tbody>
-          </table>
-        </div>
-        <div id="no-assessments-message" style="display: none; text-align: center; padding: 40px; color: #5f6368;">
-          No assessments found. Add your first assessment above.
-        </div>
+<div id="admin-dashboard-container" class="dashboard-container">
+    <div class="dashboard-header">
+      <h2 class="dashboard-title">Admin Dashboard</h2>
+      <div class="header-actions">
+        <span id="admin-name-display" class="welcome-message"></span>
+        <button onclick="logoutAdmin()" class="button button-secondary">Logout</button>
       </div>
     </div>
-</div>
 
+    <!-- Upload Section -->
+    <div id="add-assessment-section" class="assessment-card">
+      <h3 class="card-title">Add New Assessment</h3>
+
+      <!-- Tab Toggle -->
+      <div class="tab-toggle">
+        <button id="upload-tab-file" onclick="showUploadTab('file')" class="tab-button active">Upload PDF/Word</button>
+        <button id="upload-tab-gdoc" onclick="showUploadTab('gdoc')" class="tab-button">Add Google Doc</button>
+      </div>
+
+      <!-- File Upload Tab -->
+      <div id="upload-section-file" class="tab-content active">
+        <div id="file-drop-zone" class="file-drop-zone">
+          <div class="file-drop-zone-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="48" height="48">
+              <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+            </svg>
+          </div>
+          <p class="file-drop-zone-text">Drag & Drop your file here</p>
+          <p class="file-drop-zone-subtext">or</p>
+          <label for="file-upload-input" class="button button-secondary">Browse Files</label>
+          <input type="file" id="file-upload-input" accept=".pdf,.docx,.doc" class="file-upload-input">
+          <p class="file-drop-zone-info">PDF, DOCX, DOC up to 45MB</p>
+        </div>
+        <div id="file-upload-status" class="file-upload-status"></div>
+      </div>
+
+      <!-- Google Doc URL Tab -->
+      <div id="upload-section-gdoc" class="tab-content">
+        <div class="form-group">
+          <label for="gdoc-url-input" class="form-label">Google Doc URL</label>
+          <input type="url" id="gdoc-url-input" placeholder="https://docs.google.com/document/d/..." class="form-input">
+          <p class="form-hint">Note: If you only have view access, a shortcut will be created. Ensure you maintain access to the document.</p>
+        </div>
+      </div>
+
+      <!-- Metadata Fields -->
+      <div class="metadata-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="new-class-name" class="form-label">Class Name</label>
+            <input type="text" id="new-class-name" placeholder="e.g., Grade 4 Math" class="form-input">
+          </div>
+          <div class="form-group">
+            <label for="new-instructor" class="form-label">Instructor Last Name</label>
+            <input type="text" id="new-instructor" placeholder="e.g., Smith" class="form-input">
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="new-password" class="form-label">Password</label>
+            <input type="password" id="new-password" placeholder="Student password" autocomplete="new-password" class="form-input">
+          </div>
+          <div class="form-group">
+            <label for="new-student-emails" class="form-label">Student Emails</label>
+            <textarea id="new-student-emails" placeholder="student1@school.com, student2@school.com&#10;Or paste from Google Sheets" class="form-textarea"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button id="add-assessment-btn" onclick="addNewAssessment()" class="button button-primary">Add Assessment & Process</button>
+        <div id="upload-message" class="upload-message"></div>
+      </div>
+    </div>
+
+    <!-- Assessment Table -->
+    <div class="assessment-table-card">
+      <h3 class="card-title">All Assessments</h3>
+      <div class="table-container">
+        <table id="admin-assessment-table" class="assessment-table">
+          <thead>
+            <tr>
+              <th>File Name</th>
+              <th style="width: 100px;">Status</th>
+              <th>Class</th>
+              <th>Instructor Last Name</th>
+              <th>Password</th>
+              <th>Students</th>
+              <th style="width: 140px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="admin-assessment-tbody">
+          </tbody>
+        </table>
+      </div>
+      <div id="no-assessments-message" class="no-assessments-message">
+        No assessments found. Add your first assessment above.
+      </div>
+    </div>
+  </div>
 <script>
 let adminSessionToken = null;
 let adminName = null;
@@ -194,25 +198,10 @@ function showUploadTab(tab) {
   const fileSection = document.getElementById('upload-section-file');
   const gdocSection = document.getElementById('upload-section-gdoc');
 
-  if (tab === 'file') {
-    fileTab.style.borderBottomColor = '#1a73e8';
-    fileTab.style.color = '#1a73e8';
-    fileTab.style.fontWeight = '600';
-    gdocTab.style.borderBottomColor = 'transparent';
-    gdocTab.style.color = '#5f6368';
-    gdocTab.style.fontWeight = '500';
-    fileSection.style.display = 'block';
-    gdocSection.style.display = 'none';
-  } else {
-    gdocTab.style.borderBottomColor = '#1a73e8';
-    gdocTab.style.color = '#1a73e8';
-    gdocTab.style.fontWeight = '600';
-    fileTab.style.borderBottomColor = 'transparent';
-    fileTab.style.color = '#5f6368';
-    fileTab.style.fontWeight = '500';
-    gdocSection.style.display = 'block';
-    fileSection.style.display = 'none';
-  }
+  fileTab.classList.toggle('active', tab === 'file');
+  gdocTab.classList.toggle('active', tab === 'gdoc');
+  fileSection.classList.toggle('active', tab === 'file');
+  gdocSection.classList.toggle('active', tab === 'gdoc');
 }
 
 function loadAllAssessments() {
@@ -283,36 +272,36 @@ function renderAssessmentTable() {
     let statusBadge;
     if (assessment.isComplete === true) {
       // Processing complete and ready for students
-      statusBadge = '<span style="background: #e6f4ea; color: #137333; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">✓ Ready</span>';
+      statusBadge = '<span class="status-badge status-ready">✓ Ready</span>';
     } else if (assessment.chunkCount > 0) {
       // Processing in progress (text extracted, generating audio)
-      statusBadge = '<span style="background: #fef7e0; color: #ea8600; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">⏳ Processing</span>';
+      statusBadge = '<span class="status-badge status-processing">⏳ Processing</span>';
     } else {
       // Newly uploaded, waiting for processing to start
-      statusBadge = '<span style="background: #e8f0fe; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">📋 Queued</span>';
+      statusBadge = '<span class="status-badge status-queued">📋 Queued</span>';
     }
 
     return `
-      <tr style="border-bottom: 1px solid #e8eaed;" data-row-index="${assessment.rowIndex}">
-        <td style="padding: 12px 8px;">${escapeHtml(assessment.fileName)}</td>
-        <td style="padding: 12px 8px;">${statusBadge}</td>
-        <td style="padding: 12px 8px;">
-          <input type="text" value="${escapeHtml(assessment.className)}" data-field="className" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px;">
+      <tr data-row-index="${assessment.rowIndex}">
+        <td>${escapeHtml(assessment.fileName)}</td>
+        <td>${statusBadge}</td>
+        <td>
+          <input type="text" value="${escapeHtml(assessment.className)}" data-field="className" class="table-input">
         </td>
-        <td style="padding: 12px 8px;">
-          <input type="text" value="${escapeHtml(assessment.instructor)}" data-field="instructor" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px;">
+        <td>
+          <input type="text" value="${escapeHtml(assessment.instructor)}" data-field="instructor" class="table-input">
         </td>
-        <td style="padding: 12px 8px;">
-          <input type="password" value="${escapeHtml(assessment.password)}" data-field="password" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px;">
+        <td>
+          <input type="password" value="${escapeHtml(assessment.password)}" data-field="password" class="table-input">
         </td>
-        <td style="padding: 12px 8px;">
-          <textarea data-field="studentEmails" style="width: 100%; padding: 4px 6px; border: 1px solid #dadce0; border-radius: 4px; font-size: 13px; resize: vertical; min-height: 32px;">${escapeHtml(assessment.studentEmails)}</textarea>
+        <td>
+          <textarea data-field="studentEmails" class="table-textarea">${escapeHtml(assessment.studentEmails)}</textarea>
         </td>
-        <td style="padding: 12px 8px; text-align: center;">
-          <button onclick="saveAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; margin-right: 4px; background: #34a853; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Save">✓</button>
+        <td class="actions-cell">
+          <button onclick="saveAssessmentRow(${assessment.rowIndex})" class="action-button save" title="Save">✓</button>
           ${userRole === 'super_admin' ? `
-            <button onclick="deleteAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; margin-right: 4px; background: #d93025; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Delete">✕</button>
-            <button onclick="reprocessAssessmentRow(${assessment.rowIndex})" style="width: auto; padding: 6px 10px; font-size: 16px; background: #f8f9fa; color: #3c4043; border: 1px solid #dadce0; border-radius: 4px; cursor: pointer;" title="Re-run analysis and audio generation">⟳</button>
+            <button onclick="deleteAssessmentRow(${assessment.rowIndex})" class="action-button delete" title="Delete">✕</button>
+            <button onclick="reprocessAssessmentRow(${assessment.rowIndex})" class="action-button reprocess" title="Re-run analysis and audio generation">⟳</button>
           ` : ''}
         </td>
       </tr>
@@ -332,22 +321,22 @@ function addNewAssessment() {
   const studentEmails = parseEmailList(studentEmailsRaw);
 
   // Determine which tab is active
-  const isFileTab = document.getElementById('upload-section-file').style.display !== 'none';
+  const isFileTab = document.getElementById('upload-section-file').classList.contains('active');
 
   uploadMessage.textContent = '';
-  uploadMessage.style.color = '#5f6368';
+  uploadMessage.classList.remove('success', 'error');
 
   // Validate inputs
   if (isFileTab) {
     if (!fileInput.files || fileInput.files.length === 0) {
       uploadMessage.textContent = 'Please select a file to upload.';
-      uploadMessage.style.color = '#d93025';
+      uploadMessage.classList.add('error');
       return;
     }
   } else {
     if (!gdocInput.value.trim()) {
       uploadMessage.textContent = 'Please enter a Google Doc URL.';
-      uploadMessage.style.color = '#d93025';
+      uploadMessage.classList.add('error');
       return;
     }
   }
@@ -371,7 +360,7 @@ function addNewAssessment() {
         .withSuccessHandler((result) => {
           if (result.error) {
             uploadMessage.textContent = 'Error: ' + result.error;
-            uploadMessage.style.color = '#d93025';
+            uploadMessage.classList.add('error');
             addButton.disabled = false;
             addButton.textContent = 'Add Assessment & Process';
             return;
@@ -384,7 +373,7 @@ function addNewAssessment() {
         })
         .withFailureHandler((error) => {
           uploadMessage.textContent = 'Upload failed: ' + error.message;
-          uploadMessage.style.color = '#d93025';
+          uploadMessage.classList.add('error');
           addButton.disabled = false;
           addButton.textContent = 'Add Assessment & Process';
         })
@@ -393,7 +382,7 @@ function addNewAssessment() {
 
     reader.onerror = function() {
       uploadMessage.textContent = 'Failed to read file.';
-      uploadMessage.style.color = '#d93025';
+      uploadMessage.classList.add('error');
       addButton.disabled = false;
       addButton.textContent = 'Add Assessment & Process';
     };
@@ -409,7 +398,7 @@ function addNewAssessment() {
       .withSuccessHandler((result) => {
         if (result.error) {
           uploadMessage.textContent = 'Error: ' + result.error;
-          uploadMessage.style.color = '#d93025';
+          uploadMessage.classList.add('error');
           addButton.disabled = false;
           addButton.textContent = 'Add Assessment & Process';
           return;
@@ -424,7 +413,7 @@ function addNewAssessment() {
       })
       .withFailureHandler((error) => {
         uploadMessage.textContent = 'Failed: ' + error.message;
-        uploadMessage.style.color = '#d93025';
+        uploadMessage.classList.add('error');
         addButton.disabled = false;
         addButton.textContent = 'Add Assessment & Process';
       })
@@ -440,14 +429,14 @@ function addAssessmentToDatabase(fileUrl, className, instructor, password, stude
     .withSuccessHandler((result) => {
       if (result.error) {
         uploadMessage.textContent = 'Error: ' + result.error;
-        uploadMessage.style.color = '#d93025';
+        uploadMessage.classList.add('error');
         addButton.disabled = false;
         addButton.textContent = 'Add Assessment & Process';
         return;
       }
 
       uploadMessage.textContent = result.message || 'Assessment added successfully!';
-      uploadMessage.style.color = '#137333';
+      uploadMessage.classList.add('success');
 
       // Reset form
       document.getElementById('file-upload-input').value = '';
@@ -463,12 +452,13 @@ function addAssessmentToDatabase(fileUrl, className, instructor, password, stude
       // Reload assessments
       setTimeout(() => {
         uploadMessage.textContent = '';
+        uploadMessage.classList.remove('success', 'error');
         loadAllAssessments();
       }, 2000);
     })
     .withFailureHandler((error) => {
       uploadMessage.textContent = 'Failed to add: ' + error.message;
-      uploadMessage.style.color = '#d93025';
+      uploadMessage.classList.add('error');
       addButton.disabled = false;
       addButton.textContent = 'Add Assessment & Process';
     })
@@ -556,7 +546,50 @@ function reprocessAssessmentRow(rowIndex) {
     .reprocessAssessment(adminSessionToken, rowIndex);
 }
 
-// Note: checkStoredAdminSession() is now called manually from login.html after HTML injection
-// or from server-side script injection (Code.js getTeacherView)
-// Don't auto-call here as it may run before DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  const dropZone = document.getElementById('file-drop-zone');
+  const fileInput = document.getElementById('file-upload-input');
+  const fileStatus = document.getElementById('file-upload-status');
+
+  if (dropZone) {
+    dropZone.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        fileInput.files = files;
+        handleFileSelect(files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        handleFileSelect(fileInput.files[0]);
+      }
+    });
+  }
+
+  function handleFileSelect(file) {
+    if (file) {
+      fileStatus.textContent = `Selected file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+    } else {
+      fileStatus.textContent = '';
+    }
+  }
+});
 </script>

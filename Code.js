@@ -1646,9 +1646,9 @@ function getLoginView() {
 }
 
 function getTeacherView(token, tokenData) {
-    // Note: Scripts in innerHTML are not executed by the browser for security reasons.
-    // The initialization is handled client-side in login.html after HTML injection.
-    return HtmlService.createHtmlOutputFromFile('teacher.html').getContent();
+    const teacherHtml = HtmlService.createHtmlOutputFromFile('teacher.html').getContent();
+    const teacherStyles = HtmlService.createHtmlOutputFromFile('teacher-styles.html').getContent();
+    return teacherStyles + teacherHtml;
 }
 
 function getStudentView(authResult, email, password) {
