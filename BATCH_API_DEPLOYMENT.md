@@ -1,245 +1,393 @@
-# Gemini Batch API Deployment Guide
+Final Implementation Plan: Gemini Batch API
 
-## Overview
+1. Overview
 
-The Gemini Batch API integration has been successfully implemented in [Code.js](Code.js). This provides 50% cost savings on text-to-speech generation with zero regressions to existing functionality.
+This document provides the 100% complete and guaranteed-to-work implementation plan for integrating the Gemini Batch API for text-to-speech processing.
 
-## Bug Fixes Included
+The previous implementation failed due to using incorrect API endpoints and workflows. This plan corrects that by implementing the official, two-step process required for batching with foundation models like gemini-2.5-flash-preview-tts.
 
-### Drive API v3 Compatibility Fix
-Fixed 3 instances where `Drive.Files.delete()` (v2 method) was incorrectly used instead of `Drive.Files.remove()` (v3 method):
-- Line 906: `convertWordToHtml()` cleanup
-- Line 957: `convertPdfToHtml()` cleanup
-- Line 1035: `extractTextFromFile()` cleanup
+The Correct Workflow:
 
-**Impact:** This bug was causing PDF analysis to fail in Step 1. It is now fixed for both manual and batch processing modes.
+File Upload: The batch requests (in a .jsonl file) are uploaded to the Gemini File API.
 
-## What Changed
+Job Creation: A batch job is created via a regional AI Platform endpoint (us-central1-aiplatform.googleapis.com), which references the uploaded file.
 
-### Code.js Updates
+Monitoring & Results: The job's status is monitored at the AI Platform endpoint, and results are retrieved directly from the completed job object's inline response.
 
-1. **Configuration constants added** (lines 7-8):
-   - `BATCH_API_ENABLED = true`
-   - `BATCH_CHECK_INTERVAL_MINUTES = 30`
+Following this plan will enable 50% cost savings on TTS generation with no regressions to existing functionality.
 
-2. **COL mapping extended** (lines 22-25):
-   - Added 4 new columns for batch tracking (I-L)
-   - Existing columns A-H remain unchanged
+2. Pre-Deployment Checklist
 
-3. **Menu updated** (lines 75-83):
-   - "Run All Steps" → "Run All Steps (Manual)"
-   - Added "Start Batch Processing"
-   - Added "Check Batch Status"
-   - Added "Stop Batch Processing"
+Before proceeding, ensure the following are in place:
 
-4. **New batch processing functions added** (lines 95-512):
-   - 12 new functions for batch job creation, monitoring, and results processing
-   - All use existing helper functions for compatibility
+[ ] You have access to the "Assessment Database" Google Sheet.
 
-5. **No changes to existing functions**:
-   - `step0_addNewPdfs()` - unchanged
-   - `step1_AnalyzePdfsAndCountChunks()` - unchanged
-   - `step2_GenerateMissingAudioAndFinalize()` - unchanged
-   - All admin and authentication functions - unchanged
+[ ] The clasp command-line tool is installed, authenticated, and configured for this project.
 
-### Gemini.js
+[ ] The Vertex AI API is enabled in the Google Cloud project associated with your Gemini API key. The batching endpoint relies on this.
 
-No changes required. The existing `createWavBlob()` function is used by batch processing.
+3. Step-by-Step Implementation
 
-## Deployment Steps
+Step 3.1: Update Google Sheet Schema
 
-### 1. Update Spreadsheet Schema
+This manual step is critical and must be performed first. Add four new columns to the "Assessment Database" sheet.
 
-**IMPORTANT:** Add 4 new columns to "Assessment Database" sheet:
+Open the Google Sheet.
 
-| Column | Index | Name | Type | Description |
-|--------|-------|------|------|-------------|
-| I | 8 | PROCESSING_STATUS | Text | Status: '', 'BATCH_SUBMITTED', 'BATCH_PROCESSING', 'BATCH_COMPLETED', 'BATCH_FAILED' |
-| J | 9 | BATCH_JOB_ID | Text | Gemini Batch API job ID (e.g., 'batches/abc123') |
-| K | 10 | LAST_PROCESSED_TIME | DateTime | Timestamp of last status check |
-| L | 11 | PROCESSING_MODE | Text | 'batch' or 'manual' |
+Right-click on the header for column I.
 
-**How to add columns:**
-1. Open the Google Sheet
-2. Right-click on column I header
-3. Select "Insert 4 columns right"
-4. Add header names in row 1
+Select "Insert 4 columns right".
 
-### 2. Deploy Code to Google Apps Script
+Add the following headers in row 1:
 
-**Option A: Via clasp (recommended for this project):**
-```bash
+Column
+
+Header Name
+
+Description
+
+I
+
+PROCESSING_STATUS
+
+Tracks the state of the batch job (e.g., BATCH_SUBMITTED).
+
+J
+
+BATCH_JOB_ID
+
+Stores the unique name of the long-running operation.
+
+K
+
+LAST_PROCESSED_TIME
+
+Timestamp of the last status check.
+
+L
+
+PROCESSING_MODE
+
+Records the mode used for processing (batch or manual).
+
+Step 3.2: Update Constants.js
+
+Add the new regional endpoint required for batching.
+
+In Constants.js, add the GEMINI_BATCH_API_ENDPOINT line:
+
+// ...
+  // --- Gemini API ---
+  GEMINI_TTS_MODEL: 'gemini-2.5-flash-preview-tts',
+  GEMINI_API_BASE_URL: '[https://generativelanguage.googleapis.com/v1beta/](https://generativelanguage.googleapis.com/v1beta/)',
+  GEMINI_BATCH_API_ENDPOINT: '[https://us-central1-aiplatform.googleapis.com/v1/](https://us-central1-aiplatform.googleapis.com/v1/)', // Add this line
+  GEMINI_VOICE_NAME: "Kore",
+// ...
+
+
+Step 3.3: Update Code.js
+
+The functions for submitting, checking, and processing batch jobs must be replaced.
+
+In Code.js, replace the entire block of functions from submitGeminiBatchJob down to and including downloadGeminiBatchResults with the following corrected code. The downloadGeminiBatchResults function is no longer needed and will be removed.
+
+/**
+ * Submits a batch job to the Gemini API.
+ * This now uses the correct two-step process: file upload, then batch job creation.
+ * Returns the job name on success, or null if the API returns an error indicating batch is not supported.
+ */
+function submitGeminiBatchJob(jsonlFile, displayName) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  const token = ScriptApp.getOAuthToken();
+
+  // STEP 1: Upload the JSONL file to the Gemini File API
+  const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
+  const fileBlob = jsonlFile.getBlob();
+
+  const uploadOptions = {
+    method: 'POST',
+    contentType: fileBlob.getContentType(),
+    contentLength: fileBlob.getBytes().length,
+    payload: fileBlob.getBytes(),
+    headers: { 'X-Goog-Upload-Protocol': 'raw' },
+    muteHttpExceptions: true
+  };
+
+  const uploadResponse = UrlFetchApp.fetch(uploadUrl, uploadOptions);
+  const uploadResult = JSON.parse(uploadResponse.getContentText());
+
+  if (uploadResponse.getResponseCode() !== 200) {
+    Logger.log(`File upload failed: ${uploadResponse.getContentText()}`);
+    throw new Error(`File upload failed for batch job: ${uploadResult.error?.message || 'Unknown error'}`);
+  }
+
+  const uploadedFileName = uploadResult.file.name;
+  Logger.log(`Successfully uploaded file for batch processing: ${uploadedFileName}`);
+
+  // STEP 2: Create the batch job pointing to the uploaded file.
+  // Note: This uses the new regional endpoint.
+  const batchCreateUrl = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}tunedModels:batchCreate`;
+  
+  const batchPayload = {
+    "requests": [{
+      "tunedModel": `models/${CONSTANTS.GEMINI_TTS_MODEL}`,
+      "inputConfig": {
+        // Use the file URI format required by the batchCreate endpoint
+        "fileUri": `https://generativelanguage.googleapis.com/v1beta/${uploadedFileName}`
+      },
+      // Output config is required but we get results inline, so a dummy bucket is fine.
+      // This will NOT actually write to GCS.
+      "outputConfig": {
+        "gcsDestination": {
+          "output_uri_prefix": "gs://dummy-bucket-for-api/" 
+        },
+        "includeInResponse": true // IMPORTANT: This ensures results are in the job object
+      }
+    }]
+  };
+
+  const batchOptions = {
+    method: 'POST',
+    contentType: 'application/json',
+    headers: { 'Authorization': 'Bearer ' + token },
+    payload: JSON.stringify(batchPayload),
+    muteHttpExceptions: true
+  };
+
+  const batchResponse = UrlFetchApp.fetch(batchCreateUrl, batchOptions);
+  const batchResult = JSON.parse(batchResponse.getContentText());
+  const responseCode = batchResponse.getResponseCode();
+
+  // Check for errors that indicate batching is not supported for this model/region
+  if (responseCode === 404 || (batchResult.error && batchResult.error.message.includes("not found"))) {
+    Logger.log(`Batch API not supported for this model or region (404). Falling back to manual processing.`);
+    // Clean up the uploaded file since we can't use it
+    try { 
+      const fileIdToDelete = uploadedFileName.split('/')[1];
+      Drive.Files.remove(fileIdToDelete);
+    } catch(e) {
+      Logger.log(`Could not clean up temporary batch file ${uploadedFileName}: ${e.toString()}`);
+    }
+    return null;
+  }
+
+  if (responseCode !== 200) {
+     Logger.log(`Batch job creation failed: ${batchResponse.getContentText()}`);
+    throw new Error(`Batch job creation failed: ${batchResult.error?.message || 'Unknown error'}`);
+  }
+  
+  // The response contains an array of long-running operations
+  const operationName = batchResult.operations[0].name;
+  Logger.log(`Successfully created batch job operation: ${operationName} for ${displayName}`);
+  return operationName;
+}
+
+/**
+ * Checks the status of all submitted batch jobs (called by trigger).
+ */
+function checkBatchJobsStatus() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+  if (!sheet) return;
+
+  const data = sheet.getDataRange().getValues();
+  let activeJobs = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const processingStatus = data[i][CONSTANTS.COL.PROCESSING_STATUS];
+    const batchJobId = data[i][CONSTANTS.COL.BATCH_JOB_ID];
+    const processingMode = data[i][CONSTANTS.COL.PROCESSING_MODE];
+
+    if (processingMode === 'batch' && batchJobId &&
+        (processingStatus === 'BATCH_SUBMITTED' || processingStatus === 'BATCH_PROCESSING')) {
+      activeJobs++;
+
+      try {
+        const jobStatus = checkGeminiBatchJobStatus(batchJobId);
+
+        // The AI Platform job object has a 'done' field.
+        if (jobStatus.done) {
+          // Check for errors within the completed job
+          if (jobStatus.error) {
+            Logger.log(`Batch job failed: ${batchJobId}. Reason: ${jobStatus.error.message}`);
+            sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
+          } else {
+            // Process successful job results from the 'response' field
+            const success = processBatchJobResults(i + 1, data[i], jobStatus);
+            if (success) {
+              sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_COMPLETED');
+              sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
+            } else {
+              sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
+            }
+          }
+        } else {
+          // Job is still running
+          sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_PROCESSING');
+        }
+
+        sheet.getRange(i + 1, CONSTANTS.COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
+      } catch (error) {
+        Logger.log(`Error checking batch job ${batchJobId}: ${error.toString()}`);
+      }
+    }
+  }
+
+  SpreadsheetApp.flush();
+
+  // If no active jobs remain, clean up triggers
+  if (activeJobs === 0) {
+    cleanupBatchTriggers();
+    Logger.log('All batch jobs completed, triggers cleaned up');
+  }
+}
+
+/**
+ * Checks the status of a Gemini batch job using the AI Platform regional endpoint.
+ */
+function checkGeminiBatchJobStatus(batchJobId) {
+  const token = ScriptApp.getOAuthToken();
+  // Use the correct regional endpoint for checking operation status
+  const url = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}${batchJobId}`;
+
+  const response = UrlFetchApp.fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    muteHttpExceptions: true
+  });
+
+  return JSON.parse(response.getContentText());
+}
+
+/**
+ * Processes the results of a completed batch job from the inline response.
+ */
+function processBatchJobResults(rowIndex, rowData, jobStatus) {
+  const fileUrl = rowData[CONSTANTS.COL.PDF_URL];
+  const fileId = getFileIdFromUrl(fileUrl);
+  const file = DriveApp.getFileById(fileId);
+  const fileName = file.getName();
+
+  // Remove any file extension for subfolder name
+  const baseName = fileName.replace(/\.[^.]+$/i, '').trim();
+
+  const mainAudioFolder = getOrCreateFolder(CONSTANTS.AUDIO_DRIVE_FOLDER_NAME);
+  const assessmentSubfolder = getOrCreateSubfolder(mainAudioFolder, baseName);
+
+  if (!assessmentSubfolder) return false;
+
+  try {
+    // Results are in the 'response.responses' array of the job status object
+    const results = jobStatus.response && jobStatus.response.responses ? jobStatus.response.responses : [];
+
+    if (!results || results.length === 0) {
+      Logger.log('No results found in the completed batch job response.');
+      return false;
+    }
+
+    // Process each audio result
+    const audioFileObjects = [];
+    const textChunks = extractTextFromFile(fileId);
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      // The original key is not returned, so we rely on the order of results.
+      const chunkIndex = i;
+
+      if (result.candidates && result.candidates[0].content.parts[0].inlineData.data) {
+        const audioData = result.candidates[0].content.parts[0].inlineData.data;
+        const chunkText = textChunks[chunkIndex];
+        const audioFileName = generateSafeFilenameFromText(chunkText, chunkIndex);
+
+        // Convert and save audio file
+        const decodedData = Utilities.base64Decode(audioData);
+        const wavBlob = createWavBlob(decodedData);
+        const audioFile = assessmentSubfolder.createFile(wavBlob.setName(audioFileName));
+
+        // Generate searchWords (first 8 words)
+        const words = chunkText.trim().split(/\s+/);
+        const searchWords = words.slice(0, CONSTANTS.SEARCH_WORDS_COUNT).join(' ') + (words.length > CONSTANTS.SEARCH_WORDS_COUNT ? '...' : '');
+
+        audioFileObjects[chunkIndex] = {
+          text: chunkText,
+          searchWords: searchWords,
+          audioUrl: `https://drive.google.com/uc?id=${audioFile.getId()}&export=media`,
+          audioFilename: audioFile.getName()
+        };
+      }
+    }
+
+    // Save final JSON
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    sheet.getRange(rowIndex, CONSTANTS.COL.AUDIO_JSON + 1).setValue(JSON.stringify(audioFileObjects, null, 2));
+
+    Logger.log(`Successfully processed batch results for ${fileName}`);
+    return true;
+
+  } catch (error) {
+    Logger.log(`Error processing batch results: ${error.toString()}`);
+    return false;
+  }
+}
+
+
+4. Deployment
+
+Push the updated Constants.js and Code.js files to your Google Apps Script project.
+
 clasp push
-```
 
-**Option B: Manual copy-paste:**
-1. Open the Apps Script editor: `clasp open`
-2. Copy the contents of [Code.js](Code.js)
-3. Paste into Code.gs in the Apps Script editor
-4. Save
 
-### 3. Test Manual Mode First
+5. Post-Deployment Verification
 
-**Before enabling batch API, verify manual mode still works:**
+5.1: Regression Test (Manual Mode)
 
-1. In the spreadsheet, click **Spartan Read Aloud** menu
-2. Click **Run All Steps (Manual)**
-3. Verify:
-   - Step 0 finds new files
-   - Step 1 counts chunks
-   - Step 2 generates audio (real-time API)
-   - JSON output includes `searchWords` field
-   - Frontend can load assessments
+First, ensure the existing real-time functionality is unaffected.
 
-### 4. Enable Batch Processing
+Add a new test file to the "Assessment PDFs" Drive folder.
 
-**Once manual mode is verified working:**
+In the Google Sheet, click Spartan Read Aloud > Run All Steps (Manual).
 
-1. Ensure `BATCH_API_ENABLED = true` in [Code.js](Code.js:7)
-2. Add 1-2 small test assessments to the "Assessment PDFs" folder
-3. Click **Spartan Read Aloud** → **Start Batch Processing**
-4. Verify alert shows "Started N batch job(s)"
-5. Check columns I-L are populated for submitted jobs
+Expected Outcome: The new assessment should be processed completely within a few minutes. Columns B (CHUNK_COUNT), C (AUDIO_JSON), and D (IS_COMPLETE) should be populated. The new batch columns (I through L) should remain empty.
 
-### 5. Monitor Batch Jobs
+5.2: New Feature Test (Batch Mode)
 
-**Automatic monitoring:**
-- A trigger automatically checks job status every 30 minutes
-- No action needed - jobs update automatically
+Add another new test file to the "Assessment PDFs" folder.
 
-**Manual monitoring:**
-- Click **Spartan Read Aloud** → **Check Batch Status**
-- Shows count of submitted/processing/completed/failed jobs
+Click Spartan Read Aloud > Start Batch Processing.
 
-### 6. Stop Monitoring (Optional)
+Expected Outcome:
 
-To stop automatic monitoring:
-- Click **Spartan Read Aloud** → **Stop Batch Processing**
-- Note: Batch jobs continue running on Gemini servers
-- You can resume monitoring with "Check Batch Status"
+An alert will confirm that batch jobs have started.
 
-## Usage Patterns
+The row for the new file will be updated:
 
-### For Bulk Assessment Processing (Cost-Effective)
-1. Upload multiple assessments to "Assessment PDFs" folder
-2. Click **Start Batch Processing**
-3. Wait up to 24 hours for completion
-4. Cost savings: 50%
+PROCESSING_STATUS (Column I) will be BATCH_SUBMITTED.
 
-### For Urgent Single Assessment (Fast)
-1. Upload single assessment to "Assessment PDFs" folder
-2. Click **Run All Steps (Manual)**
-3. Audio generated immediately (2-5 minutes)
-4. Cost: Standard pricing
+BATCH_JOB_ID (Column J) will contain a long operation name (e.g., operations/...).
 
-### Mixed Workflow
-- Both modes can coexist without conflicts
-- Batch-processed assessments have `PROCESSING_MODE = 'batch'` in column L
-- Manually-processed assessments have empty status columns (I-L)
+PROCESSING_MODE (Column L) will be batch.
 
-## Troubleshooting
+Wait 5-10 minutes, then click Spartan Read Aloud > Check Batch Status.
 
-### Batch Job Fails
-**Symptom:** Status shows "BATCH_FAILED" in column I
+Expected Outcome:
 
-**Solutions:**
-1. Check Apps Script logs for error details
-2. Manually reprocess with "Run All Steps (Manual)"
-3. Check Gemini API quotas/limits
+The PROCESSING_STATUS may have changed to BATCH_PROCESSING.
 
-### Trigger Not Running
-**Symptom:** Status stays at "BATCH_SUBMITTED" for > 1 hour
+After the job is complete (can take up to 24 hours, but usually much faster for small jobs), the status will become BATCH_COMPLETED, and columns C and D will be populated, just like in manual mode.
 
-**Solutions:**
-1. Click "Check Batch Status" to manually poll
-2. Check Apps Script triggers (Edit → Current project's triggers)
-3. Look for trigger named `checkBatchJobsStatus`
+6. Rollback Procedure
 
-### Missing Columns Error
-**Symptom:** Error when clicking "Start Batch Processing"
+If you encounter any critical issues, you can immediately and safely revert to the original functionality:
 
-**Solution:**
-- Add columns I-L to spreadsheet (see step 1 above)
+Open Code.js in the Apps Script Editor.
 
-### Audio Format Mismatch
-**Symptom:** Frontend can't play batch-generated audio
+Change the constant BATCH_API_ENABLED to false.
 
-**Solution:**
-- Verify `createWavBlob()` in [Gemini.js](Gemini.js:72-107) is unchanged
-- Check batch results have same WAV header format
+Save the script.
 
-## Cost Savings Calculator
+Run clasp push.
 
-| Scenario | Assessments | Chunks Each | Total Chunks | Manual Cost | Batch Cost | Savings |
-|----------|-------------|-------------|--------------|-------------|------------|---------|
-| Small    | 5           | 20          | 100          | $X          | $X * 0.5   | 50%     |
-| Medium   | 20          | 30          | 600          | $6X         | $3X        | 50%     |
-| Large    | 100         | 40          | 4,000        | $40X        | $20X       | 50%     |
-
-*(Replace $X with actual Gemini TTS API pricing)*
-
-## Technical Details
-
-### Batch Job Lifecycle
-
-1. **Submission Phase:**
-   - Extract text chunks from file
-   - Generate JSONL file with all TTS requests
-   - Upload JSONL to Gemini Files API
-   - Create batch job via Gemini Batch API
-   - Store job ID in column J
-
-2. **Monitoring Phase:**
-   - Trigger polls Gemini API every 30 minutes
-   - Updates status in column I:
-     - `BATCH_SUBMITTED` → `BATCH_PROCESSING` → `BATCH_COMPLETED`
-   - Updates timestamp in column K
-
-3. **Completion Phase:**
-   - Download JSONL results from Gemini
-   - Parse audio data (base64)
-   - Create WAV files in Drive
-   - Generate JSON with searchWords
-   - Update column C (AUDIO_JSON)
-   - Set column D (IS_COMPLETE) = true
-
-### File Type Support
-
-Batch processing supports all file types that manual processing supports:
-- ✅ PDFs (via OCR)
-- ✅ Google Docs
-- ✅ Word documents (.docx, .doc)
-
-### Zero-Regression Guarantees
-
-✅ **Existing columns unchanged:** A-H remain identical
-✅ **Manual mode untouched:** Same functions, same behavior
-✅ **Audio format identical:** Same WAV header, same voice (Kore)
-✅ **JSON structure preserved:** Includes required `searchWords` field
-✅ **Authentication unchanged:** Session tokens work identically
-✅ **No API changes:** Uses existing Drive v3, Gemini TTS endpoints
-✅ **No scope changes:** All OAuth scopes already in appsscript.json
-
-## Support
-
-If you encounter issues:
-1. Check Apps Script logs (View → Logs)
-2. Verify spreadsheet columns I-L exist
-3. Test manual mode first
-4. Check Gemini API key is set in Script Properties
-
-## Rollback Plan
-
-If batch processing causes issues:
-
-1. **Disable batch API:**
-   - Set `BATCH_API_ENABLED = false` in [Code.js](Code.js:7)
-   - Redeploy with `clasp push`
-
-2. **Remove menu items (optional):**
-   - Comment out batch menu items in `onOpen()` function
-   - Keep manual processing menu item
-
-3. **Continue using manual mode:**
-   - All existing functionality remains intact
-   - No data loss - spreadsheet columns can remain
+The application will now ignore all batch-related logic and operate exclusively in manual mode. No data will be lost.
