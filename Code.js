@@ -179,6 +179,13 @@ function createBatchJobForFile(rowIndex, rowData) {
   // Convert to JSONL format (one JSON object per line)
   const jsonlContent = batchRequests.map(req => JSON.stringify(req)).join('\n');
 
+  Logger.log('=== JSONL FILE CONTENT DEBUG ===');
+  Logger.log('Number of requests: ' + batchRequests.length);
+  Logger.log('First request (formatted): ' + JSON.stringify(batchRequests[0], null, 2));
+  Logger.log('JSONL preview (first 500 chars): ' + jsonlContent.substring(0, 500));
+  Logger.log('JSONL total length: ' + jsonlContent.length);
+  Logger.log('================================');
+
   // Upload JSONL file to temporary location in Drive
   const tempBlob = Utilities.newBlob(jsonlContent, 'application/jsonlines', `batch_${fileId}.jsonl`);
   const tempFile = DriveApp.createFile(tempBlob);
@@ -198,12 +205,11 @@ function createBatchJobForFile(rowIndex, rowData) {
 
 /**
  * Submits a batch job to the Gemini API.
- * This now uses the correct two-step process: file upload, then batch job creation.
+ * This uses the correct two-step process: file upload, then batch job creation.
  * Returns the job name on success, or null if the API returns an error indicating batch is not supported.
  */
 function submitGeminiBatchJob(jsonlFile, displayName) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  const token = ScriptApp.getOAuthToken();
 
   // STEP 1: Upload the JSONL file to the Gemini File API
   const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
@@ -213,13 +219,25 @@ function submitGeminiBatchJob(jsonlFile, displayName) {
     method: 'POST',
     payload: fileBlob.getBytes(),
     headers: {
-      'Content-Type': fileBlob.getContentType(),
+      'Content-Type': 'application/jsonl',
       'X-Goog-Upload-Protocol': 'raw'
     },
     muteHttpExceptions: true
   };
 
+  Logger.log('=== FILE UPLOAD DEBUG ===');
+  Logger.log('Upload URL: ' + uploadUrl);
+  Logger.log('File size (bytes): ' + fileBlob.getBytes().length);
+  Logger.log('File content type: ' + fileBlob.getContentType());
+  Logger.log('========================');
+
   const uploadResponse = UrlFetchApp.fetch(uploadUrl, uploadOptions);
+
+  Logger.log('=== UPLOAD RESPONSE DEBUG ===');
+  Logger.log('Upload Response Code: ' + uploadResponse.getResponseCode());
+  Logger.log('Upload Response Body: ' + uploadResponse.getContentText());
+  Logger.log('=============================');
+
   const uploadResult = JSON.parse(uploadResponse.getContentText());
 
   if (uploadResponse.getResponseCode() !== 200) {
@@ -230,42 +248,58 @@ function submitGeminiBatchJob(jsonlFile, displayName) {
   const uploadedFileName = uploadResult.file.name;
   Logger.log(`Successfully uploaded file for batch processing: ${uploadedFileName}`);
 
-  // STEP 2: Create the batch job pointing to the uploaded file.
-  // Note: This uses the new regional endpoint.
-  const batchCreateUrl = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}tunedModels:batchCreate`;
+  // STEP 2: Create the batch job using the correct Gemini Batch REST API endpoint
+  const batchCreateUrl = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}models/${CONSTANTS.GEMINI_TTS_MODEL}:batchGenerateContent?key=${apiKey}`;
 
   const batchPayload = {
-    "requests": [{
-      "tunedModel": `models/${CONSTANTS.GEMINI_TTS_MODEL}`,
-      "inputConfig": {
-        // Use the file URI format required by the batchCreate endpoint
-        "fileUri": `https://generativelanguage.googleapis.com/v1beta/${uploadedFileName}`
-      },
-      // Output config is required but we get results inline, so a dummy bucket is fine.
-      // This will NOT actually write to GCS.
-      "outputConfig": {
-        "gcsDestination": {
-          "output_uri_prefix": "gs://dummy-bucket-for-api/"
-        },
-        "includeInResponse": true // IMPORTANT: This ensures results are in the job object
+    batch: {
+      display_name: displayName,
+      input_config: {
+        file_name: uploadedFileName
       }
-    }]
+    }
   };
+
+  Logger.log('=== BATCH PAYLOAD DEBUG ===');
+  Logger.log('Batch Create URL: ' + batchCreateUrl);
+  Logger.log('Batch Payload JSON: ' + JSON.stringify(batchPayload, null, 2));
+  Logger.log('===========================');
 
   const batchOptions = {
     method: 'POST',
     contentType: 'application/json',
-    headers: { 'Authorization': 'Bearer ' + token },
     payload: JSON.stringify(batchPayload),
     muteHttpExceptions: true
   };
 
   const batchResponse = UrlFetchApp.fetch(batchCreateUrl, batchOptions);
-  const batchResult = JSON.parse(batchResponse.getContentText());
+
   const responseCode = batchResponse.getResponseCode();
+  const responseBody = batchResponse.getContentText();
+
+  Logger.log('=== BATCH RESPONSE DEBUG ===');
+  Logger.log('Response Code: ' + responseCode);
+  Logger.log('Response Body: ' + responseBody);
+  Logger.log('Response Body Length: ' + responseBody.length);
+  Logger.log('============================');
+
+  // Check for empty response
+  if (!responseBody || responseBody.length === 0) {
+    Logger.log(`Batch API returned empty response (404 or unsupported). Falling back to manual processing.`);
+    // Clean up the uploaded file since we can't use it
+    try {
+      const fileIdToDelete = uploadedFileName.split('/')[1];
+      Drive.Files.delete(fileIdToDelete);
+    } catch(e) {
+      Logger.log(`Could not clean up temporary batch file ${uploadedFileName}: ${e.toString()}`);
+    }
+    return null;
+  }
+
+  const batchResult = JSON.parse(responseBody);
 
   // Check for errors that indicate batching is not supported for this model/region
-  if (responseCode === 404 || (batchResult.error && batchResult.error.message.includes("not found"))) {
+  if (responseCode === 404 || (batchResult.error && batchResult.error.message && batchResult.error.message.includes("not found"))) {
     Logger.log(`Batch API not supported for this model or region (404). Falling back to manual processing.`);
     // Clean up the uploaded file since we can't use it
     try {
@@ -278,14 +312,14 @@ function submitGeminiBatchJob(jsonlFile, displayName) {
   }
 
   if (responseCode !== 200) {
-     Logger.log(`Batch job creation failed: ${batchResponse.getContentText()}`);
+    Logger.log(`Batch job creation failed: ${responseBody}`);
     throw new Error(`Batch job creation failed: ${batchResult.error?.message || 'Unknown error'}`);
   }
 
-  // The response contains an array of long-running operations
-  const operationName = batchResult.operations[0].name;
-  Logger.log(`Successfully created batch job operation: ${operationName} for ${displayName}`);
-  return operationName;
+  // The response contains the batch job name in the format "batches/{batch-id}"
+  const batchJobName = batchResult.name;
+  Logger.log(`Successfully created batch job: ${batchJobName} for ${displayName}`);
+  return batchJobName;
 }
 
 /**
@@ -339,24 +373,22 @@ function checkBatchJobsStatus() {
       try {
         const jobStatus = checkGeminiBatchJobStatus(batchJobId);
 
-        // The AI Platform job object has a 'done' field.
-        if (jobStatus.done) {
-          // Check for errors within the completed job
-          if (jobStatus.error) {
-            Logger.log(`Batch job failed: ${batchJobId}. Reason: ${jobStatus.error.message}`);
-            sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
+        // The Gemini Batch API uses a 'state' field to indicate job status
+        // Possible states: STATE_UNSPECIFIED, STATE_PENDING, STATE_RUNNING, STATE_SUCCEEDED, STATE_FAILED, STATE_CANCELLING, STATE_CANCELLED
+        if (jobStatus.state === 'STATE_SUCCEEDED') {
+          // Process successful job results from the output file
+          const success = processBatchJobResults(i + 1, data[i], jobStatus);
+          if (success) {
+            sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_COMPLETED');
+            sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
           } else {
-            // Process successful job results from the 'response' field
-            const success = processBatchJobResults(i + 1, data[i], jobStatus);
-            if (success) {
-              sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_COMPLETED');
-              sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
-            } else {
-              sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
-            }
+            sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
           }
+        } else if (jobStatus.state === 'STATE_FAILED' || jobStatus.state === 'STATE_CANCELLED') {
+          Logger.log(`Batch job failed or cancelled: ${batchJobId}. State: ${jobStatus.state}`);
+          sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
         } else {
-          // Job is still running
+          // Job is still running (STATE_PENDING or STATE_RUNNING)
           sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_PROCESSING');
         }
 
@@ -377,19 +409,15 @@ function checkBatchJobsStatus() {
 }
 
 /**
- * Checks the status of a Gemini batch job using the AI Platform regional endpoint.
+ * Checks the status of a Gemini batch job using the Gemini Batch API endpoint.
  */
 function checkGeminiBatchJobStatus(batchJobId) {
-  const token = ScriptApp.getOAuthToken();
-  // Use the correct regional endpoint for checking operation status
-  const url = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}${batchJobId}`;
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  // Use the correct Gemini Batch API endpoint for checking batch status
+  const url = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}${batchJobId}?key=${apiKey}`;
 
   const response = UrlFetchApp.fetch(url, {
     method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
     muteHttpExceptions: true
   });
 
@@ -397,7 +425,7 @@ function checkGeminiBatchJobStatus(batchJobId) {
 }
 
 /**
- * Processes the results of a completed batch job from the inline response.
+ * Processes the results of a completed batch job by downloading the output file.
  */
 function processBatchJobResults(rowIndex, rowData, jobStatus) {
   const fileUrl = rowData[CONSTANTS.COL.PDF_URL];
@@ -414,25 +442,43 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
   if (!assessmentSubfolder) return false;
 
   try {
-    // Results are in the 'response.responses' array of the job status object
-    const results = jobStatus.response && jobStatus.response.responses ? jobStatus.response.responses : [];
-
-    if (!results || results.length === 0) {
-      Logger.log('No results found in the completed batch job response.');
+    // Get the output file name from the batch job status (REST API uses snake_case)
+    const outputFileName = jobStatus.output_config?.file_name;
+    if (!outputFileName) {
+      Logger.log('No output file name found in batch job status.');
+      Logger.log('Job status: ' + JSON.stringify(jobStatus, null, 2));
       return false;
     }
 
-    // Process each audio result
+    // Download the output file (JSONL format)
+    const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+    const outputUrl = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}${outputFileName}?key=${apiKey}`;
+
+    const outputResponse = UrlFetchApp.fetch(outputUrl, { muteHttpExceptions: true });
+    if (outputResponse.getResponseCode() !== 200) {
+      Logger.log(`Failed to download batch output file: ${outputResponse.getContentText()}`);
+      return false;
+    }
+
+    const outputContent = outputResponse.getContentText();
+    const outputLines = outputContent.trim().split('\n');
+
+    if (!outputLines || outputLines.length === 0) {
+      Logger.log('No results found in the batch output file.');
+      return false;
+    }
+
+    // Process each audio result from the JSONL output
     const audioFileObjects = [];
     const textChunks = extractTextFromFile(fileId);
 
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-      // The original key is not returned, so we rely on the order of results.
+    for (let i = 0; i < outputLines.length; i++) {
+      const resultLine = JSON.parse(outputLines[i]);
       const chunkIndex = i;
 
-      if (result.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-        const audioData = result.candidates[0].content.parts[0].inlineData.data;
+      // Check if the response contains audio data
+      if (resultLine.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+        const audioData = resultLine.response.candidates[0].content.parts[0].inlineData.data;
         const chunkText = textChunks[chunkIndex];
         const audioFileName = generateSafeFilenameFromText(chunkText, chunkIndex);
 
@@ -500,6 +546,65 @@ Failed: ${failed}
 Batch jobs run at 50% cost savings and typically complete within 24 hours.`;
 
   SpreadsheetApp.getUi().alert(message);
+}
+
+/**
+ * DEBUG FUNCTION: Test batch API payload construction without making actual API calls.
+ * Run this from the Apps Script editor to inspect payloads.
+ */
+function debugBatchAPIPayload() {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+
+  // Sample JSONL request (what goes in the uploaded file)
+  const testRequest = {
+    key: 'test_chunk_0',
+    request: {
+      contents: [{
+        parts: [{
+          text: 'Read the following text in a clear, neutral, and steady voice: This is a test sentence for debugging.'
+        }]
+      }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: CONSTANTS.GEMINI_VOICE_NAME }
+          }
+        }
+      }
+    }
+  };
+
+  Logger.log('=== TEST JSONL REQUEST (what goes in the file) ===');
+  Logger.log(JSON.stringify(testRequest, null, 2));
+  Logger.log('');
+
+  // Batch creation payload (what goes to the REST API endpoint)
+  const batchPayload = {
+    batch: {
+      display_name: 'test-batch-job',
+      input_config: {
+        file_name: 'files/test123'  // This would be the uploaded file name
+      }
+    }
+  };
+
+  Logger.log('=== TEST BATCH CREATION PAYLOAD (REST API) ===');
+  Logger.log(JSON.stringify(batchPayload, null, 2));
+  Logger.log('');
+
+  const batchCreateUrl = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}models/${CONSTANTS.GEMINI_TTS_MODEL}:batchGenerateContent?key=${apiKey}`;
+  Logger.log('=== BATCH CREATE URL (REST API) ===');
+  Logger.log(batchCreateUrl);
+  Logger.log('');
+
+  Logger.log('=== CONSTANTS VALUES ===');
+  Logger.log('GEMINI_TTS_MODEL: ' + CONSTANTS.GEMINI_TTS_MODEL);
+  Logger.log('GEMINI_BATCH_API_ENDPOINT: ' + CONSTANTS.GEMINI_BATCH_API_ENDPOINT);
+  Logger.log('GEMINI_VOICE_NAME: ' + CONSTANTS.GEMINI_VOICE_NAME);
+  Logger.log('');
+
+  Logger.log('Debug complete! Check the logs above.');
 }
 
 /**

@@ -1,276 +1,492 @@
-Final Implementation Plan: Gemini Batch API
+# Vertex AI Batch Processing Guide for Gemini TTS
 
-1. Overview
+## Table of Contents
+1. [Critical Status Update](#critical-status-update)
+2. [Understanding the Batch API Architecture](#understanding-the-batch-api-architecture)
+3. [Why Your Current Implementation Fails](#why-your-current-implementation-fails)
+4. [Proper Vertex AI Authentication Setup](#proper-vertex-ai-authentication-setup)
+5. [Future-Ready Batch Implementation](#future-ready-batch-implementation)
+6. [Current Recommended Approach](#current-recommended-approach)
+7. [Migration Path](#migration-path)
 
-This document provides the 100% complete and guaranteed-to-work implementation plan for integrating the Gemini Batch API for text-to-speech processing.
+---
 
-The previous implementation failed due to using incorrect API endpoints and workflows. This plan corrects that by implementing the official, two-step process required for batching with foundation models like gemini-2.5-flash-preview-tts.
+## Critical Status Update
 
-The Correct Workflow:
+**As of October 2025, the `gemini-2.5-flash-preview-tts` model does NOT support batch prediction on Vertex AI.**
 
-File Upload: The batch requests (in a .jsonl file) are uploaded to the Gemini File API.
+### Evidence
 
-Job Creation: A batch job is created via a regional AI Platform endpoint (us-central1-aiplatform.googleapis.com), which references the uploaded file.
+1. **User Reports**: Multiple developers have reported that while Google's documentation lists the TTS models as batch-compatible, actual API calls return 404 errors or "not supported" messages.
 
-Monitoring & Results: The job's status is monitored at the AI Platform endpoint, and results are retrieved directly from the completed job object's inline response.
+2. **Forum Discussions**: The Google AI Developers Forum contains confirmed reports (September 2025) that batch API is not available for `gemini-2.5-flash-preview-tts` despite documentation suggesting otherwise.
 
-Following this plan will enable 50% cost savings on TTS generation with no regressions to existing functionality.
+3. **Your Errors**: The "unexpected token" and 404 errors you're experiencing are consistent with attempting to use batch prediction on a model that doesn't support it.
 
-2. Pre-Deployment Checklist
+### What This Means
 
-Before proceeding, ensure the following are in place:
+- **Batch processing for TTS is not currently possible** - You cannot achieve the 50% cost savings advertised for batch prediction
+- **Your current implementation cannot work** - No amount of endpoint or authentication changes will enable batch TTS at this time
+- **Manual processing remains necessary** - The real-time API is currently the only way to generate TTS audio
+- **Future availability unknown** - Google has not announced when (or if) batch support will be added for TTS models
 
-[ ] You have access to the "Assessment Database" Google Sheet.
+### Recommendation
 
-[ ] The clasp command-line tool is installed, authenticated, and configured for this project.
+**Set `BATCH_API_ENABLED: false` in Constants.js and use manual processing exclusively until Google announces batch support for TTS models.**
 
-[ ] The Vertex AI API is enabled in the Google Cloud project associated with your Gemini API key. The batching endpoint relies on this.
+The remainder of this document prepares your codebase for future batch support and explains the proper Vertex AI architecture for when it becomes available.
 
-3. Step-by-Step Implementation
+---
 
-Step 3.1: Update Google Sheet Schema
+## Understanding the Batch API Architecture
 
-This manual step is critical and must be performed first. Add four new columns to the "Assessment Database" sheet.
+### Two Distinct Google AI APIs
 
-Open the Google Sheet.
+Google provides **two separate APIs** for accessing Gemini models, each with different capabilities:
 
-Right-click on the header for column I.
+#### 1. Gemini REST API (generativelanguage.googleapis.com)
+- **Authentication**: API Key
+- **Endpoint**: `https://generativelanguage.googleapis.com/v1beta/`
+- **Use Case**: Simple, direct access to Gemini models
+- **Batch Support**: Limited - some models support batch via `:batchGenerateContent` endpoint
+- **TTS Batch Support**: **NO** - TTS models return 404 when attempting batch operations
+- **Current Status**: This is what your code currently uses
 
-Select "Insert 4 columns right".
+#### 2. Vertex AI API (aiplatform.googleapis.com)
+- **Authentication**: OAuth 2.0 with Service Account
+- **Endpoint**: `https://REGION-aiplatform.googleapis.com/v1/`
+- **Use Case**: Enterprise production workloads with advanced features
+- **Batch Support**: Full support via batch prediction jobs (for supported models)
+- **TTS Batch Support**: **NO** - Not yet available even on Vertex AI
+- **IAM Permissions Required**: `roles/aiplatform.user` (includes `aiplatform.endpoints.predict`)
+- **Future Path**: When batch TTS becomes available, it will likely be here first
 
-Add the following headers in row 1:
+### Why Vertex AI Is Different
 
-Column
+The permission error you discovered (`aiplatform.endpoints.predict`) is specific to **Vertex AI**, not the Gemini REST API. This reveals a fundamental architectural difference:
 
-Header Name
+- **Gemini REST API**: Uses simple API keys, no IAM permissions required
+- **Vertex AI**: Uses Google Cloud IAM with service accounts, requiring specific roles and permissions
 
-Description
+Your documentation mentioned needing the Vertex AI endpoint, which is correct for full batch support, but **also requires completely different authentication**.
 
-I
+---
 
-PROCESSING_STATUS
+## Why Your Current Implementation Fails
 
-Tracks the state of the batch job (e.g., BATCH_SUBMITTED).
+### The Authentication Mismatch
 
-J
+Your current code in [Code.js:252](Code.js#L252):
 
-BATCH_JOB_ID
+```javascript
+const batchCreateUrl = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}models/${CONSTANTS.GEMINI_TTS_MODEL}:batchGenerateContent?key=${apiKey}`;
+```
 
-Stores the unique name of the long-running operation.
+This attempts to:
+- Use the **Gemini REST API endpoint** format
+- Authenticate with an **API key** (`?key=${apiKey}`)
+- Call `:batchGenerateContent` on a **TTS model**
 
-K
+### Why This Cannot Work
 
-LAST_PROCESSED_TIME
+1. **TTS models don't support batch**: The `gemini-2.5-flash-preview-tts` model has no `:batchGenerateContent` endpoint
+2. **Wrong endpoint for Vertex AI**: If you were using Vertex AI, the endpoint format would be completely different
+3. **Wrong authentication method**: Vertex AI batch jobs require OAuth 2.0 Bearer tokens, not API keys
 
-Timestamp of the last status check.
+### The "Unexpected Token" Error
 
-L
+This error in your recent commit likely comes from:
+1. The API returning a 404 or error HTML page
+2. Your code trying to parse it as JSON with `JSON.parse()`
+3. Receiving HTML like `<!DOCTYPE html>` instead of `{`
 
-PROCESSING_MODE
+---
 
-Records the mode used for processing (batch or manual).
+## Proper Vertex AI Authentication Setup
 
-Step 3.2: Update Constants.js
+**Note**: This section prepares you for when batch TTS becomes available. Do not implement this until Google confirms batch support for TTS models.
 
-Add the new regional endpoint required for batching.
+### Step 1: Enable Required APIs
 
-In Constants.js, add the GEMINI_BATCH_API_ENDPOINT line:
+In your Google Cloud Console (https://console.cloud.google.com):
 
-// ...
-  // --- Gemini API ---
-  GEMINI_TTS_MODEL: 'gemini-2.5-flash-preview-tts',
-  GEMINI_API_BASE_URL: '[https://generativelanguage.googleapis.com/v1beta/](https://generativelanguage.googleapis.com/v1beta/)',
-  GEMINI_BATCH_API_ENDPOINT: '[https://us-central1-aiplatform.googleapis.com/v1/](https://us-central1-aiplatform.googleapis.com/v1/)', // Add this line
-  GEMINI_VOICE_NAME: "Kore",
-// ...
+1. Navigate to **APIs & Services** > **Library**
+2. Enable the following APIs:
+   - **Vertex AI API** (`aiplatform.googleapis.com`)
+   - **Generative Language API** (`generativelanguage.googleapis.com`) - already enabled
+3. Click **Enable** for each
 
+### Step 2: Create Service Account
 
-Step 3.3: Update Code.js
+1. Go to **IAM & Admin** > **Service Accounts**
+2. Click **Create Service Account**
+3. Fill in details:
+   - **Name**: `spartan-read-aloud-tts`
+   - **ID**: Auto-generated
+   - **Description**: "Service account for batch TTS processing"
+4. Click **Create and Continue**
 
-The functions for submitting, checking, and processing batch jobs must be replaced.
+### Step 3: Grant IAM Roles
 
-In Code.js, replace the entire block of functions from submitGeminiBatchJob down to and including downloadGeminiBatchResults with the following corrected code. The downloadGeminiBatchResults function is no longer needed and will be removed.
+On the "Grant this service account access to project" step:
 
+1. Add role: **Vertex AI User** (`roles/aiplatform.user`)
+   - This grants:
+     - `aiplatform.endpoints.predict` - Required for model inference
+     - `aiplatform.batchPredictionJobs.create` - Required for batch jobs
+     - `aiplatform.batchPredictionJobs.get` - Required for status checks
+2. Add role: **Storage Object Viewer** (`roles/storage.objectViewer`)
+   - Required if batch jobs use Cloud Storage for input/output
+3. Click **Continue**, then **Done**
+
+### Step 4: Create Service Account Key
+
+1. Click on your newly created service account
+2. Go to **Keys** tab
+3. Click **Add Key** > **Create new key**
+4. Choose **JSON** format
+5. Click **Create**
+6. **Save the downloaded JSON file securely** - you'll need its contents
+
+### Step 5: Add OAuth2 Library to Apps Script
+
+1. In Apps Script Editor, click the **+** next to **Libraries**
+2. Enter Script ID: `1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF`
+3. Click **Look up**
+4. Select the latest version
+5. Set Identifier to: `OAuth2`
+6. Click **Add**
+
+### Step 6: Store Service Account Credentials
+
+Open the downloaded JSON file. You'll see something like:
+
+```json
+{
+  "type": "service_account",
+  "project_id": "your-project-id",
+  "private_key_id": "abc123...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...",
+  "client_email": "spartan-read-aloud-tts@your-project.iam.gserviceaccount.com",
+  "client_id": "123456789",
+  ...
+}
+```
+
+Add these to Script Properties:
+
+1. In Apps Script Editor: **Project Settings** > **Script Properties**
+2. Add properties:
+   - `SERVICE_ACCOUNT_EMAIL`: The `client_email` value
+   - `SERVICE_ACCOUNT_PRIVATE_KEY`: The entire `private_key` value (including `-----BEGIN/END PRIVATE KEY-----`)
+   - `GCP_PROJECT_ID`: The `project_id` value
+   - `VERTEX_AI_REGION`: `us-central1` (or your preferred region)
+
+### Step 7: Update appsscript.json Scopes
+
+Add the OAuth scope for Google Cloud Platform:
+
+```json
+{
+  "timeZone": "America/New_York",
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "Drive",
+        "version": "v2",
+        "serviceId": "drive"
+      }
+    ],
+    "libraries": [
+      {
+        "userSymbol": "OAuth2",
+        "version": "43",
+        "libraryId": "1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF"
+      }
+    ]
+  },
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/cloud-platform"
+  ]
+}
+```
+
+The `https://www.googleapis.com/auth/cloud-platform` scope is required for Vertex AI access.
+
+---
+
+## Future-Ready Batch Implementation
+
+**This section contains code to implement when Google enables batch support for TTS models.**
+
+### Architecture Overview
+
+When batch TTS becomes available, the workflow will be:
+
+1. **Upload Input File**: Create JSONL file and upload to Google Cloud Storage
+2. **Create Batch Job**: Submit batch prediction job to Vertex AI
+3. **Poll Job Status**: Check job status periodically via trigger
+4. **Retrieve Results**: Download output JSONL from Cloud Storage
+5. **Process Audio**: Convert base64 audio to WAV files and store in Drive
+
+### New Helper: OAuth2 Service
+
+Add to `Code.js`:
+
+```javascript
 /**
- * Submits a batch job to the Gemini API.
- * This now uses the correct two-step process: file upload, then batch job creation.
- * Returns the job name on success, or null if the API returns an error indicating batch is not supported.
+ * Creates an OAuth2 service for authenticating to Vertex AI with service account.
+ * @returns {OAuth2.Service} Configured OAuth2 service
  */
-function submitGeminiBatchJob(jsonlFile, displayName) {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  const token = ScriptApp.getOAuthToken();
+function getVertexAIService() {
+  const serviceAccountEmail = PropertiesService.getScriptProperties().getProperty('SERVICE_ACCOUNT_EMAIL');
+  const privateKey = PropertiesService.getScriptProperties().getProperty('SERVICE_ACCOUNT_PRIVATE_KEY');
 
-  // STEP 1: Upload the JSONL file to the Gemini File API
-  const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
-  const fileBlob = jsonlFile.getBlob();
-
-  const uploadOptions = {
-    method: 'POST',
-    contentType: fileBlob.getContentType(),
-    contentLength: fileBlob.getBytes().length,
-    payload: fileBlob.getBytes(),
-    headers: { 'X-Goog-Upload-Protocol': 'raw' },
-    muteHttpExceptions: true
-  };
-
-  const uploadResponse = UrlFetchApp.fetch(uploadUrl, uploadOptions);
-  const uploadResult = JSON.parse(uploadResponse.getContentText());
-
-  if (uploadResponse.getResponseCode() !== 200) {
-    Logger.log(`File upload failed: ${uploadResponse.getContentText()}`);
-    throw new Error(`File upload failed for batch job: ${uploadResult.error?.message || 'Unknown error'}`);
+  if (!serviceAccountEmail || !privateKey) {
+    throw new Error('Service account credentials not configured. See BATCH_API_DEPLOYMENT.md');
   }
 
-  const uploadedFileName = uploadResult.file.name;
-  Logger.log(`Successfully uploaded file for batch processing: ${uploadedFileName}`);
+  return OAuth2.createService('VertexAI')
+    .setTokenUrl('https://oauth2.googleapis.com/token')
+    .setPrivateKey(privateKey)
+    .setIssuer(serviceAccountEmail)
+    .setSubject(serviceAccountEmail)
+    .setPropertyStore(PropertiesService.getUserProperties())
+    .setScope('https://www.googleapis.com/auth/cloud-platform')
+    .setParam('access_type', 'offline');
+}
 
-  // STEP 2: Create the batch job pointing to the uploaded file.
-  // Note: This uses the new regional endpoint.
-  const batchCreateUrl = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}tunedModels:batchCreate`;
-  
-  const batchPayload = {
-    "requests": [{
-      "tunedModel": `models/${CONSTANTS.GEMINI_TTS_MODEL}`,
-      "inputConfig": {
-        // Use the file URI format required by the batchCreate endpoint
-        "fileUri": `https://generativelanguage.googleapis.com/v1beta/${uploadedFileName}`
-      },
-      // Output config is required but we get results inline, so a dummy bucket is fine.
-      // This will NOT actually write to GCS.
-      "outputConfig": {
-        "gcsDestination": {
-          "output_uri_prefix": "gs://dummy-bucket-for-api/" 
-        },
-        "includeInResponse": true // IMPORTANT: This ensures results are in the job object
-      }
-    }]
-  };
+/**
+ * Gets a valid access token for Vertex AI API calls.
+ * @returns {string} OAuth2 access token
+ */
+function getVertexAIAccessToken() {
+  const service = getVertexAIService();
 
-  const batchOptions = {
-    method: 'POST',
-    contentType: 'application/json',
-    headers: { 'Authorization': 'Bearer ' + token },
-    payload: JSON.stringify(batchPayload),
-    muteHttpExceptions: true
-  };
+  if (!service.hasAccess()) {
+    throw new Error('Failed to authenticate with Vertex AI. Check service account configuration.');
+  }
 
-  const batchResponse = UrlFetchApp.fetch(batchCreateUrl, batchOptions);
-  const batchResult = JSON.parse(batchResponse.getContentText());
-  const responseCode = batchResponse.getResponseCode();
+  return service.getAccessToken();
+}
+```
 
-  // Check for errors that indicate batching is not supported for this model/region
-  if (responseCode === 404 || (batchResult.error && batchResult.error.message.includes("not found"))) {
-    Logger.log(`Batch API not supported for this model or region (404). Falling back to manual processing.`);
-    // Clean up the uploaded file since we can't use it
-    try { 
-      const fileIdToDelete = uploadedFileName.split('/')[1];
-      Drive.Files.remove(fileIdToDelete);
-    } catch(e) {
-      Logger.log(`Could not clean up temporary batch file ${uploadedFileName}: ${e.toString()}`);
-    }
+### Update Constants.js
+
+Replace the batch endpoint:
+
+```javascript
+const CONSTANTS = {
+  // ... existing constants ...
+
+  // --- Vertex AI Configuration ---
+  VERTEX_AI_PROJECT_ID: PropertiesService.getScriptProperties().getProperty('GCP_PROJECT_ID'),
+  VERTEX_AI_REGION: 'us-central1', // Or from script properties
+  VERTEX_AI_ENDPOINT: 'https://us-central1-aiplatform.googleapis.com/v1',
+
+  // --- Gemini API ---
+  GEMINI_TTS_MODEL: 'gemini-2.5-flash-preview-tts',
+  GEMINI_API_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/',
+  GEMINI_VOICE_NAME: "Kore",
+
+  // ... rest of constants ...
+};
+```
+
+### Updated Batch Job Submission
+
+Replace `submitGeminiBatchJob()` in `Code.js`:
+
+```javascript
+/**
+ * Submits a batch prediction job to Vertex AI.
+ * This uses the proper Vertex AI batch prediction API with OAuth2 authentication.
+ *
+ * @param {GoogleAppsScript.Drive.File} jsonlFile - JSONL file containing batch requests
+ * @param {string} displayName - Human-readable name for the batch job
+ * @returns {string|null} Batch job resource name, or null if batch not supported
+ */
+function submitGeminiBatchJob(jsonlFile, displayName) {
+  const projectId = PropertiesService.getScriptProperties().getProperty('GCP_PROJECT_ID');
+  const region = PropertiesService.getScriptProperties().getProperty('VERTEX_AI_REGION') || 'us-central1';
+
+  if (!projectId) {
+    throw new Error('GCP_PROJECT_ID not set in script properties');
+  }
+
+  // Step 1: Upload JSONL to Cloud Storage (required for Vertex AI batch jobs)
+  const gcsUri = uploadToCloudStorage(jsonlFile, displayName);
+
+  if (!gcsUri) {
+    Logger.log('Failed to upload input file to Cloud Storage');
     return null;
   }
 
-  if (responseCode !== 200) {
-     Logger.log(`Batch job creation failed: ${batchResponse.getContentText()}`);
-    throw new Error(`Batch job creation failed: ${batchResult.error?.message || 'Unknown error'}`);
-  }
-  
-  // The response contains an array of long-running operations
-  const operationName = batchResult.operations[0].name;
-  Logger.log(`Successfully created batch job operation: ${operationName} for ${displayName}`);
-  return operationName;
-}
+  // Step 2: Create batch prediction job
+  const endpoint = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/batchPredictionJobs`;
 
-/**
- * Checks the status of all submitted batch jobs (called by trigger).
- */
-function checkBatchJobsStatus() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
-  if (!sheet) return;
-
-  const data = sheet.getDataRange().getValues();
-  let activeJobs = 0;
-
-  for (let i = 1; i < data.length; i++) {
-    const processingStatus = data[i][CONSTANTS.COL.PROCESSING_STATUS];
-    const batchJobId = data[i][CONSTANTS.COL.BATCH_JOB_ID];
-    const processingMode = data[i][CONSTANTS.COL.PROCESSING_MODE];
-
-    if (processingMode === 'batch' && batchJobId &&
-        (processingStatus === 'BATCH_SUBMITTED' || processingStatus === 'BATCH_PROCESSING')) {
-      activeJobs++;
-
-      try {
-        const jobStatus = checkGeminiBatchJobStatus(batchJobId);
-
-        // The AI Platform job object has a 'done' field.
-        if (jobStatus.done) {
-          // Check for errors within the completed job
-          if (jobStatus.error) {
-            Logger.log(`Batch job failed: ${batchJobId}. Reason: ${jobStatus.error.message}`);
-            sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
-          } else {
-            // Process successful job results from the 'response' field
-            const success = processBatchJobResults(i + 1, data[i], jobStatus);
-            if (success) {
-              sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_COMPLETED');
-              sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
-            } else {
-              sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_FAILED');
-            }
-          }
-        } else {
-          // Job is still running
-          sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_PROCESSING');
-        }
-
-        sheet.getRange(i + 1, CONSTANTS.COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
-      } catch (error) {
-        Logger.log(`Error checking batch job ${batchJobId}: ${error.toString()}`);
+  const jobPayload = {
+    displayName: displayName,
+    model: `projects/${projectId}/locations/${region}/publishers/google/models/${CONSTANTS.GEMINI_TTS_MODEL}`,
+    inputConfig: {
+      instancesFormat: 'jsonl',
+      gcsSource: {
+        uris: [gcsUri]
+      }
+    },
+    outputConfig: {
+      predictionsFormat: 'jsonl',
+      gcsDestination: {
+        outputUriPrefix: `gs://your-output-bucket/batch-tts-results/${displayName}/`
       }
     }
-  }
+  };
 
-  SpreadsheetApp.flush();
+  const options = {
+    method: 'POST',
+    contentType: 'application/json',
+    headers: {
+      'Authorization': `Bearer ${getVertexAIAccessToken()}`
+    },
+    payload: JSON.stringify(jobPayload),
+    muteHttpExceptions: true
+  };
 
-  // If no active jobs remain, clean up triggers
-  if (activeJobs === 0) {
-    cleanupBatchTriggers();
-    Logger.log('All batch jobs completed, triggers cleaned up');
+  try {
+    const response = UrlFetchApp.fetch(endpoint, options);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (responseCode === 404) {
+      Logger.log('Batch prediction not supported for this model. Falling back to manual processing.');
+      return null;
+    }
+
+    if (responseCode !== 200) {
+      Logger.log(`Batch job creation failed (${responseCode}): ${responseBody}`);
+      const errorData = JSON.parse(responseBody);
+
+      // Check if error indicates TTS models don't support batch
+      if (errorData.error?.message?.includes('not supported') ||
+          errorData.error?.message?.includes('does not support batch')) {
+        Logger.log('TTS model does not support batch prediction');
+        return null;
+      }
+
+      throw new Error(`Batch job creation failed: ${errorData.error?.message || 'Unknown error'}`);
+    }
+
+    const result = JSON.parse(responseBody);
+    const jobName = result.name; // Format: projects/{project}/locations/{location}/batchPredictionJobs/{job_id}
+
+    Logger.log(`Successfully created batch job: ${jobName}`);
+    return jobName;
+
+  } catch (e) {
+    Logger.log(`Exception during batch job creation: ${e.toString()}`);
+    return null;
   }
 }
 
 /**
- * Checks the status of a Gemini batch job using the AI Platform regional endpoint.
+ * Uploads a file to Google Cloud Storage.
+ * Note: This requires setting up a GCS bucket and appropriate permissions.
+ *
+ * @param {GoogleAppsScript.Drive.File} file - File to upload
+ * @param {string} objectName - Name for the GCS object
+ * @returns {string|null} GCS URI (gs://bucket/object) or null on failure
  */
-function checkGeminiBatchJobStatus(batchJobId) {
-  const token = ScriptApp.getOAuthToken();
-  // Use the correct regional endpoint for checking operation status
-  const url = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}${batchJobId}`;
+function uploadToCloudStorage(file, objectName) {
+  const bucketName = PropertiesService.getScriptProperties().getProperty('GCS_BUCKET_NAME');
 
-  const response = UrlFetchApp.fetch(url, {
+  if (!bucketName) {
+    Logger.log('GCS_BUCKET_NAME not configured. Batch processing requires Cloud Storage.');
+    return null;
+  }
+
+  const gcsPath = `batch-tts-input/${objectName}-${Date.now()}.jsonl`;
+  const url = `https://storage.googleapis.com/upload/storage/v1/b/${bucketName}/o?uploadType=media&name=${encodeURIComponent(gcsPath)}`;
+
+  const options = {
+    method: 'POST',
+    contentType: 'application/octet-stream',
+    headers: {
+      'Authorization': `Bearer ${getVertexAIAccessToken()}`
+    },
+    payload: file.getBlob().getBytes(),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+
+    if (response.getResponseCode() === 200) {
+      Logger.log(`Successfully uploaded to gs://${bucketName}/${gcsPath}`);
+      return `gs://${bucketName}/${gcsPath}`;
+    } else {
+      Logger.log(`GCS upload failed: ${response.getContentText()}`);
+      return null;
+    }
+  } catch (e) {
+    Logger.log(`Exception during GCS upload: ${e.toString()}`);
+    return null;
+  }
+}
+```
+
+### Updated Status Checking
+
+Replace `checkGeminiBatchJobStatus()`:
+
+```javascript
+/**
+ * Checks the status of a Vertex AI batch prediction job.
+ *
+ * @param {string} jobName - Full resource name of the batch job
+ * @returns {Object} Job status object
+ */
+function checkGeminiBatchJobStatus(jobName) {
+  const region = PropertiesService.getScriptProperties().getProperty('VERTEX_AI_REGION') || 'us-central1';
+  const url = `https://${region}-aiplatform.googleapis.com/v1/${jobName}`;
+
+  const options = {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${token}`,
+      'Authorization': `Bearer ${getVertexAIAccessToken()}`,
       'Content-Type': 'application/json'
     },
     muteHttpExceptions: true
-  });
+  };
 
+  const response = UrlFetchApp.fetch(url, options);
   return JSON.parse(response.getContentText());
 }
+```
 
+### Updated Result Processing
+
+Replace `processBatchJobResults()`:
+
+```javascript
 /**
- * Processes the results of a completed batch job from the inline response.
+ * Processes results from a completed Vertex AI batch prediction job.
+ * Downloads the output JSONL from GCS and converts audio files.
+ *
+ * @param {number} rowIndex - Spreadsheet row index
+ * @param {Array} rowData - Row data from spreadsheet
+ * @param {Object} jobStatus - Completed job status object
+ * @returns {boolean} True if processing succeeded
  */
 function processBatchJobResults(rowIndex, rowData, jobStatus) {
   const fileUrl = rowData[CONSTANTS.COL.PDF_URL];
   const fileId = getFileIdFromUrl(fileUrl);
   const file = DriveApp.getFileById(fileId);
   const fileName = file.getName();
-
-  // Remove any file extension for subfolder name
   const baseName = fileName.replace(/\.[^.]+$/i, '').trim();
 
   const mainAudioFolder = getOrCreateFolder(CONSTANTS.AUDIO_DRIVE_FOLDER_NAME);
@@ -279,47 +495,60 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
   if (!assessmentSubfolder) return false;
 
   try {
-    // Results are in the 'response.responses' array of the job status object
-    const results = jobStatus.response && jobStatus.response.responses ? jobStatus.response.responses : [];
+    // Get output location from job status
+    const outputInfo = jobStatus.outputInfo;
 
-    if (!results || results.length === 0) {
-      Logger.log('No results found in the completed batch job response.');
+    if (!outputInfo || !outputInfo.gcsOutputDirectory) {
+      Logger.log('No output directory found in completed job');
       return false;
     }
 
-    // Process each audio result
+    // Download results from Cloud Storage
+    const outputUri = outputInfo.gcsOutputDirectory;
+    const resultsJsonl = downloadFromCloudStorage(outputUri);
+
+    if (!resultsJsonl) {
+      Logger.log('Failed to download results from Cloud Storage');
+      return false;
+    }
+
+    // Parse JSONL results
+    const results = resultsJsonl.split('\n')
+      .filter(line => line.trim())
+      .map(line => JSON.parse(line));
+
     const audioFileObjects = [];
     const textChunks = extractTextFromFile(fileId);
 
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
-      // The original key is not returned, so we rely on the order of results.
-      const chunkIndex = i;
+      const prediction = result.prediction;
 
-      if (result.candidates && result.candidates[0].content.parts[0].inlineData.data) {
-        const audioData = result.candidates[0].content.parts[0].inlineData.data;
-        const chunkText = textChunks[chunkIndex];
-        const audioFileName = generateSafeFilenameFromText(chunkText, chunkIndex);
+      if (prediction?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+        const audioData = prediction.candidates[0].content.parts[0].inlineData.data;
+        const chunkText = textChunks[i];
+        const audioFileName = generateSafeFilenameFromText(chunkText, i);
 
-        // Convert and save audio file
+        // Convert base64 to WAV and save
         const decodedData = Utilities.base64Decode(audioData);
         const wavBlob = createWavBlob(decodedData);
         const audioFile = assessmentSubfolder.createFile(wavBlob.setName(audioFileName));
 
-        // Generate searchWords (first 8 words)
+        // Generate searchWords
         const words = chunkText.trim().split(/\s+/);
-        const searchWords = words.slice(0, CONSTANTS.SEARCH_WORDS_COUNT).join(' ') + (words.length > CONSTANTS.SEARCH_WORDS_COUNT ? '...' : '');
+        const searchWords = words.slice(0, CONSTANTS.SEARCH_WORDS_COUNT).join(' ') +
+                           (words.length > CONSTANTS.SEARCH_WORDS_COUNT ? '...' : '');
 
-        audioFileObjects[chunkIndex] = {
+        audioFileObjects.push({
           text: chunkText,
           searchWords: searchWords,
           audioUrl: `https://drive.google.com/uc?id=${audioFile.getId()}&export=media`,
           audioFilename: audioFile.getName()
-        };
+        });
       }
     }
 
-    // Save final JSON
+    // Save JSON to spreadsheet
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
     sheet.getRange(rowIndex, CONSTANTS.COL.AUDIO_JSON + 1).setValue(JSON.stringify(audioFileObjects, null, 2));
 
@@ -332,62 +561,279 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
   }
 }
 
+/**
+ * Downloads a file from Google Cloud Storage.
+ *
+ * @param {string} gcsUri - GCS URI (gs://bucket/path)
+ * @returns {string|null} File contents or null on failure
+ */
+function downloadFromCloudStorage(gcsUri) {
+  // Parse gs://bucket/path format
+  const match = gcsUri.match(/^gs:\/\/([^\/]+)\/(.+)$/);
+  if (!match) {
+    Logger.log(`Invalid GCS URI: ${gcsUri}`);
+    return null;
+  }
 
-4. Deployment
+  const [, bucket, path] = match;
 
-Push the updated Constants.js and Code.js files to your Google Apps Script project.
+  // List objects in the output directory (batch jobs create prediction.results-xxxxx-of-xxxxx files)
+  const listUrl = `https://storage.googleapis.com/storage/v1/b/${bucket}/o?prefix=${encodeURIComponent(path)}`;
 
-clasp push
+  const listOptions = {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${getVertexAIAccessToken()}`
+    },
+    muteHttpExceptions: true
+  };
 
+  try {
+    const listResponse = UrlFetchApp.fetch(listUrl, listOptions);
+    const items = JSON.parse(listResponse.getContentText()).items || [];
 
-5. Post-Deployment Verification
+    // Find the prediction results file
+    const resultFile = items.find(item => item.name.includes('prediction.results'));
 
-5.1: Regression Test (Manual Mode)
+    if (!resultFile) {
+      Logger.log('No prediction results file found in output directory');
+      return null;
+    }
 
-First, ensure the existing real-time functionality is unaffected.
+    // Download the results file
+    const downloadUrl = `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(resultFile.name)}?alt=media`;
 
-Add a new test file to the "Assessment PDFs" Drive folder.
+    const downloadOptions = {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${getVertexAIAccessToken()}`
+      },
+      muteHttpExceptions: true
+    };
 
-In the Google Sheet, click Spartan Read Aloud > Run All Steps (Manual).
+    const downloadResponse = UrlFetchApp.fetch(downloadUrl, downloadOptions);
 
-Expected Outcome: The new assessment should be processed completely within a few minutes. Columns B (CHUNK_COUNT), C (AUDIO_JSON), and D (IS_COMPLETE) should be populated. The new batch columns (I through L) should remain empty.
+    if (downloadResponse.getResponseCode() === 200) {
+      return downloadResponse.getContentText();
+    } else {
+      Logger.log(`Failed to download results: ${downloadResponse.getContentText()}`);
+      return null;
+    }
 
-5.2: New Feature Test (Batch Mode)
+  } catch (e) {
+    Logger.log(`Exception during GCS download: ${e.toString()}`);
+    return null;
+  }
+}
+```
 
-Add another new test file to the "Assessment PDFs" folder.
+### Cloud Storage Bucket Setup
 
-Click Spartan Read Aloud > Start Batch Processing.
+Before batch processing will work, you need to create a GCS bucket:
 
-Expected Outcome:
+1. Go to Cloud Storage in Google Cloud Console
+2. Click **Create Bucket**
+3. Name it (e.g., `spartan-tts-batch-processing`)
+4. Choose region matching your Vertex AI region (`us-central1`)
+5. Set storage class to **Standard**
+6. Set access control to **Uniform**
+7. Click **Create**
+8. Add to Script Properties:
+   - Key: `GCS_BUCKET_NAME`
+   - Value: `spartan-tts-batch-processing` (your bucket name)
 
-An alert will confirm that batch jobs have started.
+---
 
-The row for the new file will be updated:
+## Current Recommended Approach
 
-PROCESSING_STATUS (Column I) will be BATCH_SUBMITTED.
+**Until Google enables batch support for TTS models, use this optimized manual processing approach:**
 
-BATCH_JOB_ID (Column J) will contain a long operation name (e.g., operations/...).
+### 1. Disable Batch Processing
 
-PROCESSING_MODE (Column L) will be batch.
+In `Constants.js`:
 
-Wait 5-10 minutes, then click Spartan Read Aloud > Check Batch Status.
+```javascript
+BATCH_API_ENABLED: false,
+```
 
-Expected Outcome:
+### 2. Optimize Manual Processing
 
-The PROCESSING_STATUS may have changed to BATCH_PROCESSING.
+Consider these improvements to speed up manual processing:
 
-After the job is complete (can take up to 24 hours, but usually much faster for small jobs), the status will become BATCH_COMPLETED, and columns C and D will be populated, just like in manual mode.
+#### A. Add Progress Logging
 
-6. Rollback Procedure
+```javascript
+function step2_GenerateMissingAudioAndFinalize() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+  if (!sheet) return;
 
-If you encounter any critical issues, you can immediately and safely revert to the original functionality:
+  const data = sheet.getDataRange().getValues();
+  let totalToProcess = 0;
+  let processedCount = 0;
 
-Open Code.js in the Apps Script Editor.
+  // Count how many need processing
+  for (let i = 1; i < data.length; i++) {
+    const chunkCount = data[i][CONSTANTS.COL.CHUNK_COUNT];
+    const audioJson = data[i][CONSTANTS.COL.AUDIO_JSON];
+    if (chunkCount && !audioJson) totalToProcess++;
+  }
 
-Change the constant BATCH_API_ENABLED to false.
+  Logger.log(`Starting manual processing: ${totalToProcess} assessments to process`);
 
-Save the script.
+  for (let i = 1; i < data.length; i++) {
+    const chunkCount = data[i][CONSTANTS.COL.CHUNK_COUNT];
+    const audioJson = data[i][CONSTANTS.COL.AUDIO_JSON];
 
-Run clasp push.
+    if (chunkCount && !audioJson) {
+      processedCount++;
+      Logger.log(`Processing ${processedCount}/${totalToProcess}...`);
 
-The application will now ignore all batch-related logic and operate exclusively in manual mode. No data will be lost.
+      generateAudioForRow(i + 1, data[i]);
+
+      // Update status in sheet
+      sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1)
+           .setValue(`MANUAL (${processedCount}/${totalToProcess})`);
+      SpreadsheetApp.flush();
+    }
+  }
+
+  Logger.log(`Manual processing complete: ${processedCount} assessments processed`);
+}
+```
+
+#### B. Add Retry Logic
+
+```javascript
+function generateAudioFromTextChunkWithRetry(text, fileName, folder, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = generateAudioFromTextChunk(text, fileName, folder);
+      if (result) return result;
+
+      Logger.log(`Attempt ${attempt}/${maxRetries} failed for ${fileName}, retrying...`);
+      Utilities.sleep(1000 * attempt); // Exponential backoff
+    } catch (e) {
+      Logger.log(`Exception on attempt ${attempt}/${maxRetries}: ${e.toString()}`);
+      if (attempt === maxRetries) throw e;
+      Utilities.sleep(1000 * attempt);
+    }
+  }
+  return null;
+}
+```
+
+#### C. Add Cost Tracking
+
+```javascript
+function trackAPIUsage(chunkCount) {
+  const props = PropertiesService.getScriptProperties();
+  const currentCount = parseInt(props.getProperty('TOTAL_CHUNKS_PROCESSED') || '0');
+  const newCount = currentCount + chunkCount;
+
+  props.setProperty('TOTAL_CHUNKS_PROCESSED', newCount.toString());
+  props.setProperty('LAST_PROCESSING_DATE', new Date().toISOString());
+
+  // Rough cost estimate: $0.05 per 1000 characters (adjust based on actual pricing)
+  // Assume average chunk is 500 characters
+  const estimatedCost = (newCount * 500 * 0.05) / 1000;
+
+  Logger.log(`Total chunks processed: ${newCount}`);
+  Logger.log(`Estimated API cost to date: $${estimatedCost.toFixed(2)}`);
+}
+```
+
+### 3. Monitor API Quotas
+
+Add to your menu:
+
+```javascript
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+
+  ui.createMenu(CONSTANTS.MENU_NAME)
+      .addItem(CONSTANTS.MENU_ITEMS.RUN_MANUAL, 'runAllStepsManual')
+      .addSeparator()
+      .addItem('View API Usage Stats', 'showAPIUsageStats')
+      .addToUi();
+}
+
+function showAPIUsageStats() {
+  const props = PropertiesService.getScriptProperties();
+  const totalChunks = props.getProperty('TOTAL_CHUNKS_PROCESSED') || '0';
+  const lastDate = props.getProperty('LAST_PROCESSING_DATE') || 'Never';
+
+  const message = `
+API Usage Statistics:
+━━━━━━━━━━━━━━━━━━━━
+Total chunks processed: ${totalChunks}
+Last processing: ${lastDate}
+
+Note: Batch API for TTS not yet available.
+Estimated savings when batch becomes available: 50%
+  `.trim();
+
+  SpreadsheetApp.getUi().alert('API Usage', message, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+```
+
+---
+
+## Migration Path
+
+### When Google Announces Batch Support for TTS
+
+1. **Monitor Official Channels**:
+   - Google AI Developer Blog: https://developers.googleblog.com/
+   - Vertex AI Release Notes: https://cloud.google.com/vertex-ai/docs/release-notes
+   - Gemini API Changelog: https://ai.google.dev/gemini-api/docs/changelog
+
+2. **Verification Checklist**:
+   - [ ] Official documentation confirms `gemini-2.5-flash-preview-tts` supports batch
+   - [ ] Release notes specify the correct endpoint format
+   - [ ] Example code is provided by Google
+   - [ ] Pricing for batch TTS is published
+
+3. **Implementation Steps**:
+   - [ ] Complete [Proper Vertex AI Authentication Setup](#proper-vertex-ai-authentication-setup)
+   - [ ] Set up Cloud Storage bucket
+   - [ ] Update code with [Future-Ready Batch Implementation](#future-ready-batch-implementation)
+   - [ ] Test with a single small assessment
+   - [ ] Verify cost savings in billing
+   - [ ] Set `BATCH_API_ENABLED: true`
+   - [ ] Roll out to production
+
+4. **Rollback Plan**:
+   - If any issues occur, simply set `BATCH_API_ENABLED: false`
+   - All batch columns in spreadsheet can remain (they'll just be unused)
+   - No data loss occurs
+
+---
+
+## Additional Resources
+
+### Official Documentation
+- [Vertex AI Batch Prediction](https://cloud.google.com/vertex-ai/docs/predictions/get-batch-predictions)
+- [Gemini API Documentation](https://ai.google.dev/gemini-api/docs)
+- [Service Account Authentication](https://cloud.google.com/docs/authentication/provide-credentials-adc#service-account)
+- [Apps Script OAuth2 Library](https://github.com/googleworkspace/apps-script-oauth2)
+
+### Community Resources
+- [Google AI Developers Forum](https://discuss.ai.google.dev/)
+- [Stack Overflow: vertex-ai tag](https://stackoverflow.com/questions/tagged/vertex-ai)
+
+### Monitoring
+- [Google Cloud Console - Vertex AI](https://console.cloud.google.com/vertex-ai)
+- [API Usage Dashboard](https://console.cloud.google.com/apis/dashboard)
+- [Billing Reports](https://console.cloud.google.com/billing)
+
+---
+
+## Summary
+
+**Current Status**: Batch processing for `gemini-2.5-flash-preview-tts` is **not available** as of October 2025.
+
+**Action Required**: Set `BATCH_API_ENABLED: false` and use optimized manual processing.
+
+**Future Path**: This document provides a complete implementation ready for when Google enables batch TTS support, including proper Vertex AI authentication with service accounts and IAM permissions.
+
+**Permission Context**: The `roles/aiplatform.user` role (with `aiplatform.endpoints.predict` permission) you discovered is indeed required for Vertex AI batch operations, confirming that proper batch support requires the full Vertex AI architecture, not just the Gemini REST API.

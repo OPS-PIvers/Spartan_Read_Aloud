@@ -52,7 +52,7 @@ const CONSTANTS = {
   // --- Gemini API ---
   GEMINI_TTS_MODEL: 'gemini-2.5-flash-preview-tts',
   GEMINI_API_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/',
-  GEMINI_BATCH_API_ENDPOINT: 'https://us-central1-aiplatform.googleapis.com/v1/',
+  GEMINI_BATCH_API_ENDPOINT: 'https://generativelanguage.googleapis.com/v1beta/',
   GEMINI_VOICE_NAME: "Kore",
 
   // --- Audio Generation (WAV Header) ---
