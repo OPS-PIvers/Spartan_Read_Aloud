@@ -1,0 +1,344 @@
+<style>
+* {
+  box-sizing: border-box;
+}
+.dashboard-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.dashboard-title {
+  margin: 0;
+  color: #1a73e8;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.welcome-message {
+  color: #5f6368;
+  font-size: 14px;
+}
+
+.assessment-card {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 24px;
+}
+
+.card-title {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #202124;
+}
+
+.tab-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e8eaed;
+}
+
+.tab-button {
+  width: auto;
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #5f6368;
+  font-weight: 500;
+  margin-bottom: -2px;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  border-bottom-color: #1a73e8;
+  color: #1a73e8;
+  font-weight: 600;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.file-drop-zone {
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.file-drop-zone:hover, .file-drop-zone.dragover {
+  background-color: #f8f9fa;
+  border-color: #1a73e8;
+}
+
+.file-drop-zone-icon {
+  margin-bottom: 16px;
+  color: #1a73e8;
+}
+
+.file-drop-zone-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: #202124;
+  margin: 0 0 8px 0;
+}
+
+.file-drop-zone-subtext {
+  color: #5f6368;
+  margin: 0 0 16px 0;
+}
+
+.file-upload-input {
+  display: none;
+}
+
+.file-drop-zone-info {
+  font-size: 12px;
+  color: #5f6368;
+  margin-top: 16px;
+}
+
+.file-upload-status {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #5f6368;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #5f6368;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.form-input, .form-textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.form-textarea {
+  min-height: 60px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.form-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #5f6368;
+}
+
+.metadata-form {
+  margin-top: 24px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-container {
+    padding: 12px;
+  }
+
+  .assessment-card,
+  .assessment-table-card {
+    padding: 16px;
+  }
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 24px;
+}
+
+.upload-message {
+  color: #5f6368;
+  font-size: 14px;
+}
+
+.upload-message.success {
+  color: #137333;
+}
+
+.upload-message.error {
+  color: #d93025;
+}
+
+.assessment-table-card {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.assessment-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.assessment-table th, .assessment-table td {
+  padding: 12px 8px;
+  text-align: left;
+  border-bottom: 1px solid #e8eaed;
+}
+
+.assessment-table th {
+  background: #f8f9fa;
+  color: #5f6368;
+  font-weight: 600;
+}
+
+.no-assessments-message {
+  display: none;
+  text-align: center;
+  padding: 40px;
+  color: #5f6368;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-ready {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.status-processing {
+  background: #fef7e0;
+  color: #ea8600;
+}
+
+.status-queued {
+  background: #e8f0fe;
+  color: #1967d2;
+}
+
+.table-input, .table-textarea {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.table-textarea {
+  resize: vertical;
+  min-height: 32px;
+}
+
+.actions-cell {
+  text-align: center;
+}
+
+.action-button {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 16px;
+  margin-right: 4px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.action-button.save {
+  background: #34a853;
+  color: white;
+}
+
+.action-button.delete {
+  background: #d93025;
+  color: white;
+}
+
+.action-button.reprocess {
+  background: #f8f9fa;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+}
+
+.button {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.button-primary {
+  background-color: #1a73e8;
+  color: white;
+  border: none;
+}
+
+.button-primary:hover {
+  background-color: #155ab6;
+}
+
+.button-secondary {
+  background-color: #f8f9fa;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+}
+
+.button-secondary:hover {
+  background-color: #f1f3f4;
+}
+
+.th-status {
+  width: 100px;
+}
+
+.th-actions {
+  width: 140px;
+}
+</style>
