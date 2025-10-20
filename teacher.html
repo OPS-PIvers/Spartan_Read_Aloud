@@ -81,12 +81,12 @@
           <thead>
             <tr>
               <th>File Name</th>
-              <th style="width: 100px;">Status</th>
+              <th class="th-status">Status</th>
               <th>Class</th>
               <th>Instructor Last Name</th>
               <th>Password</th>
               <th>Students</th>
-              <th style="width: 140px;">Actions</th>
+              <th class="th-actions">Actions</th>
             </tr>
           </thead>
           <tbody id="admin-assessment-tbody">
@@ -553,11 +553,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (dropZone) {
     dropZone.addEventListener('dragenter', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('dragover');
-    });
-
-    dropZone.addEventListener('dragover', (e) => {
       e.preventDefault();
       dropZone.classList.add('dragover');
     });
