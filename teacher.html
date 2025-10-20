@@ -21,7 +21,7 @@
       <div id="upload-section-file" class="tab-content active">
         <div id="file-drop-zone" class="file-drop-zone">
           <div class="file-drop-zone-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="48" height="48">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="48" height="48" role="img" aria-label="Upload file">
               <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
             </svg>
           </div>
@@ -550,24 +550,39 @@ document.addEventListener('DOMContentLoaded', () => {
   const dropZone = document.getElementById('file-drop-zone');
   const fileInput = document.getElementById('file-upload-input');
   const fileStatus = document.getElementById('file-upload-status');
+  let dragCounter = 0;
 
   if (dropZone) {
     dropZone.addEventListener('dragenter', (e) => {
       e.preventDefault();
+      dragCounter++;
       dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault(); // Necessary to allow dropping
     });
 
     dropZone.addEventListener('dragleave', (e) => {
       e.preventDefault();
-      dropZone.classList.remove('dragover');
+      dragCounter--;
+      if (dragCounter === 0) {
+        dropZone.classList.remove('dragover');
+      }
     });
 
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
+      dragCounter = 0;
       dropZone.classList.remove('dragover');
       const files = e.dataTransfer.files;
       if (files.length > 0) {
-        fileInput.files = files;
+        // Use DataTransfer API to properly set files
+        const dataTransfer = new DataTransfer();
+        for (let i = 0; i < files.length; i++) {
+          dataTransfer.items.add(files[i]);
+        }
+        fileInput.files = dataTransfer.files;
         handleFileSelect(files[0]);
       }
     });
