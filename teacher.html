@@ -172,6 +172,9 @@ function showAdminDashboard() {
   // Set admin name
   document.getElementById('admin-name-display').textContent = `Welcome, ${adminName}`;
 
+  // Initialize drag-and-drop functionality
+  initializeDragDrop();
+
   // Load all assessments
   loadAllAssessments();
 }
@@ -292,7 +295,7 @@ function renderAssessmentTable() {
           <input type="text" value="${escapeHtml(assessment.instructor)}" data-field="instructor" class="table-input">
         </td>
         <td>
-          <input type="password" value="${escapeHtml(assessment.password)}" data-field="password" class="table-input">
+          <input type="text" value="${escapeHtml(assessment.password)}" data-field="password" class="table-input">
         </td>
         <td>
           <textarea data-field="studentEmails" class="table-textarea">${escapeHtml(assessment.studentEmails)}</textarea>
@@ -354,7 +357,13 @@ function addNewAssessment() {
       const base64Data = e.target.result.split(',')[1]; // Remove data URL prefix
       const mimeType = file.type;
 
-      uploadMessage.textContent = 'Uploading to Drive...';
+      // Show appropriate message based on file type
+      if (mimeType.includes('word') || mimeType.includes('msword') ||
+          file.name.match(/\.(docx|doc)$/i)) {
+        uploadMessage.textContent = 'Converting Word document to PDF...';
+      } else {
+        uploadMessage.textContent = 'Uploading to Drive...';
+      }
 
       google.script.run
         .withSuccessHandler((result) => {
@@ -366,7 +375,12 @@ function addNewAssessment() {
             return;
           }
 
-          uploadMessage.textContent = 'File uploaded. Adding to database...';
+          // Show conversion success message if provided
+          if (result.message) {
+            uploadMessage.textContent = result.message + ' Adding to database...';
+          } else {
+            uploadMessage.textContent = 'File uploaded. Adding to database...';
+          }
 
           // Add to spreadsheet
           addAssessmentToDatabase(result.fileUrl, className, instructor, password, studentEmails);
@@ -546,52 +560,15 @@ function reprocessAssessmentRow(rowIndex) {
     .reprocessAssessment(adminSessionToken, rowIndex);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function initializeDragDrop() {
   const dropZone = document.getElementById('file-drop-zone');
   const fileInput = document.getElementById('file-upload-input');
   const fileStatus = document.getElementById('file-upload-status');
   let dragCounter = 0;
 
-  if (dropZone) {
-    dropZone.addEventListener('dragenter', (e) => {
-      e.preventDefault();
-      dragCounter++;
-      dropZone.classList.add('dragover');
-    });
-
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault(); // Necessary to allow dropping
-    });
-
-    dropZone.addEventListener('dragleave', (e) => {
-      e.preventDefault();
-      dragCounter--;
-      if (dragCounter === 0) {
-        dropZone.classList.remove('dragover');
-      }
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dragCounter = 0;
-      dropZone.classList.remove('dragover');
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        // Use DataTransfer API to properly set files
-        const dataTransfer = new DataTransfer();
-        for (let i = 0; i < files.length; i++) {
-          dataTransfer.items.add(files[i]);
-        }
-        fileInput.files = dataTransfer.files;
-        handleFileSelect(files[0]);
-      }
-    });
-
-    fileInput.addEventListener('change', () => {
-      if (fileInput.files.length > 0) {
-        handleFileSelect(fileInput.files[0]);
-      }
-    });
+  if (!dropZone || !fileInput || !fileStatus) {
+    console.warn('Drag-drop elements not found');
+    return;
   }
 
   function handleFileSelect(file) {
@@ -601,5 +578,45 @@ document.addEventListener('DOMContentLoaded', () => {
       fileStatus.textContent = '';
     }
   }
-});
+
+  dropZone.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dragCounter++;
+    dropZone.classList.add('dragover');
+  });
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault(); // Necessary to allow dropping
+  });
+
+  dropZone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter === 0) {
+      dropZone.classList.remove('dragover');
+    }
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dragCounter = 0;
+    dropZone.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      // Use DataTransfer API to properly set files
+      const dataTransfer = new DataTransfer();
+      for (let i = 0; i < files.length; i++) {
+        dataTransfer.items.add(files[i]);
+      }
+      fileInput.files = dataTransfer.files;
+      handleFileSelect(files[0]);
+    }
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length > 0) {
+      handleFileSelect(fileInput.files[0]);
+    }
+  });
+}
 </script>

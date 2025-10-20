@@ -31,6 +31,27 @@
   font-size: 14px;
 }
 
+#add-assessment-section.assessment-card {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 24px;
+  cursor: default;
+  transition: none;
+}
+
+#add-assessment-section.assessment-card:hover {
+  background: white;
+  border-color: transparent;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transform: none;
+}
+
+#add-assessment-section.assessment-card:active {
+  transform: none;
+}
+
 .assessment-card {
   background: white;
   border-radius: 8px;
@@ -83,11 +104,9 @@
   border-radius: 8px;
   padding: 40px;
   text-align: center;
-  cursor: pointer;
-  transition: background-color 0.3s;
 }
 
-.file-drop-zone:hover, .file-drop-zone.dragover {
+.file-drop-zone.dragover {
   background-color: #f8f9fa;
   border-color: #1a73e8;
 }
@@ -121,8 +140,13 @@
 
 .file-upload-status {
   margin-top: 16px;
+  padding: 12px 16px;
   font-size: 14px;
-  color: #5f6368;
+  font-weight: 600;
+  color: #137333;
+  background-color: #e6f4ea;
+  border-radius: 4px;
+  border-left: 4px solid #34a853;
 }
 
 .form-group {

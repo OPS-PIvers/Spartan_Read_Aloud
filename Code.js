@@ -958,6 +958,75 @@ function convertPdfToHtml(fileId, file) {
 }
 
 /**
+ * Converts a Word document to PDF for permanent storage.
+ * This ensures formatting preservation and image embedding.
+ * @param {string} fileId The Word file ID in Drive
+ * @param {GoogleAppsScript.Drive.File} file The file object
+ * @returns {GoogleAppsScript.Base.Blob} PDF blob ready for storage
+ */
+function convertWordToPdf(fileId, file) {
+  let tempDocId = null;
+  try {
+    const blob = file.getBlob();
+    const metadata = {
+      name: blob.getName(),
+      mimeType: MimeType.GOOGLE_DOCS // Convert to Google Doc
+    };
+
+    Logger.log('→ Step 1: Converting Word file to temporary Google Doc');
+    // Use Drive API v3 to convert Word → Google Doc
+    const tempDoc = Drive.Files.create(metadata, blob, {
+      fields: 'id'
+    });
+    tempDocId = tempDoc.id;
+    Logger.log(`→ Created temporary Google Doc: ${tempDocId}`);
+
+    // Step 2: Export the Google Doc as PDF
+    Logger.log('→ Step 2: Exporting Google Doc to PDF');
+    const token = ScriptApp.getOAuthToken();
+    const exportUrl = `https://www.googleapis.com/drive/v3/files/${tempDocId}/export?mimeType=application/pdf`;
+
+    const options = {
+      method: 'get',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(exportUrl, options);
+    const responseCode = response.getResponseCode();
+
+    if (responseCode !== 200) {
+      Logger.log(`✗ PDF export failed: ${responseCode}`);
+      Logger.log(`Response: ${response.getContentText()}`);
+      return null;
+    }
+
+    const pdfBlob = response.getBlob();
+    const pdfFileName = file.getName().replace(/\.(docx|doc)$/i, '.pdf');
+    pdfBlob.setName(pdfFileName);
+
+    Logger.log(`✓ Word file successfully converted to PDF: ${pdfFileName}`);
+    return pdfBlob;
+
+  } catch (e) {
+    Logger.log(`✗ Word to PDF conversion failed: ${e.toString()}`);
+    return null;
+  } finally {
+    // Always clean up temporary Google Doc
+    if (tempDocId) {
+      try {
+        Drive.Files.remove(tempDocId);
+        Logger.log('→ Deleted temporary Google Doc');
+      } catch (cleanupError) {
+        Logger.log(`⚠ Failed to delete temp doc ${tempDocId}: ${cleanupError.toString()}`);
+      }
+    }
+  }
+}
+
+/**
  * Sanitizes HTML from Google Docs export for safe rendering.
  * Removes style blocks, scripts, and most inline styles.
  * @param {string} html Raw HTML from Google Docs export
@@ -989,7 +1058,12 @@ function sanitizeHtml(html) {
 
 
 function getFileIdFromUrl(url) {
-    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    // Try document URL format first: /d/FILE_ID/
+    let match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+
+    // Try audio URL format: id=FILE_ID
+    match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     return match ? match[1] : null;
 }
 
@@ -1343,19 +1417,56 @@ function uploadAssessmentFile(sessionToken, fileName, base64Data, mimeType) {
 
     // Decode base64 and create blob
     const bytes = Utilities.base64Decode(base64Data);
-    const blob = Utilities.newBlob(bytes, mimeType, fileName);
+    let blob = Utilities.newBlob(bytes, mimeType, fileName);
+    let finalFileName = fileName;
+    let conversionMessage = null;
 
-    // Upload file
+    // Check if Word document - convert to PDF for formatting preservation
+    if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.MS_WORD ||
+        mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.MS_WORD_OLD) {
+      Logger.log('→ Detected Word document, converting to PDF for storage');
+
+      // Create temporary file for conversion
+      const tempWordFile = pdfFolder.createFile(blob);
+
+      // Convert to PDF
+      const pdfBlob = convertWordToPdf(tempWordFile.getId(), tempWordFile);
+
+      if (!pdfBlob) {
+        // Cleanup and return error
+        tempWordFile.setTrashed(true);
+        return { error: 'Failed to convert Word document to PDF. Please try uploading as PDF directly.' };
+      }
+
+      // Delete original Word file
+      tempWordFile.setTrashed(true);
+      Logger.log('→ Deleted original Word file after conversion');
+
+      // Use the PDF blob instead
+      blob = pdfBlob;
+      finalFileName = fileName.replace(/\.(docx|doc)$/i, '.pdf');
+      conversionMessage = 'Word document converted to PDF for optimal formatting preservation.';
+      Logger.log(`✓ Word document converted: ${fileName} → ${finalFileName}`);
+    }
+
+    // Upload final file (PDF or original)
     const uploadedFile = pdfFolder.createFile(blob);
     const fileUrl = uploadedFile.getUrl();
 
-    Logger.log(`Uploaded file: ${fileName} (${fileUrl})`);
+    Logger.log(`Uploaded file: ${finalFileName} (${fileUrl})`);
 
-    return {
+    const result = {
       success: true,
       fileUrl: fileUrl,
       fileId: uploadedFile.getId()
     };
+
+    // Include conversion message if Word was converted
+    if (conversionMessage) {
+      result.message = conversionMessage;
+    }
+
+    return result;
 
   } catch (e) {
     Logger.log(`Error in uploadAssessmentFile: ${e.toString()}`);
