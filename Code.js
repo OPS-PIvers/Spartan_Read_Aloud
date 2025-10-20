@@ -1421,9 +1421,16 @@ function uploadAssessmentFile(sessionToken, fileName, base64Data, mimeType) {
     let finalFileName = fileName;
     let conversionMessage = null;
 
+    // Log incoming file details for debugging
+    Logger.log(`uploadAssessmentFile: fileName=${fileName}, mimeType=${mimeType}, size=${bytes.length} bytes`);
+
     // Check if Word document - convert to PDF for formatting preservation
-    if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.MS_WORD ||
-        mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.MS_WORD_OLD) {
+    // Check both MIME type AND file extension (browsers may send different/empty MIME types)
+    const isWordDoc = (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.MS_WORD ||
+                       mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.MS_WORD_OLD ||
+                       fileName.match(/\.(docx|doc)$/i));
+
+    if (isWordDoc) {
       Logger.log('→ Detected Word document, converting to PDF for storage');
 
       // Create temporary file for conversion
@@ -1445,15 +1452,23 @@ function uploadAssessmentFile(sessionToken, fileName, base64Data, mimeType) {
       // Use the PDF blob instead
       blob = pdfBlob;
       finalFileName = fileName.replace(/\.(docx|doc)$/i, '.pdf');
+
+      // Explicitly set PDF blob properties to ensure correct MIME type and filename
+      blob.setName(finalFileName);
+      blob = blob.setContentType(MimeType.PDF);
+
       conversionMessage = 'Word document converted to PDF for optimal formatting preservation.';
       Logger.log(`✓ Word document converted: ${fileName} → ${finalFileName}`);
     }
+
+    // Validate blob before upload
+    Logger.log(`→ Preparing to upload: name=${blob.getName()}, mimeType=${blob.getContentType()}, size=${blob.getBytes().length} bytes`);
 
     // Upload final file (PDF or original)
     const uploadedFile = pdfFolder.createFile(blob);
     const fileUrl = uploadedFile.getUrl();
 
-    Logger.log(`Uploaded file: ${finalFileName} (${fileUrl})`);
+    Logger.log(`✓ Uploaded file: ${finalFileName} (${fileUrl})`);
 
     const result = {
       success: true,
