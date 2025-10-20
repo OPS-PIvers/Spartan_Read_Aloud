@@ -42,9 +42,15 @@ function parseStudentEmails(input) {
  * Adds a custom menu to the spreadsheet UI.
  */
 function onOpen() {
-  SpreadsheetApp.getUi()
-      .createMenu(CONSTANTS.MENU_NAME)
+  const ui = SpreadsheetApp.getUi();
+
+  ui.createMenu(CONSTANTS.MENU_NAME)
       .addItem(CONSTANTS.MENU_ITEMS.RUN_MANUAL, 'runAllStepsManual')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('Automated Batching')
+        .addItem('Setup Automation', 'setupAutomatedBatchProcessing')
+        .addItem('Stop Automation', 'stopAutomatedBatchProcessing')
+        .addItem('Check Status', 'getAutomatedBatchStatus'))
       .addSeparator()
       .addItem(CONSTANTS.MENU_ITEMS.START_BATCH, 'startBatchProcessing')
       .addItem(CONSTANTS.MENU_ITEMS.CHECK_BATCH, 'checkBatchStatus')
@@ -208,7 +214,6 @@ function submitGeminiBatchJob(jsonlFile, displayName) {
     payload: fileBlob.getBytes(),
     headers: {
       'Content-Type': fileBlob.getContentType(),
-      'Content-Length': fileBlob.getBytes().length.toString(),
       'X-Goog-Upload-Protocol': 'raw'
     },
     muteHttpExceptions: true
@@ -503,6 +508,230 @@ Batch jobs run at 50% cost savings and typically complete within 24 hours.`;
 function stopBatchProcessing() {
   cleanupBatchTriggers();
   SpreadsheetApp.getUi().alert('Batch processing monitoring stopped. Active jobs will continue processing in the background.\n\nNote: Jobs will still complete on Gemini servers. Use "Check Batch Status" to manually check progress.');
+}
+
+// --- AUTOMATED BATCH PROCESSING ---
+
+/**
+ * Main automated batch processing function.
+ * Called by time-based trigger to automatically process new assessments.
+ * Uses accumulation strategy: marks new assessments as PENDING_BATCH,
+ * then batches all pending assessments together on subsequent runs.
+ */
+function automatedBatchProcessing() {
+  if (!CONSTANTS.AUTOMATED_BATCH_ENABLED || !CONSTANTS.BATCH_API_ENABLED) {
+    Logger.log('Automated batch processing is disabled in constants.');
+    return;
+  }
+
+  Logger.log('=== Starting Automated Batch Processing ===');
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+  if (!sheet) {
+    Logger.log('ERROR: "Assessment Database" sheet not found.');
+    return;
+  }
+
+  // STEP 1: Discover and analyze new PDFs
+  step0_addNewPdfs();
+  step1_AnalyzePdfsAndCountChunks();
+
+  // STEP 2: Mark ready assessments as PENDING_BATCH (accumulation phase)
+  const data = sheet.getDataRange().getValues();
+  let newPendingCount = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const pdfUrl = data[i][CONSTANTS.COL.PDF_URL];
+    const chunkCount = data[i][CONSTANTS.COL.CHUNK_COUNT];
+    const isComplete = data[i][CONSTANTS.COL.IS_COMPLETE];
+    const processingStatus = data[i][CONSTANTS.COL.PROCESSING_STATUS];
+
+    // Mark assessments that are ready but not yet in any processing state
+    if (pdfUrl && chunkCount > 0 && !isComplete && !processingStatus) {
+      sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('PENDING_BATCH');
+      sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_MODE + 1).setValue('batch');
+      sheet.getRange(i + 1, CONSTANTS.COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
+      newPendingCount++;
+      Logger.log(`Marked row ${i + 1} as PENDING_BATCH`);
+    }
+  }
+
+  SpreadsheetApp.flush();
+  Logger.log(`Marked ${newPendingCount} new assessment(s) as PENDING_BATCH`);
+
+  // STEP 3: Batch all PENDING_BATCH assessments together
+  const updatedData = sheet.getDataRange().getValues();
+  const pendingRows = [];
+
+  for (let i = 1; i < updatedData.length; i++) {
+    const processingStatus = updatedData[i][CONSTANTS.COL.PROCESSING_STATUS];
+    if (processingStatus === 'PENDING_BATCH') {
+      pendingRows.push({ rowIndex: i + 1, rowData: updatedData[i] });
+    }
+  }
+
+  if (pendingRows.length === 0) {
+    Logger.log('No PENDING_BATCH assessments found. Accumulation phase complete.');
+    Logger.log('=== Automated Batch Processing Complete ===');
+    return;
+  }
+
+  Logger.log(`Found ${pendingRows.length} PENDING_BATCH assessment(s). Submitting as batch...`);
+
+  // Submit all pending assessments as individual batch jobs
+  let batchJobsCreated = 0;
+  let batchNotSupported = false;
+
+  for (const pending of pendingRows) {
+    const batchJobId = createBatchJobForFile(pending.rowIndex, pending.rowData);
+
+    if (batchJobId) {
+      sheet.getRange(pending.rowIndex, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('BATCH_SUBMITTED');
+      sheet.getRange(pending.rowIndex, CONSTANTS.COL.BATCH_JOB_ID + 1).setValue(batchJobId);
+      sheet.getRange(pending.rowIndex, CONSTANTS.COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
+      batchJobsCreated++;
+      Logger.log(`Submitted batch job for row ${pending.rowIndex}`);
+    } else {
+      // Batch API not supported - fall back to manual processing
+      batchNotSupported = true;
+      Logger.log('Batch API not supported. Falling back to manual processing.');
+      break;
+    }
+  }
+
+  SpreadsheetApp.flush();
+
+  // Handle fallback to manual processing if needed
+  if (batchNotSupported) {
+    Logger.log('Batch API not supported. Processing assessments manually...');
+    // Reset pending assessments to allow manual processing
+    for (const pending of pendingRows) {
+      sheet.getRange(pending.rowIndex, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue('');
+      sheet.getRange(pending.rowIndex, CONSTANTS.COL.PROCESSING_MODE + 1).setValue('manual');
+    }
+    SpreadsheetApp.flush();
+    step2_GenerateMissingAudioAndFinalize();
+  } else if (batchJobsCreated > 0) {
+    setupBatchCheckTrigger();
+    Logger.log(`Successfully submitted ${batchJobsCreated} batch job(s).`);
+  }
+
+  Logger.log('=== Automated Batch Processing Complete ===');
+}
+
+/**
+ * Sets up the automated batch processing trigger.
+ * Run this once to enable automatic processing every X hours.
+ */
+function setupAutomatedBatchProcessing() {
+  if (!CONSTANTS.AUTOMATED_BATCH_ENABLED) {
+    SpreadsheetApp.getUi().alert('Automated batch processing is disabled in Constants.\n\nSet AUTOMATED_BATCH_ENABLED to true to enable this feature.');
+    return;
+  }
+
+  // Clean up any existing automated triggers first
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'automatedBatchProcessing') {
+      ScriptApp.deleteTrigger(trigger);
+      Logger.log('Removed existing automated batch processing trigger');
+    }
+  });
+
+  // Create new time-based trigger
+  const intervalHours = CONSTANTS.AUTOMATED_BATCH_INTERVAL_HOURS || 12;
+
+  ScriptApp.newTrigger('automatedBatchProcessing')
+    .timeBased()
+    .everyHours(intervalHours)
+    .create();
+
+  Logger.log(`Created automated batch processing trigger (every ${intervalHours} hours)`);
+
+  SpreadsheetApp.getUi().alert(
+    `Automated Batch Processing Enabled!\n\n` +
+    `- Checks for new assessments every ${intervalHours} hour(s)\n` +
+    `- Accumulates assessments between checks\n` +
+    `- Batches them together for 50% cost savings\n` +
+    `- Runs completely automatically\n\n` +
+    `Upload PDFs anytime - they'll be processed automatically!`
+  );
+}
+
+/**
+ * Stops the automated batch processing trigger.
+ */
+function stopAutomatedBatchProcessing() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let removedCount = 0;
+
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'automatedBatchProcessing') {
+      ScriptApp.deleteTrigger(trigger);
+      removedCount++;
+    }
+  });
+
+  if (removedCount > 0) {
+    Logger.log(`Removed ${removedCount} automated batch processing trigger(s)`);
+    SpreadsheetApp.getUi().alert(
+      `Automated Batch Processing Stopped\n\n` +
+      `The automatic trigger has been removed.\n` +
+      `You can still use manual batch processing via the menu.`
+    );
+  } else {
+    SpreadsheetApp.getUi().alert('No automated batch processing trigger found.');
+  }
+}
+
+/**
+ * Shows the current status of automated batch processing.
+ */
+function getAutomatedBatchStatus() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let automatedTrigger = null;
+
+  for (const trigger of triggers) {
+    if (trigger.getHandlerFunction() === 'automatedBatchProcessing') {
+      automatedTrigger = trigger;
+      break;
+    }
+  }
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+  let pendingCount = 0;
+  let submittedCount = 0;
+  let processingCount = 0;
+
+  if (sheet) {
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const status = data[i][CONSTANTS.COL.PROCESSING_STATUS];
+      if (status === 'PENDING_BATCH') pendingCount++;
+      if (status === 'BATCH_SUBMITTED') submittedCount++;
+      if (status === 'BATCH_PROCESSING') processingCount++;
+    }
+  }
+
+  let message = 'Automated Batch Processing Status\n\n';
+
+  if (automatedTrigger) {
+    const intervalHours = CONSTANTS.AUTOMATED_BATCH_INTERVAL_HOURS || 12;
+    message += `✓ ACTIVE - Runs every ${intervalHours} hour(s)\n\n`;
+  } else {
+    message += `✗ INACTIVE - No trigger installed\n\n`;
+  }
+
+  message += `Current Queue:\n`;
+  message += `- Pending for batch: ${pendingCount}\n`;
+  message += `- Submitted to API: ${submittedCount}\n`;
+  message += `- Currently processing: ${processingCount}\n\n`;
+
+  if (!automatedTrigger) {
+    message += `Use "Setup Automation" to enable automated processing.`;
+  }
+
+  SpreadsheetApp.getUi().alert(message);
 }
 
 // --- MAIN CONTROL FUNCTIONS ---

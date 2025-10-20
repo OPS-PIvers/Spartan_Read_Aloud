@@ -8,6 +8,11 @@ const CONSTANTS = {
   BATCH_API_ENABLED: true,
   BATCH_CHECK_INTERVAL_MINUTES: 30,
 
+  // --- Automated Batch Processing ---
+  AUTOMATED_BATCH_ENABLED: true,
+  AUTOMATED_BATCH_INTERVAL_HOURS: 12,  // Twice daily (configurable)
+  BATCH_ACCUMULATION_ENABLED: true,    // Accumulate assessments before batching
+
   // --- Spreadsheet Column Mapping (0-based) ---
   COL: {
     PDF_URL: 0,
