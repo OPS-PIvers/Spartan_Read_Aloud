@@ -648,25 +648,29 @@
       opacity: 1 !important;
     }
 
+    .highlighted-chunk,
+    .highlighted-text-span,
+    .html-assessment-container .highlighted-element {
+      background-color: rgba(255, 235, 59, 0.8) !important;
+      color: #000 !important;
+      border-radius: 2px;
+      opacity: 1 !important;
+      transition: background-color 0.3s ease, box-shadow 0.3s ease !important;
+    }
+
     .highlighted-chunk {
-      background-color: rgba(255, 235, 59, 0.3) !important;
       outline: 2px solid #ffc107 !important;
       outline-offset: 2px;
-      opacity: 1 !important;
-      transition: all 0.3s ease;
       border-radius: 4px;
     }
 
     .highlighted-text-span {
-      background-color: rgba(255, 235, 59, 0.8) !important;
-      color: #000 !important;
-      border-radius: 2px;
-      box-shadow: 0 0 4px rgba(255, 193, 7, 0.6);
+      box-shadow: 0 0 4px rgba(255, 193, 7, 0.6) !important;
     }
 
     body.focus-mode .highlighted-chunk {
       opacity: 1 !important;
-      box-shadow: 0 0 20px rgba(255, 193, 7, 0.4);
+      box-shadow: 0 0 20px rgba(255, 193, 7, 0.4) !important;
     }
 
     /* Loading spinner animation */
@@ -1029,13 +1033,6 @@
        HIGHLIGHTING SYSTEM - SUBTLE & CALM
        ======================================== */
 
-    /* Highlighted elements - visible yellow highlight */
-    .html-assessment-container .highlighted-element {
-      background-color: rgba(255, 235, 59, 0.45) !important; /* More saturated yellow for better visibility */
-      opacity: 1 !important;
-      transition: background-color 0.3s ease;
-    }
-
     /* Focus mode - very subtle dimming */
     body.focus-mode .html-assessment-container > * {
       opacity: 0.3;
@@ -1054,11 +1051,7 @@
       opacity: 1 !important;
     }
 
-    /* Highlighted table cells - same visible treatment */
-    .html-assessment-container td.highlighted-element,
-    .html-assessment-container th.highlighted-element {
-      background-color: rgba(255, 235, 59, 0.45) !important;
-    }
+    /* Highlighted table cells inherit unified highlighting styles above */
 
     /* ========================================
        MOBILE RESPONSIVE - MINIMAL & SPACIOUS
