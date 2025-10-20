@@ -651,20 +651,26 @@
     .highlighted-chunk,
     .highlighted-text-span,
     .html-assessment-container .highlighted-element {
-      background-color: #DDEEFF !important;
-      border-bottom: 2px solid #007BFF !important;
-      transition: background-color 0.5s ease-in-out !important;
+      background-color: rgba(255, 235, 59, 0.8) !important;
       color: #000 !important;
       border-radius: 2px;
-      padding-bottom: 1px;
-      outline: none !important;
-      box-shadow: none !important;
       opacity: 1 !important;
+      transition: background-color 0.3s ease, box-shadow 0.3s ease !important;
+    }
+
+    .highlighted-chunk {
+      outline: 2px solid #ffc107 !important;
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    .highlighted-text-span {
+      box-shadow: 0 0 4px rgba(255, 193, 7, 0.6) !important;
     }
 
     body.focus-mode .highlighted-chunk {
       opacity: 1 !important;
-      box-shadow: 0 0 20px rgba(255, 193, 7, 0.4);
+      box-shadow: 0 0 20px rgba(255, 193, 7, 0.4) !important;
     }
 
     /* Loading spinner animation */
@@ -1045,11 +1051,7 @@
       opacity: 1 !important;
     }
 
-    /* Highlighted table cells - same visible treatment */
-    .html-assessment-container td.highlighted-element,
-    .html-assessment-container th.highlighted-element {
-      background-color: rgba(255, 235, 59, 0.45) !important;
-    }
+    /* Highlighted table cells inherit unified highlighting styles above */
 
     /* ========================================
        MOBILE RESPONSIVE - MINIMAL & SPACIOUS
