@@ -1428,10 +1428,10 @@ function handleAudioEnd() {
     globalAudioPlayer.currentTime = 0;
     globalAudioPlayer.play();
     updatePlayPauseButton(true);
-  } else if (currentChunkIndex < serverChunks.length - 1) {
-    // Auto-advance to next chunk
-    navigateChunk(1);
   } else {
+    // Audio finished - stay on current chunk (no auto-advance)
+    // Students must click Next button to move to next chunk
+    // Clicking Play will replay the same chunk
     currentlyPlayingChunk = null;
   }
 }
@@ -1854,6 +1854,31 @@ function findEndBoundaryAfterStart(allSpans, startIndex, endSearchText) {
   return -1; // Not found
 }
 
+/**
+ * Trims trailing empty or whitespace-only spans from a span array.
+ * This prevents highlighting from extending into blank space before the next chunk.
+ * @param {Array<HTMLElement>} spans - Array of span elements
+ * @returns {Array<HTMLElement>} - Trimmed array with trailing whitespace removed
+ */
+function trimTrailingEmptySpans(spans) {
+  if (!spans || spans.length === 0) return spans;
+
+  // Find the last non-empty span by working backwards
+  let lastNonEmptyIndex = spans.length - 1;
+
+  while (lastNonEmptyIndex >= 0) {
+    const text = spans[lastNonEmptyIndex].textContent;
+    // Check if span has meaningful content (not just whitespace)
+    if (text && text.trim().length > 0) {
+      break;
+    }
+    lastNonEmptyIndex--;
+  }
+
+  // Return trimmed array (include the last non-empty span)
+  return spans.slice(0, lastNonEmptyIndex + 1);
+}
+
 function searchTextRangeInPDF(startSearchText, endSearchText) {
   /**
    * Searches for a range of text between two searchWords boundaries.
@@ -1902,9 +1927,10 @@ function searchTextRangeInPDF(startSearchText, endSearchText) {
   // If no end search text, highlight from start to end of page
   if (!endSearchText) {
     console.log('→ Highlighting from start to end of page');
+    const spanRange = allSpans.slice(startSpanIndex);
     return {
       container: pageContainer,
-      spans: allSpans.slice(startSpanIndex)
+      spans: trimTrailingEmptySpans(spanRange)
     };
   }
 
@@ -1914,17 +1940,20 @@ function searchTextRangeInPDF(startSearchText, endSearchText) {
 
   if (endSpanIndex === -1) {
     console.log('→ End boundary not found after start position, highlighting to end of page');
+    const spanRange = allSpans.slice(startSpanIndex);
     return {
       container: pageContainer,
-      spans: allSpans.slice(startSpanIndex)
+      spans: trimTrailingEmptySpans(spanRange)
     };
   }
 
-  // Return the precise range between boundaries
-  console.log(`✓ Precise range: ${endSpanIndex - startSpanIndex} spans (including text after images)`);
+  // Return the precise range between boundaries (trimmed of trailing whitespace)
+  const spanRange = allSpans.slice(startSpanIndex, endSpanIndex);
+  const trimmedSpans = trimTrailingEmptySpans(spanRange);
+  console.log(`✓ Precise range: ${endSpanIndex - startSpanIndex} spans, trimmed to ${trimmedSpans.length} (removed ${spanRange.length - trimmedSpans.length} trailing whitespace spans)`);
   return {
     container: pageContainer,
-    spans: allSpans.slice(startSpanIndex, endSpanIndex)
+    spans: trimmedSpans
   };
 }
 
