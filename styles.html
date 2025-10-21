@@ -650,22 +650,20 @@
 
     /* ========================================
        AUTO-DIM INACTIVE CONTENT (PDF Assessments)
-       Dims all page containers by default, highlights active question
+       Dims individual text spans, not entire pages
        ======================================== */
 
-    #pdf-container > .page-container {
-      opacity: 0.35;
-      transition: opacity 0.4s ease;
+    /* Add semi-transparent white background to all text spans to create dim effect */
+    .textLayer > span {
+      background-color: rgba(255, 255, 255, 0.65);
+      transition: background-color 0.4s ease;
+      z-index: 1;
     }
 
-    /* Active page with highlighted content is fully visible */
-    #pdf-container > .page-container.has-highlight {
-      opacity: 1 !important;
-    }
-
-    /* All descendants of active page are fully visible */
-    #pdf-container > .page-container.has-highlight * {
-      opacity: 1 !important;
+    /* Remove dimming from highlighted text spans (active question) */
+    .textLayer > span.highlighted-text-span {
+      background-color: rgba(255, 235, 59, 0.8) !important;
+      z-index: 2;
     }
 
     .highlighted-chunk,
@@ -1069,35 +1067,39 @@
 
     /* ========================================
        AUTO-DIM INACTIVE CONTENT (HTML Assessments)
-       Dims all elements by default, highlights active question
+       Dims all content elements by default, highlights active question
        ======================================== */
 
-    .html-assessment-container > * {
+    /* Dim all content elements - this dims individual questions, not containers */
+    .html-assessment-container p,
+    .html-assessment-container h1,
+    .html-assessment-container h2,
+    .html-assessment-container h3,
+    .html-assessment-container h4,
+    .html-assessment-container h5,
+    .html-assessment-container h6,
+    .html-assessment-container li,
+    .html-assessment-container td,
+    .html-assessment-container th,
+    .html-assessment-container div,
+    .html-assessment-container img {
       opacity: 0.35;
       transition: opacity 0.4s ease;
     }
 
-    /* Active elements and their parents are fully visible */
-    .html-assessment-container > .highlighted-element,
-    .html-assessment-container > .has-highlight {
-      opacity: 1 !important;
-    }
-
-    /* Also ensure nested highlighted content is fully visible */
+    /* Active question elements are fully visible */
     .html-assessment-container .highlighted-element {
       opacity: 1 !important;
     }
 
-    /* All descendants of elements with highlights are fully visible */
-    .html-assessment-container .has-highlight,
-    .html-assessment-container .has-highlight * {
+    /* All descendants of highlighted elements are fully visible */
+    .html-assessment-container .highlighted-element * {
       opacity: 1 !important;
     }
 
-    /* All descendants of highlighted elements are fully visible */
-    .html-assessment-container .highlighted-element,
-    .html-assessment-container .highlighted-element * {
-      opacity: 1 !important;
+    /* Parent containers with highlights don't affect dimming (stay transparent) */
+    .html-assessment-container .has-highlight {
+      opacity: inherit;
     }
 
     /* Highlighted table cells inherit unified highlighting styles above */
