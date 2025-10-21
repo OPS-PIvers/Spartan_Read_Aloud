@@ -1027,7 +1027,7 @@ function step2_GenerateMissingAudioAndFinalize() {
          } else {
             Logger.log(`--> Generating new audio for chunk ${j + 1} with name "${newChunkName}"...`);
             // Always generate new files with the new descriptive name
-            audioFile = generateAudioFromTextChunk(chunkText, newChunkName, assessmentSubfolder);
+            audioFile = generateAudio(chunkText, newChunkName, assessmentSubfolder);
          }
 
          if (audioFile) {
