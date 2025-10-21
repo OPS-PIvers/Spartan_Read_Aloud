@@ -648,6 +648,26 @@
       opacity: 1 !important;
     }
 
+    /* ========================================
+       AUTO-DIM INACTIVE CONTENT (PDF Assessments)
+       Dims all page containers by default, highlights active question
+       ======================================== */
+
+    #pdf-container > .page-container {
+      opacity: 0.35;
+      transition: opacity 0.4s ease;
+    }
+
+    /* Active page with highlighted content is fully visible */
+    #pdf-container > .page-container.has-highlight {
+      opacity: 1 !important;
+    }
+
+    /* All descendants of active page are fully visible */
+    #pdf-container > .page-container.has-highlight * {
+      opacity: 1 !important;
+    }
+
     .highlighted-chunk,
     .highlighted-text-span,
     .html-assessment-container .highlighted-element {
@@ -1044,6 +1064,39 @@
     /* Ensure all ancestors with highlights stay visible */
     body.focus-mode .html-assessment-container > .highlighted-element,
     body.focus-mode .html-assessment-container > .has-highlight {
+      opacity: 1 !important;
+    }
+
+    /* ========================================
+       AUTO-DIM INACTIVE CONTENT (HTML Assessments)
+       Dims all elements by default, highlights active question
+       ======================================== */
+
+    .html-assessment-container > * {
+      opacity: 0.35;
+      transition: opacity 0.4s ease;
+    }
+
+    /* Active elements and their parents are fully visible */
+    .html-assessment-container > .highlighted-element,
+    .html-assessment-container > .has-highlight {
+      opacity: 1 !important;
+    }
+
+    /* Also ensure nested highlighted content is fully visible */
+    .html-assessment-container .highlighted-element {
+      opacity: 1 !important;
+    }
+
+    /* All descendants of elements with highlights are fully visible */
+    .html-assessment-container .has-highlight,
+    .html-assessment-container .has-highlight * {
+      opacity: 1 !important;
+    }
+
+    /* All descendants of highlighted elements are fully visible */
+    .html-assessment-container .highlighted-element,
+    .html-assessment-container .highlighted-element * {
       opacity: 1 !important;
     }
 

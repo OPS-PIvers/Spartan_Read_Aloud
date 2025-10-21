@@ -963,6 +963,17 @@ function initializeAudioToolbar() {
   if (serverChunks.length > 0) {
     currentChunkIndex = 0;
     updateToolbarDisplay();
+
+    // Highlight the first chunk so students can see what will be read
+    const firstChunk = serverChunks[0];
+    const firstSearchWords = firstChunk.searchWords ||
+      (firstChunk.text ? firstChunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : '');
+    const secondChunk = serverChunks[1];
+    const secondSearchWords = secondChunk ?
+      (secondChunk.searchWords || (secondChunk.text ? secondChunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : ''))
+      : null;
+
+    highlightChunkInPDF(firstSearchWords, secondSearchWords);
   }
 }
 
