@@ -5,7 +5,7 @@ const CONSTANTS = {
   TEACHERS_SHEET_NAME: "Teachers",
 
   // --- Batch Processing ---
-  BATCH_API_ENABLED: true,
+  BATCH_API_ENABLED: false,
   BATCH_CHECK_INTERVAL_MINUTES: 30,
 
   // --- Automated Batch Processing ---

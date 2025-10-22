@@ -653,15 +653,15 @@
        Dims individual text spans, not entire pages
        ======================================== */
 
-    /* Add semi-transparent white background to all text spans to create dim effect */
-    .textLayer > span {
+    /* Only dim non-highlighted text spans when highlighting is active */
+    .has-highlight .textLayer > span {
       background-color: rgba(255, 255, 255, 0.65);
       transition: background-color 0.4s ease;
       z-index: 1;
     }
 
     /* Remove dimming from highlighted text spans (active question) */
-    .textLayer > span.highlighted-text-span {
+    .has-highlight .textLayer > span.highlighted-text-span {
       background-color: rgba(255, 235, 59, 0.8) !important;
       z-index: 2;
     }
@@ -862,8 +862,13 @@
       right: 0;
       bottom: 0;
       overflow: hidden;
-      opacity: 0.2;
+      opacity: 0;
       line-height: 1.0;
+    }
+
+    /* Make text layer visible when page has highlighting */
+    .has-highlight .textLayer {
+      opacity: 1;
     }
 
     .textLayer > span {
