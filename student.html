@@ -990,7 +990,7 @@ function initializeAudioToolbar() {
 
     // Highlight the first chunk so students can see what will be read
     const firstSearchWords = getSearchWords(serverChunks[0]);
-    const secondSearchWords = getSearchWords(serverChunks[1] || null);
+    const secondSearchWords = getSearchWords(serverChunks[1]);
 
     highlightChunkInPDF(firstSearchWords, secondSearchWords);
   }
