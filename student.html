@@ -698,6 +698,17 @@ function getCleanedChunkText(text) {
 }
 
 /**
+ * Extracts or generates search words from a chunk for highlighting purposes.
+ * @param {Object} chunk - The audio chunk object
+ * @returns {string|null} Search words for highlighting, or null if chunk is invalid
+ */
+function getSearchWords(chunk) {
+  if (!chunk) return null;
+  return chunk.searchWords ||
+    (chunk.text ? chunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : '');
+}
+
+/**
  * Extracts file ID from Google Drive URL.
  * @param {string} audioUrl Drive URL containing file ID
  * @returns {string|null} File ID or null if not found
@@ -965,13 +976,8 @@ function initializeAudioToolbar() {
     updateToolbarDisplay();
 
     // Highlight the first chunk so students can see what will be read
-    const firstChunk = serverChunks[0];
-    const firstSearchWords = firstChunk.searchWords ||
-      (firstChunk.text ? firstChunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : '');
-    const secondChunk = serverChunks[1];
-    const secondSearchWords = secondChunk ?
-      (secondChunk.searchWords || (secondChunk.text ? secondChunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : ''))
-      : null;
+    const firstSearchWords = getSearchWords(serverChunks[0]);
+    const secondSearchWords = getSearchWords(serverChunks[1]);
 
     highlightChunkInPDF(firstSearchWords, secondSearchWords);
   }
@@ -1073,13 +1079,8 @@ function playAudio(chunk, index) {
   updateToolbarDisplay();
 
   // Use searchWords for current chunk and next chunk as boundaries
-  // Fallback: generate searchWords from text for backward compatibility with old assessments
-  const currentSearchWords = chunk.searchWords ||
-    (chunk.text ? chunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : '');
-  const nextChunk = serverChunks[index + 1];
-  const nextSearchWords = nextChunk ?
-    (nextChunk.searchWords || (nextChunk.text ? nextChunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : ''))
-    : null;
+  const currentSearchWords = getSearchWords(chunk);
+  const nextSearchWords = getSearchWords(serverChunks[index + 1]);
 
   console.log('Audio title displayed:', getCleanedChunkText(chunk.text));
   console.log('Current chunk searchWords:', currentSearchWords);

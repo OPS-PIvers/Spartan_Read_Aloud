@@ -1070,19 +1070,8 @@
        Dims all content elements by default, highlights active question
        ======================================== */
 
-    /* Dim all content elements - this dims individual questions, not containers */
-    .html-assessment-container p,
-    .html-assessment-container h1,
-    .html-assessment-container h2,
-    .html-assessment-container h3,
-    .html-assessment-container h4,
-    .html-assessment-container h5,
-    .html-assessment-container h6,
-    .html-assessment-container li,
-    .html-assessment-container td,
-    .html-assessment-container th,
-    .html-assessment-container div,
-    .html-assessment-container img {
+    /* Dim direct children only to prevent opacity stacking on nested elements */
+    .html-assessment-container > * {
       opacity: 0.35;
       transition: opacity 0.4s ease;
     }
