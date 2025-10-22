@@ -2080,40 +2080,94 @@ function getOrCreateSubfolder(parentFolder, subfolderName) {
 }
 
 function doGet(e) {
-  var template = HtmlService.createTemplateFromFile('index');
-  return template.evaluate()
-      .setTitle('Orono Schools Assessment Reader')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+  // Use the more robust Session.getActiveUser().getEmail() to get the user's identity.
+  const userEmail = Session.getActiveUser().getEmail();
+
+  if (!userEmail) {
+    // This case should be rare in a properly configured domain-access app.
+    return HtmlService.createHtmlOutput('<h1>Authentication Error</h1><p>Could not identify your Google account email. Please ensure you are logged in and have granted the app necessary permissions.</p>');
+  }
+
+  // Determine the user's role and get their data.
+  const user = getUserByEmail(userEmail);
+
+  if (user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN)) {
+    // For teachers/admins, serve the teacher dashboard.
+    const template = HtmlService.createTemplateFromFile('teacher');
+    template.user = user;
+    // Generate a session token for the frontend to use for subsequent API calls.
+    template.sessionToken = generateSessionToken(user.email, user.userType, CONSTANTS.SESSION_TOKEN_STAFF_EXPIRY_MINUTES, user.name);
+    return template.evaluate().setTitle('Teacher Dashboard').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+
+  } else if (user && user.userType === CONSTANTS.ROLE_TOKEN_STUDENT) {
+    // For students, serve the student view.
+    const template = HtmlService.createTemplateFromFile('student');
+    template.user = user;
+    // The student view will then fetch the assessments for this user.
+    return template.evaluate().setTitle('Student Assessment').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+
+  } else {
+    // If the user's email is not found in either the teacher or student lists.
+    return HtmlService.createHtmlOutput(`<h1>Access Denied</h1><p>Your email (${userEmail}) is not authorized to use this application.</p>`);
+  }
 }
+
+/**
+ * Helper function to get user role and data based on email.
+ * This replaces the password-based authentication.
+ * @param {string} email The user's email address.
+ * @returns {Object|null} User object or null if not found.
+ */
+function getUserByEmail(email) {
+  const cleanEmail = email.toLowerCase().trim();
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
+  // 1. Check Teachers sheet for staff members.
+  const adminSheet = spreadsheet.getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
+  if (adminSheet) {
+    const adminData = adminSheet.getDataRange().getValues();
+    for (let i = 1; i < adminData.length; i++) {
+      const row = adminData[i];
+      const adminEmail = row[2] ? row[2].toString().toLowerCase().trim() : '';
+      if (adminEmail === cleanEmail) {
+        const teacherRole = row[4] ? row[4].toString().trim() : CONSTANTS.ROLE_TEACHER;
+        let userType = CONSTANTS.ROLE_TOKEN_TEACHER;
+        if (teacherRole === CONSTANTS.ROLE_SUPER_ADMIN) {
+          userType = CONSTANTS.ROLE_TOKEN_SUPER_ADMIN;
+        } else if (teacherRole === CONSTANTS.ROLE_ADMIN) {
+          userType = CONSTANTS.ROLE_TOKEN_ADMIN;
+        }
+        
+        return {
+          userType: userType,
+          role: teacherRole,
+          name: `${row[0]} ${row[1]}`.trim(),
+          email: cleanEmail
+        };
+      }
+    }
+  }
+
+  // 2. Check Assessment Database for students.
+  const studentSheet = spreadsheet.getSheetByName('Assessment Database');
+  if (studentSheet) {
+      const studentData = studentSheet.getDataRange().getValues();
+      for (let i = 1; i < studentData.length; i++) {
+          const studentEmailsRaw = studentData[i][CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
+          if (studentEmailsRaw.includes(cleanEmail)) {
+              // Found the user in at least one assessment, classify as student.
+              return { userType: CONSTANTS.ROLE_TOKEN_STUDENT, email: cleanEmail };
+          }
+      }
+  }
+
+  // 3. User not found in any list.
+  return null;
+}
+
 
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
-
-function loadView(adminToken) {
-  if (adminToken) {
-    const tokenData = validateAdminToken(adminToken);
-    if (tokenData) {
-      return getTeacherView(adminToken, tokenData);
-    }
-  }
-  return getLoginView();
-}
-
-function getLoginView() {
-  return HtmlService.createHtmlOutputFromFile('login.html').getContent();
-}
-
-function getTeacherView(token, tokenData) {
-    const teacherHtml = HtmlService.createHtmlOutputFromFile('teacher.html').getContent();
-    const teacherStyles = HtmlService.createHtmlOutputFromFile('teacher-styles.html').getContent();
-    return teacherStyles + teacherHtml;
-}
-
-function getStudentView(authResult, email, password) {
-  // Note: Scripts in innerHTML are not executed by the browser for security reasons.
-  // The initialization is handled client-side in login.html after HTML injection.
-  return HtmlService.createHtmlOutputFromFile('student.html').getContent();
 }
 
 
@@ -2403,82 +2457,16 @@ function validateSessionToken(token) {
   }
 }
 
-/**
- * Unified authentication: checks Admin sheet first, then student assessments.
- * @param {string} email User email
- * @param {string} password Password
- * @returns {Object} { userType: 'admin'|'student', data: {...} } or { error: "..." }
- */
-function authenticateUser(email, password) {
-  try {
-    const cleanEmail = email.toLowerCase().trim();
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
 
-    // 1. Check Teachers sheet first (formerly "Admin")
-    const adminSheet = spreadsheet.getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
-    if (adminSheet) {
-      const adminData = adminSheet.getDataRange().getValues();
-      for (let i = 1; i < adminData.length; i++) { // Skip header row
-        const row = adminData[i];
-        const teacherFirst = row[0] ? row[0].toString().trim() : '';
-        const teacherLast = row[1] ? row[1].toString().trim() : '';
-        const adminEmail = row[2] ? row[2].toString().toLowerCase().trim() : '';
-        const adminPassword = row[3] ? row[3].toString().trim() : '';
-        const teacherRole = row[4] ? row[4].toString().trim() : CONSTANTS.ROLE_TEACHER; // Column E: Role (default to Teacher if not set)
 
-        if (adminEmail === cleanEmail && adminPassword === password) {
-          // Staff login successful (Teacher/Admin/Super Admin)
-          Logger.log(`Staff login successful: ${adminEmail} (Role: ${teacherRole})`);
 
-          // Determine userType token based on display role
-          let userType = CONSTANTS.ROLE_TOKEN_TEACHER; // Default
-          if (teacherRole === CONSTANTS.ROLE_SUPER_ADMIN) {
-            userType = CONSTANTS.ROLE_TOKEN_SUPER_ADMIN;
-          } else if (teacherRole === CONSTANTS.ROLE_ADMIN) {
-            userType = CONSTANTS.ROLE_TOKEN_ADMIN;
-          }
-
-          const displayName = `${teacherFirst} ${teacherLast}`.trim();
-          const lastNameForFiltering = teacherLast;
-
-          const sessionToken = generateSessionToken(cleanEmail, userType, CONSTANTS.SESSION_TOKEN_STAFF_EXPIRY_MINUTES, lastNameForFiltering); // 6 hour token, use last name for filtering
-          return {
-            userType: userType,
-            role: teacherRole, // Store the actual role string for display purposes
-            name: displayName, // Return full name for UI display
-            email: cleanEmail,
-            sessionToken: sessionToken
-          };
-        }
-      }
-    }
-
-    // 2. Not admin - check student assessments
-    const studentResult = getStudentAssessments(email, password);
-    if (!studentResult.error) {
-      return {
-        userType: CONSTANTS.ROLE_TOKEN_STUDENT,
-        ...studentResult
-      };
-    }
-
-    // 3. Neither admin nor valid student
-    return { error: 'Invalid email or password.' };
-
-  } catch (e) {
-    Logger.log(`Error in authenticateUser: ${e.toString()}`);
-    return { error: 'An unexpected server error occurred.' };
-  }
-}
 
 /**
- * Retrieves list of all assessments assigned to a student.
- * Used for multi-assessment selection landing page.
+ * Retrieves list of all assessments assigned to a student by email only.
  * @param {string} email Student email
- * @param {string} password Assessment password
  * @returns {Object} { success: true, assessments: [...] } or { error: "..." }
  */
-function getStudentAssessments(email, password) {
+function getStudentAssessmentsForEmail(email) {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
     if (!sheet) return { error: 'Backend Error: "Assessment Database" sheet not found.' };
@@ -2486,64 +2474,38 @@ function getStudentAssessments(email, password) {
     const data = sheet.getDataRange().getValues();
     const cleanEmail = email.toLowerCase().trim();
     const matchingAssessments = [];
-    let passwordValidated = false;
 
-    // First pass: find all rows matching this student's email
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
       const pdfUrl = row[CONSTANTS.COL.PDF_URL];
       const isComplete = row[CONSTANTS.COL.IS_COMPLETE];
-      const sheetPassword = row[CONSTANTS.COL.PASSWORD].toString().trim();
       const studentEmailsRaw = row[CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
       const className = row[CONSTANTS.COL.CLASS_NAME] ? row[CONSTANTS.COL.CLASS_NAME].toString().trim() : '';
       const instructor = row[CONSTANTS.COL.INSTRUCTOR] ? row[CONSTANTS.COL.INSTRUCTOR].toString().trim() : '';
 
-      if (!pdfUrl || !sheetPassword || !studentEmailsRaw) continue;
+      if (!pdfUrl || isComplete !== true || !studentEmailsRaw) continue;
 
       const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
 
-      // Check if student email matches
       if (studentEmails.includes(cleanEmail)) {
-        // Validate password on first match
-        if (!passwordValidated) {
-          if (password !== sheetPassword) {
-            return { error: 'Assessment not found. Please check your email and password and try again.' };
-          }
-          passwordValidated = true;
-        }
+        try {
+          const fileId = getFileIdFromUrl(pdfUrl);
+          if (fileId) {
+            const file = DriveApp.getFileById(fileId);
+            const fileName = file.getName();
 
-        // Only include completed assessments with matching password
-        if (isComplete === true && password === sheetPassword) {
-          try {
-            const fileId = getFileIdFromUrl(pdfUrl);
-            if (fileId) {
-              const file = DriveApp.getFileById(fileId);
-              const fileName = file.getName();
-
-              matchingAssessments.push({
-                assessmentName: fileName,
-                className: className,
-                instructor: instructor,
-                assessmentUrl: pdfUrl,
-                rowIndex: i
-              });
-            }
-          } catch (e) {
-            Logger.log(`Warning: Could not fetch file info for row ${i}: ${e.toString()}`);
-            // Continue processing other assessments
+            matchingAssessments.push({
+              assessmentName: fileName,
+              className: className,
+              instructor: instructor,
+              assessmentUrl: pdfUrl,
+              rowIndex: i
+            });
           }
+        } catch (e) {
+          Logger.log(`Warning: Could not fetch file info for row ${i}: ${e.toString()}`);
         }
       }
-    }
-
-    // If password was never validated, no matching email was found
-    if (!passwordValidated) {
-      return { error: 'Assessment not found. Please check your email and password and try again.' };
-    }
-
-    // Check if any completed assessments were found
-    if (matchingAssessments.length === 0) {
-      return { error: 'No ready assessments found. Your assessments may still be processing.' };
     }
 
     Logger.log(`Found ${matchingAssessments.length} assessment(s) for ${email}`);
@@ -2554,7 +2516,7 @@ function getStudentAssessments(email, password) {
     };
 
   } catch (e) {
-    Logger.log(`Error in getStudentAssessments: ${e.toString()}`);
+    Logger.log(`Error in getStudentAssessmentsForEmail: ${e.toString()}`);
     return { error: 'An unexpected server error occurred.' };
   }
 }
@@ -2574,70 +2536,79 @@ function getAssessmentPdf(email, password, assessmentUrl) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
     if (!sheet) return { error: 'Backend Error: "Assessment Database" sheet not found.' };
     const data = sheet.getDataRange().getValues();
+    const cleanEmail = email.toLowerCase().trim();
 
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
       const pdfUrl = row[CONSTANTS.COL.PDF_URL];
-      const audioDataJson = row[CONSTANTS.COL.AUDIO_JSON];
-      const sheetPassword = row[CONSTANTS.COL.PASSWORD].toString().trim();
-      const studentEmailsRaw = row[CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
 
-      if (!pdfUrl || !sheetPassword || !studentEmailsRaw) continue;
+      // Find the correct assessment row using the URL
+      if (pdfUrl === assessmentUrl) {
+        const studentEmailsRaw = row[CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
+        const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
+        const sheetPassword = row[CONSTANTS.COL.PASSWORD].toString().trim();
 
-      // If assessmentUrl is provided, skip rows that don't match
-      if (assessmentUrl && pdfUrl !== assessmentUrl) continue;
+        // Verify this authenticated user's email is in the list for this assessment.
+        if (studentEmails.includes(cleanEmail)) {
+          // NEW: Validate the provided password against the one in the sheet.
+          if (password !== sheetPassword) {
+            return { error: 'Incorrect password for this assessment.' };
+          }
 
-      const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
-      const cleanEmail = email.toLowerCase().trim();
+          // Password is correct, proceed...
+          const audioDataJson = row[CONSTANTS.COL.AUDIO_JSON];
+          if (!audioDataJson) {
+            return { error: 'Audio for this assessment has not been generated yet. Please try again later.' };
+          }
 
-      if (studentEmails.includes(cleanEmail) && password === sheetPassword) {
-        if (!audioDataJson) {
-          return { error: 'Audio for this assessment has not been generated yet. Please try again later.' };
-        }
+          const fileId = getFileIdFromUrl(pdfUrl);
+          if (!fileId) return { error: 'Invalid Google Drive URL in sheet.' };
 
-        const fileId = getFileIdFromUrl(pdfUrl);
-        if (!fileId) return { error: 'Invalid Google Drive URL in sheet.' };
+          const file = DriveApp.getFileById(fileId);
+          const mimeType = file.getMimeType();
+          const fileName = file.getName();
+          const audioChunks = JSON.parse(audioDataJson);
 
-        const file = DriveApp.getFileById(fileId);
-        const mimeType = file.getMimeType();
-        const fileName = file.getName();
-        const audioChunks = JSON.parse(audioDataJson);
+          Logger.log(`Serving assessment: ${fileName} (${mimeType}) to ${email}`);
 
-        Logger.log(`Serving assessment: ${fileName} (${mimeType}) to ${email}`);
+          // Generate session token for secure audio access
+          const sessionToken = generateSessionToken(cleanEmail, pdfUrl);
 
-        // Generate session token for secure audio access
-        const sessionToken = generateSessionToken(cleanEmail, pdfUrl);
+          // PDFs: Return base64 data for PDF.js rendering
+          if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.PDF) {
+            Logger.log('→ Serving PDF with base64 encoding');
+            return {
+              fileType: 'pdf',
+              pdfData: Utilities.base64Encode(file.getBlob().getBytes()),
+              fileName: fileName,
+              audioChunks: audioChunks,
+              sessionToken: sessionToken
+            };
+          }
 
-        // PDFs: Return base64 data for PDF.js rendering (BACKWARDS COMPATIBLE)
-        if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.PDF) {
-          Logger.log('→ Serving PDF with base64 encoding');
+          // Docs/Word: Convert to HTML and return sanitized HTML
+          Logger.log('→ Converting to HTML for native rendering');
+          const conversionResult = convertFileToHtml(fileId);
+          if (conversionResult.error) {
+            Logger.log(`✗ Conversion error: ${conversionResult.error}`);
+            return { error: `Could not load assessment: ${conversionResult.error}` };
+          }
+
           return {
-            fileType: 'pdf',
-            pdfData: Utilities.base64Encode(file.getBlob().getBytes()),
+            fileType: 'html',
+            assessmentHtml: sanitizeHtml(conversionResult.html),
             fileName: fileName,
             audioChunks: audioChunks,
-            sessionToken: sessionToken // NEW: For secure audio fetching
+            sessionToken: sessionToken
           };
+        } else {
+          // User is trying to access an assessment they are not assigned to.
+          return { error: 'You are not authorized to access this assessment.' };
         }
-
-        // Docs/Word: Convert to HTML and return sanitized HTML
-        Logger.log('→ Converting to HTML for native rendering');
-        const conversionResult = convertFileToHtml(fileId);
-        if (conversionResult.error) {
-          Logger.log(`✗ Conversion error: ${conversionResult.error}`);
-          return { error: `Could not load assessment: ${conversionResult.error}` };
-        }
-
-        return {
-          fileType: 'html',
-          assessmentHtml: sanitizeHtml(conversionResult.html),
-          fileName: fileName,
-          audioChunks: audioChunks,
-          sessionToken: sessionToken // NEW: For secure audio fetching
-        };
       }
     }
-    return { error: 'Assessment not found. Please check your email and password and try again.' };
+    // If loop finishes, the assessmentUrl was not found.
+    return { error: 'Assessment not found.' };
   } catch (e) {
     Logger.log(`Error in getAssessmentPdf: ${e.toString()}`);
     return { error: 'An unexpected server error occurred.' };
