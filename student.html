@@ -692,9 +692,23 @@ function onPdfLoadError(error) {
 }
 
 
+// Maximum number of words to use for search/display purposes
+const MAX_SEARCH_WORDS = 8;
+
 function getCleanedChunkText(text) {
   const words = text.trim().split(/\s+/);
-  return words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
+  return words.slice(0, MAX_SEARCH_WORDS).join(' ') + (words.length > MAX_SEARCH_WORDS ? '...' : '');
+}
+
+/**
+ * Generates a search/display string from text by taking first N words.
+ * @param {string} text - The text to process
+ * @returns {string} First N words with ellipsis if truncated
+ */
+function generateSearchWords(text) {
+  if (!text) return '';
+  const words = text.trim().split(/\s+/);
+  return words.slice(0, MAX_SEARCH_WORDS).join(' ') + (words.length > MAX_SEARCH_WORDS ? '...' : '');
 }
 
 /**
@@ -704,8 +718,7 @@ function getCleanedChunkText(text) {
  */
 function getSearchWords(chunk) {
   if (!chunk) return null;
-  return chunk.searchWords ||
-    (chunk.text ? chunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : '');
+  return chunk.searchWords || generateSearchWords(chunk.text);
 }
 
 /**
@@ -977,7 +990,7 @@ function initializeAudioToolbar() {
 
     // Highlight the first chunk so students can see what will be read
     const firstSearchWords = getSearchWords(serverChunks[0]);
-    const secondSearchWords = getSearchWords(serverChunks[1]);
+    const secondSearchWords = getSearchWords(serverChunks[1] || null);
 
     highlightChunkInPDF(firstSearchWords, secondSearchWords);
   }
