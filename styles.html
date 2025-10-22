@@ -648,6 +648,24 @@
       opacity: 1 !important;
     }
 
+    /* ========================================
+       AUTO-DIM INACTIVE CONTENT (PDF Assessments)
+       Dims individual text spans, not entire pages
+       ======================================== */
+
+    /* Add semi-transparent white background to all text spans to create dim effect */
+    .textLayer > span {
+      background-color: rgba(255, 255, 255, 0.65);
+      transition: background-color 0.4s ease;
+      z-index: 1;
+    }
+
+    /* Remove dimming from highlighted text spans (active question) */
+    .textLayer > span.highlighted-text-span {
+      background-color: rgba(255, 235, 59, 0.8) !important;
+      z-index: 2;
+    }
+
     .highlighted-chunk,
     .highlighted-text-span,
     .html-assessment-container .highlighted-element {
@@ -1045,6 +1063,32 @@
     body.focus-mode .html-assessment-container > .highlighted-element,
     body.focus-mode .html-assessment-container > .has-highlight {
       opacity: 1 !important;
+    }
+
+    /* ========================================
+       AUTO-DIM INACTIVE CONTENT (HTML Assessments)
+       Dims all content elements by default, highlights active question
+       ======================================== */
+
+    /* Dim direct children only to prevent opacity stacking on nested elements */
+    .html-assessment-container > * {
+      opacity: 0.35;
+      transition: opacity 0.4s ease;
+    }
+
+    /* Active question elements are fully visible */
+    .html-assessment-container .highlighted-element {
+      opacity: 1 !important;
+    }
+
+    /* All descendants of highlighted elements are fully visible */
+    .html-assessment-container .highlighted-element * {
+      opacity: 1 !important;
+    }
+
+    /* Parent containers with highlights don't affect dimming (stay transparent) */
+    .html-assessment-container .has-highlight {
+      opacity: inherit;
     }
 
     /* Highlighted table cells inherit unified highlighting styles above */

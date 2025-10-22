@@ -692,9 +692,33 @@ function onPdfLoadError(error) {
 }
 
 
+// Maximum number of words to use for search/display purposes
+const MAX_SEARCH_WORDS = 8;
+
 function getCleanedChunkText(text) {
   const words = text.trim().split(/\s+/);
-  return words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
+  return words.slice(0, MAX_SEARCH_WORDS).join(' ') + (words.length > MAX_SEARCH_WORDS ? '...' : '');
+}
+
+/**
+ * Generates a search/display string from text by taking first N words.
+ * @param {string} text - The text to process
+ * @returns {string} First N words with ellipsis if truncated
+ */
+function generateSearchWords(text) {
+  if (!text) return '';
+  const words = text.trim().split(/\s+/);
+  return words.slice(0, MAX_SEARCH_WORDS).join(' ') + (words.length > MAX_SEARCH_WORDS ? '...' : '');
+}
+
+/**
+ * Extracts or generates search words from a chunk for highlighting purposes.
+ * @param {Object} chunk - The audio chunk object
+ * @returns {string|null} Search words for highlighting, or null if chunk is invalid
+ */
+function getSearchWords(chunk) {
+  if (!chunk) return null;
+  return chunk.searchWords || generateSearchWords(chunk.text);
 }
 
 /**
@@ -963,6 +987,12 @@ function initializeAudioToolbar() {
   if (serverChunks.length > 0) {
     currentChunkIndex = 0;
     updateToolbarDisplay();
+
+    // Highlight the first chunk so students can see what will be read
+    const firstSearchWords = getSearchWords(serverChunks[0]);
+    const secondSearchWords = getSearchWords(serverChunks[1]);
+
+    highlightChunkInPDF(firstSearchWords, secondSearchWords);
   }
 }
 
@@ -1062,13 +1092,8 @@ function playAudio(chunk, index) {
   updateToolbarDisplay();
 
   // Use searchWords for current chunk and next chunk as boundaries
-  // Fallback: generate searchWords from text for backward compatibility with old assessments
-  const currentSearchWords = chunk.searchWords ||
-    (chunk.text ? chunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : '');
-  const nextChunk = serverChunks[index + 1];
-  const nextSearchWords = nextChunk ?
-    (nextChunk.searchWords || (nextChunk.text ? nextChunk.text.trim().split(/\s+/).slice(0, 8).join(' ') + '...' : ''))
-    : null;
+  const currentSearchWords = getSearchWords(chunk);
+  const nextSearchWords = getSearchWords(serverChunks[index + 1]);
 
   console.log('Audio title displayed:', getCleanedChunkText(chunk.text));
   console.log('Current chunk searchWords:', currentSearchWords);
