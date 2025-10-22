@@ -661,13 +661,14 @@
     }
 
     /* Remove dimming from highlighted text spans (active question) */
+    /* NOTE: No background-color on PDF text spans - highlighting handled by .highlight-box */
     .has-highlight .textLayer > span.highlighted-text-span {
-      background-color: rgba(255, 235, 59, 0.8) !important;
+      background-color: transparent !important;
       z-index: 2;
     }
 
+    /* Highlighted elements (for page-level and HTML fallbacks) */
     .highlighted-chunk,
-    .highlighted-text-span,
     .html-assessment-container .highlighted-element {
       background-color: rgba(255, 235, 59, 0.8) !important;
       color: #000 !important;
@@ -853,6 +854,37 @@
 
     .page-container canvas {
       display: block;
+    }
+
+    /* Highlight layer - positioned between canvas and text layer */
+    .highlightLayer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none; /* Allow clicks to pass through */
+      z-index: 0; /* Below text layer */
+      overflow: hidden;
+    }
+
+    /* Single highlight box - encompasses entire text chunk */
+    .highlight-box {
+      position: absolute;
+      background-color: rgba(255, 235, 59, 0.35); /* Lighter for better readability */
+      pointer-events: none;
+      border-radius: 4px; /* Slightly more rounded for softer look */
+      transition: opacity 0.3s ease;
+      box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.3); /* Subtle border for definition */
+    }
+
+    /* Focus mode dimming for highlight boxes */
+    body.focus-mode .highlight-box:not(.active-highlight) {
+      opacity: 0.3;
+    }
+
+    body.focus-mode .highlight-box.active-highlight {
+      opacity: 1;
     }
 
     .textLayer {

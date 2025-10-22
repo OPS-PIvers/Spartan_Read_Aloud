@@ -670,12 +670,12 @@
 
     /* Remove dimming from highlighted text spans (active question) */
     .has-highlight .textLayer > span.highlighted-text-span {
-      background-color: rgba(255, 235, 59, 0.8) !important;
+      background-color: transparent !important;
+      color: #000 !important;
       z-index: 2;
     }
 
     .highlighted-chunk,
-    .highlighted-text-span,
     .html-assessment-container .highlighted-element {
       background-color: rgba(255, 235, 59, 0.8) !important;
       color: #000 !important;
@@ -693,6 +693,15 @@
     body.focus-mode .highlighted-chunk {
       opacity: 1 !important;
       box-shadow: 0 0 20px rgba(255, 193, 7, 0.4) !important;
+    }
+
+    /* Highlight boxes for PDF text (single box per chunk) */
+    .highlight-box {
+      position: absolute;
+      background-color: rgba(255, 235, 59, 0.8);
+      border-radius: 2px;
+      pointer-events: none;
+      z-index: 1;
     }
 
     /* Loading spinner animation */
@@ -872,6 +881,17 @@
       overflow: hidden;
       opacity: 0;
       line-height: 1.0;
+    }
+
+    /* Highlight layer sits between canvas and text layer */
+    .highlightLayer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      pointer-events: none;
     }
 
     /* Make text layer visible when page has highlighting */
@@ -1845,14 +1865,21 @@ function processPage(pdfDocument, pageNum) {
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
+    // Create highlight layer (positioned between canvas and text layer)
+    const highlightLayerDiv = document.createElement('div');
+    highlightLayerDiv.className = 'highlightLayer';
+    highlightLayerDiv.style.width = viewport.width + 'px';
+    highlightLayerDiv.style.height = viewport.height + 'px';
+
     // Create text layer div
     const textLayerDiv = document.createElement('div');
     textLayerDiv.className = 'textLayer';
     textLayerDiv.style.width = viewport.width + 'px';
     textLayerDiv.style.height = viewport.height + 'px';
 
-    // Append canvas and text layer to page container
+    // Append layers to page container (order: canvas, highlight layer, text layer)
     pageContainer.appendChild(canvas);
+    pageContainer.appendChild(highlightLayerDiv);
     pageContainer.appendChild(textLayerDiv);
     pdfContainer.appendChild(pageContainer);
 
@@ -2985,13 +3012,19 @@ function highlightChunkInPDF(currentSearchWords, nextSearchWords) {
     el.classList.remove('has-highlight');
   });
 
+  // NEW: Remove previous highlight boxes
+  clearAllHighlightBoxes();
+
   // Use range-based search with current and next chunk boundaries
   console.log('Using range-based highlighting with chunk boundaries...');
   const found = searchTextRangeInPDF(currentSearchWords, nextSearchWords);
 
   if (found) {
     if (found.spans && found.spans.length > 0) {
-      // Highlight all spans in the range
+      // NEW: Create highlight boxes instead of adding background to spans
+      createHighlightBoxes(found.spans, found.container);
+
+      // KEEP: Add marker classes for focus mode (but no background color)
       found.spans.forEach(span => {
         span.classList.add('highlighted-text-span');
       });
@@ -3016,7 +3049,7 @@ function highlightChunkInPDF(currentSearchWords, nextSearchWords) {
         isProgrammaticScroll = false;
       }, 800);
 
-      console.log(`✓ Highlighted ${found.spans.length} spans in the chunk range`);
+      console.log(`✓ Highlighted ${found.spans.length} spans with highlight boxes`);
     } else {
       // Fallback to container highlighting
       found.classList.add('highlighted-chunk');
@@ -3283,6 +3316,116 @@ function trimTrailingEmptySpans(spans) {
 
   // Return trimmed array (include the last non-empty span)
   return spans.slice(0, lastNonEmptyIndex + 1);
+}
+
+/**
+ * Creates highlight boxes - one per line of text in the chunk.
+ * @param {Array<HTMLElement>} spans - Text layer spans to highlight
+ * @param {HTMLElement} pageContainer - The page container
+ * @returns {Array<HTMLElement>} Created highlight box elements (one per line)
+ */
+function createHighlightBoxes(spans, pageContainer) {
+  if (!spans || spans.length === 0) return [];
+
+  const highlightLayer = pageContainer.querySelector('.highlightLayer');
+  if (!highlightLayer) {
+    console.warn('No highlight layer found in page container');
+    return [];
+  }
+
+  const highlightLayerRect = highlightLayer.getBoundingClientRect();
+
+  // Group spans by line (Y position with tolerance)
+  const lineGroups = [];
+  const lineTolerance = 5; // pixels tolerance for same line
+
+  spans.forEach(span => {
+    const rect = span.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return; // Skip empty spans
+
+    // Check if span text is only whitespace
+    const text = span.textContent || '';
+    if (text.trim().length === 0) return; // Skip whitespace-only spans
+
+    // Find existing line group or create new one
+    const spanTop = rect.top;
+    let foundGroup = false;
+
+    for (let group of lineGroups) {
+      // Check if span is on same line as this group
+      if (Math.abs(group.top - spanTop) <= lineTolerance) {
+        group.spans.push(span);
+        group.rects.push(rect);
+        foundGroup = true;
+        break;
+      }
+    }
+
+    if (!foundGroup) {
+      lineGroups.push({
+        top: spanTop,
+        spans: [span],
+        rects: [rect]
+      });
+    }
+  });
+
+  // Sort line groups by vertical position (top to bottom)
+  lineGroups.sort((a, b) => a.top - b.top);
+
+  // Create one highlight box per line
+  const boxes = [];
+  const padding = 4;
+
+  lineGroups.forEach((group, index) => {
+    if (group.rects.length === 0) return;
+
+    // Calculate bounding box for this line
+    let minLeft = Infinity;
+    let minTop = Infinity;
+    let maxRight = -Infinity;
+    let maxBottom = -Infinity;
+
+    group.rects.forEach(rect => {
+      minLeft = Math.min(minLeft, rect.left);
+      minTop = Math.min(minTop, rect.top);
+      maxRight = Math.max(maxRight, rect.right);
+      maxBottom = Math.max(maxBottom, rect.bottom);
+    });
+
+    // Add padding
+    minLeft -= padding;
+    minTop -= padding;
+    maxRight += padding;
+    maxBottom += padding;
+
+    // Calculate dimensions relative to highlight layer
+    const left = minLeft - highlightLayerRect.left;
+    const top = minTop - highlightLayerRect.top;
+    const width = maxRight - minLeft;
+    const height = maxBottom - minTop;
+
+    // Create highlight box for this line
+    const box = document.createElement('div');
+    box.className = 'highlight-box active-highlight';
+    box.style.left = left + 'px';
+    box.style.top = top + 'px';
+    box.style.width = width + 'px';
+    box.style.height = height + 'px';
+
+    highlightLayer.appendChild(box);
+    boxes.push(box);
+  });
+
+  console.log(`✓ Created ${boxes.length} highlight boxes (one per line)`);
+  return boxes;
+}
+
+/**
+ * Removes all highlight boxes from all highlight layers.
+ */
+function clearAllHighlightBoxes() {
+  document.querySelectorAll('.highlight-box').forEach(box => box.remove());
 }
 
 function searchTextRangeInPDF(startSearchText, endSearchText) {
