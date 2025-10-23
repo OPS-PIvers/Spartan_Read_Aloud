@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/text_layer_builder.css">
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     html, body {
       min-height: 100vh;
@@ -84,72 +85,69 @@
     }
 
     /* ========================================
-       AUDIO TOOLBAR - MODERN REDESIGN
+       AUDIO TOOLBAR - MODERN TAILWIND DESIGN
+       Custom styles for range slider thumbs only
        ======================================== */
 
-    #audio-toolbar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: white;
-      border-top: 1px solid rgba(229, 231, 235, 1);
-      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-      padding: 8px 16px;
-      z-index: 9999;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+    /* Ensure padding for fixed toolbar */
+    body {
+      padding-bottom: 96px; /* h-24 toolbar height */
     }
 
-    .audio-toolbar-inner {
-      width: 100%;
-      max-width: 100%; /* Full width for single row layout */
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 16px;
-      padding: 0;
-    }
-
-    /* Left Zone: Title */
-    .toolbar-title {
-      min-width: 180px;
-      max-width: 250px;
-      flex-shrink: 1;
-      text-align: left;
-      overflow: hidden;
+    /* Custom styles for timeline progress slider */
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: #4f46e5;
+      border-radius: 9999px;
       cursor: pointer;
-      padding: 4px 8px;
-      margin: -4px -8px;
-      border-radius: 8px;
-      transition: background-color 0.2s;
-      position: relative;
+      margin-top: -5px;
+      border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
-    .toolbar-title:hover {
-      background-color: rgba(0, 0, 0, 0.05);
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: #4f46e5;
+      border-radius: 9999px;
+      cursor: pointer;
+      border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
-    .toolbar-title-main {
-      font-size: 13px;
-      font-weight: 600;
-      color: #1F2937;
-      line-height: 1.3;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin: 0;
+    /* Custom styles for volume slider thumb */
+    #volume-slider::-webkit-slider-thumb {
+      margin-top: -3px;
+      width: 12px;
+      height: 12px;
     }
 
-    .toolbar-title-sub {
-      font-size: 10px;
-      color: #6B7280;
-      line-height: 1.2;
-      margin: 0;
+    #volume-slider::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
     }
 
-    /* Center Zone: Playback Controls */
+    /* Highlight boxes for PDF text (line-by-line) */
+    .highlight-box {
+      position: absolute;
+      background-color: rgba(255, 235, 59, 0.8);
+      border-radius: 2px;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .loading-spinner {
+      animation: spin 1s linear infinite;
+    }
+
     .toolbar-controls {
       display: flex;
       align-items: center;
@@ -1434,88 +1432,130 @@
     </div>
   </div>
 
-  <div id="audio-toolbar" style="display: none;">
-    <div class="audio-toolbar-inner">
-      <!-- Left Zone: Title -->
-      <div class="toolbar-title">
-        <p id="current-title-text" class="toolbar-title-main">Loading...</p>
-        <p id="chunk-counter" class="toolbar-title-sub">Chunk 1 of 1</p>
-      </div>
+  <!-- Modern Audio Toolbar -->
+  <div id="audio-toolbar" class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-5px_20px_rgba(0,0,0,0.2)]" style="display: none;">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-24">
 
-      <!-- Center Zone: Playback Controls -->
-      <div class="toolbar-controls">
-        <button id="skip-back-btn" class="control-btn control-skip" title="Skip back 10 seconds" aria-label="Skip back 10 seconds">
-          <span class="material-icons">replay_10</span>
-        </button>
-        <button id="prev-btn" class="control-btn control-prev" title="Previous chunk" aria-label="Previous chunk">
-          <span class="material-icons">skip_previous</span>
-        </button>
-        <button id="play-pause-btn" class="control-btn control-play" title="Play/Pause" aria-label="Play or pause">
-          <span class="material-icons play-icon">play_arrow</span>
-          <span class="material-icons pause-icon" style="display: none;">pause</span>
-          <span class="material-icons loading-spinner" style="display: none;">refresh</span>
-        </button>
-        <button id="next-btn" class="control-btn control-next" title="Next chunk" aria-label="Next chunk">
-          <span class="material-icons">skip_next</span>
-        </button>
-        <button id="skip-forward-btn" class="control-btn control-skip" title="Skip forward 10 seconds" aria-label="Skip forward 10 seconds">
-          <span class="material-icons">forward_10</span>
-        </button>
-      </div>
-
-      <!-- Right Zone: Progress Bar + Actions -->
-      <div class="toolbar-right">
-        <div class="progress-compact">
-          <div class="progress-bar-container">
-            <div id="progress-bar-bg" class="progress-bar-bg">
-              <div id="progress-bar-fill" class="progress-bar-fill"></div>
-              <div id="chunk-markers" class="chunk-markers"></div>
+        <!-- ZONE 1: LEFT (Context) -->
+        <div class="w-64 hidden md:block flex-shrink-0">
+          <div class="flex items-center space-x-3">
+            <!-- Mock Artwork -->
+            <div class="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg flex-shrink-0"></div>
+            <div>
+              <div id="toolbar-title" class="text-sm font-semibold text-gray-900 dark:text-white truncate" title="Loading...">
+                Loading...
+              </div>
+              <div id="toolbar-subtitle" class="text-xs text-gray-500 dark:text-gray-400">Assessment</div>
             </div>
-            <input type="range" id="timeline" class="timeline-slider" min="0" max="100" value="0"
-                   title="Audio timeline" aria-label="Audio timeline slider">
-          </div>
-          <div class="time-displays">
-            <span id="current-time" class="time-display">01:02</span>
-            <span class="time-separator">/</span>
-            <span id="total-time" class="time-display">-01:34</span>
           </div>
         </div>
-        <div class="toolbar-actions">
-          <button id="speed-menu-btn" class="control-btn" title="Playback speed" aria-label="Playback speed">
-            <span id="speed-display" class="text-sm font-bold" style="font-size: 11px;">1.0x</span>
+
+        <!-- ZONE 2: CENTER (Controls & Progress) -->
+        <div class="flex-1 min-w-0 px-4">
+          <div class="flex flex-col items-center gap-2">
+            <!-- Playback Controls -->
+            <div class="flex items-center justify-center gap-3 sm:gap-4">
+              <!-- Speed Control -->
+              <button id="speed-btn" title="Playback Speed (1.0x)" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <span class="material-icons text-xl">slow_motion_video</span>
+              </button>
+              <!-- Skip Back 10s -->
+              <button id="skip-back-btn" title="Skip Back 10s" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <span class="material-icons text-2xl">replay_10</span>
+              </button>
+              <!-- Previous Chunk -->
+              <button id="prev-btn" title="Previous Chunk" class="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <span class="material-icons text-3xl">skip_previous</span>
+              </button>
+              <!-- Play/Pause Button (Hero Button) -->
+              <button id="play-pause-btn" title="Play" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105">
+                <span id="play-icon" class="material-icons text-4xl play-icon">play_arrow</span>
+                <span id="pause-icon" class="material-icons text-4xl pause-icon hidden">pause</span>
+                <span id="loading-spinner" class="material-icons text-4xl loading-spinner hidden animate-spin">refresh</span>
+              </button>
+              <!-- Next Chunk -->
+              <button id="next-btn" title="Next Chunk" class="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <span class="material-icons text-3xl">skip_next</span>
+              </button>
+              <!-- Skip Forward 10s -->
+              <button id="skip-forward-btn" title="Skip Forward 10s" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <span class="material-icons text-2xl">forward_10</span>
+              </button>
+              <!-- Focus Mode -->
+              <button id="focus-btn" title="Focus Mode" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <span class="material-icons text-xl">center_focus_strong</span>
+              </button>
+            </div>
+
+            <!-- Progress Bar & Time -->
+            <div class="w-full flex items-center gap-2">
+              <span id="current-time" class="text-xs font-mono text-gray-500 dark:text-gray-400 w-10 text-right">0:00</span>
+              <div class="flex-1 relative">
+                <!-- Progress Bar Track -->
+                <input id="timeline-slider" type="range" min="0" max="100" value="0" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer">
+                <!-- Filled part -->
+                <div id="progress-fill" class="absolute top-1/2 left-0 h-1.5 bg-indigo-500 rounded-full -translate-y-1/2 pointer-events-none" style="width: 0%;"></div>
+
+                <!-- Chunk Markers -->
+                <div id="chunk-markers" class="absolute top-1/2 left-0 w-full h-1.5 -translate-y-1/2 pointer-events-none">
+                  <!-- Markers will be populated dynamically -->
+                </div>
+              </div>
+              <span id="total-time" class="text-xs font-mono text-gray-500 dark:text-gray-400 w-10 text-left">0:00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ZONE 3: RIGHT (Tools) -->
+        <div class="w-64 hidden md:flex items-center justify-end flex-shrink-0 space-x-4">
+          <!-- Chunk List -->
+          <button id="chunk-list-btn" title="Question List" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <span class="material-icons">list</span>
           </button>
+          <!-- Volume Control -->
+          <div class="flex items-center gap-2">
+            <span id="volume-icon" class="material-icons text-lg text-gray-500 dark:text-gray-400">volume_up</span>
+            <input id="volume-slider" type="range" min="0" max="100" value="80" class="w-24 h-1 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer">
+          </div>
         </div>
-      </div>
 
-      <!-- Speed Menu Popup (Hidden by default) -->
-      <div id="speed-popup" class="popup-menu" style="display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 12px; background: white; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #E5E7EB; padding: 16px; min-width: 200px; z-index: 100;">
-        <p style="text-align: center; font-size: 14px; font-weight: 500; color: #1F2937; margin-bottom: 12px;">Playback Speed</p>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-          <button class="speed-preset" data-speed="0.5" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: transparent; border: none; color: #6B7280; cursor: pointer; transition: all 0.2s;">0.5x</button>
-          <button class="speed-preset" data-speed="0.75" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: transparent; border: none; color: #6B7280; cursor: pointer; transition: all 0.2s;">0.75x</button>
-          <button class="speed-preset" data-speed="1.0" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: transparent; border: none; color: #6B7280; cursor: pointer; transition: all 0.2s;">1.0x</button>
-          <button class="speed-preset active" data-speed="1.25" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: #4F46E5; border: none; color: white; cursor: pointer; transition: all 0.2s;">1.25x</button>
-          <button class="speed-preset" data-speed="1.5" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: transparent; border: none; color: #6B7280; cursor: pointer; transition: all 0.2s;">1.5x</button>
-          <button class="speed-preset" data-speed="2.0" style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: transparent; border: none; color: #6B7280; cursor: pointer; transition: all 0.2s;">2.0x</button>
-        </div>
       </div>
-
-      <!-- Chunk Menu Popup (Hidden by default) - Appears above title when clicked -->
-      <div id="chunk-popup" class="popup-menu" style="display: none; position: absolute; bottom: 100%; left: 0; margin-bottom: 12px; background: white; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #E5E7EB; padding: 16px; min-width: 300px; max-width: 400px; max-height: 256px; overflow-y: auto; z-index: 100;">
-        <p style="text-align: center; font-size: 14px; font-weight: 500; color: #1F2937; margin-bottom: 12px;">Questions</p>
-        <div id="title-dropdown" style="display: flex; flex-direction: column; gap: 8px;">
-          <!-- Will be populated with chunks -->
-        </div>
-      </div>
-
-      <!-- Hidden elements for compatibility -->
-      <div id="toolbar-secondary" style="display: none;"></div>
-      <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.25" value="1.0" style="display: none;" aria-label="Fine-tune playback speed">
-      <button id="toggle-secondary-btn" style="display: none;"></button>
-      <button id="focus-mode-btn" style="display: none;"></button>
-      <button id="loop-btn" style="display: none;"></button>
-      <div id="keyboard-hints" style="display: none;"></div>
     </div>
+  </div>
+  <!-- End of Toolbar -->
+
+  <!-- Speed Control Popup -->
+  <div id="speed-popup" class="hidden fixed bottom-0 left-0 mb-28 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 z-50">
+    <p class="text-sm font-medium text-center text-gray-700 dark:text-gray-200 mb-2">Playback Speed</p>
+    <div class="grid grid-cols-3 gap-2">
+      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="0.5">0.5x</button>
+      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="0.75">0.75x</button>
+      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="1.0">1.0x</button>
+      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="1.25">1.25x</button>
+      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="1.5">1.5x</button>
+      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="2.0">2.0x</button>
+    </div>
+    <!-- Popup tail -->
+    <div class="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-4 bg-white dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 transform rotate-45"></div>
+  </div>
+
+  <!-- Chunk List Popup -->
+  <div id="chunk-popup" class="hidden fixed bottom-0 right-0 mb-28 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 z-50">
+    <p class="text-sm font-medium text-center text-gray-700 dark:text-gray-200 mb-2">Question List</p>
+    <div id="title-dropdown" class="max-h-64 overflow-y-auto space-y-1">
+      <!-- Items will be populated dynamically -->
+    </div>
+    <!-- Popup tail -->
+    <div class="absolute right-6 -bottom-2 w-4 h-4 bg-white dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 transform rotate-45"></div>
+  </div>
+
+  <!-- Hidden elements for compatibility -->
+  <div id="toolbar-secondary" style="display: none;"></div>
+  <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.25" value="1.0" style="display: none;" aria-label="Fine-tune playback speed">
+  <button id="toggle-secondary-btn" style="display: none;"></button>
+  <button id="loop-btn" style="display: none;"></button>
+  <div id="keyboard-hints" style="display: none;"></div>
 </div>
 <script>
 // Global variables and functions that need to be accessible before DOMContentLoaded
@@ -2410,16 +2450,13 @@ function createChunkMarkers() {
 
   markersContainer.innerHTML = ''; // Clear existing markers
 
-  // Calculate total duration (estimate based on first chunk if needed)
-  // For now, we'll space markers evenly as we don't know exact durations upfront
-  const markerCount = serverChunks.length - 1; // markers between chunks
-
+  // Create markers between chunks
   for (let i = 1; i < serverChunks.length; i++) {
     const marker = document.createElement('div');
-    marker.className = 'chunk-marker';
+    marker.className = 'absolute w-0.5 h-1.5 bg-white dark:bg-gray-800';
     // Position evenly across the progress bar
     marker.style.left = `${(i / serverChunks.length) * 100}%`;
-    marker.title = `Chunk ${i + 1}: ${getCleanedChunkText(serverChunks[i].text)}`;
+    marker.title = `Question ${i + 1}: ${getCleanedChunkText(serverChunks[i].text)}`;
     markersContainer.appendChild(marker);
   }
 }
@@ -2429,9 +2466,15 @@ function populateTitleDropdown() {
   dropdown.innerHTML = '';
 
   serverChunks.forEach((chunk, index) => {
-    const item = document.createElement('div');
-    item.className = 'dropdown-item';
-    item.textContent = getCleanedChunkText(chunk.text);
+    const item = document.createElement('button');
+    item.className = 'chunk-item w-full text-left text-sm text-gray-700 dark:text-gray-200 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 truncate';
+    item.textContent = `${index + 1}. ${getCleanedChunkText(chunk.text)}`;
+
+    // Highlight current chunk
+    if (index === currentChunkIndex) {
+      item.classList.add('bg-indigo-50', 'dark:bg-indigo-900/50', 'text-indigo-700', 'dark:text-indigo-300', 'font-medium');
+    }
+
     item.onclick = () => jumpToChunk(index);
     dropdown.appendChild(item);
   });
@@ -2442,28 +2485,37 @@ function updateToolbarDisplay() {
 
   const currentChunk = serverChunks[currentChunkIndex];
   if (currentChunk) {
-    const titleText = document.getElementById('current-title-text');
-    if (titleText) {
-      titleText.textContent = getCleanedChunkText(currentChunk.text);
+    const toolbarTitle = document.getElementById('toolbar-title');
+    if (toolbarTitle) {
+      const chunkText = getCleanedChunkText(currentChunk.text);
+      toolbarTitle.textContent = `Q${currentChunkIndex + 1}: ${chunkText}`;
+      toolbarTitle.title = chunkText;
     }
   }
 
-  // Update chunk counter
-  const chunkCounter = document.getElementById('chunk-counter');
-  if (chunkCounter) {
-    chunkCounter.textContent = `Chunk ${currentChunkIndex + 1} of ${serverChunks.length}`;
+  // Update subtitle with assessment info
+  const toolbarSubtitle = document.getElementById('toolbar-subtitle');
+  if (toolbarSubtitle) {
+    toolbarSubtitle.textContent = `Question ${currentChunkIndex + 1} of ${serverChunks.length}`;
   }
 
-  // Update speed preset buttons
+  // Update speed preset buttons with Tailwind styling
   document.querySelectorAll('.speed-preset').forEach(btn => {
     const speed = parseFloat(btn.getAttribute('data-speed'));
-    btn.classList.toggle('active', Math.abs(speed - currentPlaybackRate) < 0.01);
+    const isActive = Math.abs(speed - currentPlaybackRate) < 0.01;
+
+    // Toggle Tailwind classes for active state
+    btn.classList.toggle('bg-indigo-50', isActive);
+    btn.classList.toggle('dark:bg-indigo-900/50', isActive);
+    btn.classList.toggle('text-indigo-700', isActive);
+    btn.classList.toggle('dark:text-indigo-300', isActive);
+    btn.classList.toggle('font-medium', isActive);
   });
 
-  // Update speed slider
-  const speedSlider = document.getElementById('speed-slider');
-  if (speedSlider) {
-    speedSlider.value = currentPlaybackRate;
+  // Update speed button title
+  const speedBtn = document.getElementById('speed-btn');
+  if (speedBtn) {
+    speedBtn.title = `Playback Speed (${currentPlaybackRate}x)`;
   }
 
   // Update dropdown current item
@@ -2472,8 +2524,10 @@ function updateToolbarDisplay() {
   });
 
   // Update navigation button states
-  document.getElementById('prev-btn').disabled = currentChunkIndex === 0;
-  document.getElementById('next-btn').disabled = currentChunkIndex === serverChunks.length - 1;
+  const prevBtn = document.getElementById('prev-btn');
+  const nextBtn = document.getElementById('next-btn');
+  if (prevBtn) prevBtn.disabled = currentChunkIndex === 0;
+  if (nextBtn) nextBtn.disabled = currentChunkIndex === serverChunks.length - 1;
 }
 
 function playAudio(chunk, index) {
@@ -2565,15 +2619,15 @@ function updatePlayPauseButton(isPlaying) {
 
   // Hide loading spinner when updating play/pause state
   if (loadingSpinner) {
-    loadingSpinner.style.display = 'none';
+    loadingSpinner.classList.add('hidden');
   }
 
   if (isPlaying) {
-    playIcon.style.display = 'none';
-    pauseIcon.style.display = 'block';
+    if (playIcon) playIcon.classList.add('hidden');
+    if (pauseIcon) pauseIcon.classList.remove('hidden');
   } else {
-    playIcon.style.display = 'block';
-    pauseIcon.style.display = 'none';
+    if (playIcon) playIcon.classList.remove('hidden');
+    if (pauseIcon) pauseIcon.classList.add('hidden');
   }
 }
 
@@ -2589,16 +2643,16 @@ function setLoadingState(loading) {
 
   if (loading) {
     // Hide play/pause icons, show spinner
-    playIcon.style.display = 'none';
-    pauseIcon.style.display = 'none';
-    loadingSpinner.style.display = 'block';
+    if (playIcon) playIcon.classList.add('hidden');
+    if (pauseIcon) pauseIcon.classList.add('hidden');
+    if (loadingSpinner) loadingSpinner.classList.remove('hidden');
 
     // Disable button while loading
     playPauseBtn.disabled = true;
     playPauseBtn.style.opacity = '0.8';
   } else {
     // Hide spinner, button state will be set by updatePlayPauseButton
-    loadingSpinner.style.display = 'none';
+    if (loadingSpinner) loadingSpinner.classList.add('hidden');
 
     // Re-enable controls
     playPauseBtn.disabled = false;
@@ -2609,7 +2663,7 @@ function setLoadingState(loading) {
 function updateProgressBar() {
   if (globalAudioPlayer.duration) {
     const progress = (globalAudioPlayer.currentTime / globalAudioPlayer.duration) * 100;
-    const progressFill = document.getElementById('progress-bar-fill');
+    const progressFill = document.getElementById('progress-fill');
     if (progressFill) {
       progressFill.style.width = progress + '%';
     }
@@ -2625,7 +2679,16 @@ function setupEventListeners() {
   document.getElementById('skip-forward-btn').onclick = () => skipTime(10);
 
   // Timeline scrubbing
-  document.getElementById('timeline').oninput = scrubTimeline;
+  const timelineSlider = document.getElementById('timeline-slider');
+  if (timelineSlider) timelineSlider.oninput = scrubTimeline;
+
+  // Volume control
+  const volumeSlider = document.getElementById('volume-slider');
+  if (volumeSlider) {
+    volumeSlider.oninput = handleVolumeChange;
+    // Set initial volume
+    updateVolumeIcon(0.8); // Default 80%
+  }
 
   // Speed preset buttons
   document.querySelectorAll('.speed-preset').forEach(btn => {
@@ -2643,33 +2706,27 @@ function setupEventListeners() {
     };
   }
 
-  // Title click to open chunk list
-  const toolbarTitle = document.querySelector('.toolbar-title');
-  if (toolbarTitle) {
-    toolbarTitle.onclick = (e) => {
-      e.stopPropagation();
-      toggleChunkMenu();
-    };
-  }
-
-  // Chunk list button (old compatibility)
-  const oldTitleBtn = document.getElementById('current-title-btn');
-  if (oldTitleBtn) {
-    oldTitleBtn.onclick = toggleTitleDropdown;
-  }
-
-  // New menu buttons
-  const speedMenuBtn = document.getElementById('speed-menu-btn');
-  if (speedMenuBtn) {
-    speedMenuBtn.onclick = (e) => {
+  // Speed button (new Tailwind UI)
+  const speedBtn = document.getElementById('speed-btn');
+  if (speedBtn) {
+    speedBtn.onclick = (e) => {
       e.stopPropagation();
       toggleSpeedMenu();
     };
   }
 
+  // Chunk list button (new Tailwind UI)
+  const chunkListBtn = document.getElementById('chunk-list-btn');
+  if (chunkListBtn) {
+    chunkListBtn.onclick = (e) => {
+      e.stopPropagation();
+      toggleChunkMenu();
+    };
+  }
+
   // Feature toggles
-  const focusModeBtn = document.getElementById('focus-mode-btn');
-  if (focusModeBtn) focusModeBtn.onclick = toggleFocusMode;
+  const focusBtn = document.getElementById('focus-btn');
+  if (focusBtn) focusBtn.onclick = toggleFocusMode;
 
   const loopBtn = document.getElementById('loop-btn');
   if (loopBtn) loopBtn.onclick = toggleLoop;
@@ -2691,18 +2748,13 @@ function setupEventListeners() {
 
   // Close dropdowns when clicking outside
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('#speed-menu-btn') && !e.target.closest('#speed-popup')) {
+    if (!e.target.closest('#speed-btn') && !e.target.closest('#speed-popup')) {
       const speedPopup = document.getElementById('speed-popup');
-      if (speedPopup) speedPopup.style.display = 'none';
+      if (speedPopup) speedPopup.classList.add('hidden');
     }
-    if (!e.target.closest('.toolbar-title') && !e.target.closest('#chunk-popup')) {
+    if (!e.target.closest('#chunk-list-btn') && !e.target.closest('#chunk-popup')) {
       const chunkPopup = document.getElementById('chunk-popup');
-      if (chunkPopup) chunkPopup.style.display = 'none';
-    }
-    // Old dropdown compatibility
-    if (!e.target.closest('.chunk-nav')) {
-      const titleDropdown = document.getElementById('title-dropdown');
-      if (titleDropdown) titleDropdown.style.display = 'none';
+      if (chunkPopup) chunkPopup.classList.add('hidden');
     }
   });
 }
@@ -2753,26 +2805,40 @@ function setPlaybackSpeed(speed) {
 function toggleSpeedMenu() {
   const popup = document.getElementById('speed-popup');
   const chunkPopup = document.getElementById('chunk-popup');
+  const speedBtn = document.getElementById('speed-btn');
 
   // Close chunk menu if open
-  if (chunkPopup) chunkPopup.style.display = 'none';
+  if (chunkPopup) chunkPopup.classList.add('hidden');
 
   // Toggle speed menu
   if (popup) {
-    popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+    const isHidden = popup.classList.contains('hidden');
+    popup.classList.toggle('hidden');
+
+    // Position popup if showing
+    if (isHidden && speedBtn) {
+      positionPopup(speedBtn, popup);
+    }
   }
 }
 
 function toggleChunkMenu() {
   const popup = document.getElementById('chunk-popup');
   const speedPopup = document.getElementById('speed-popup');
+  const chunkBtn = document.getElementById('chunk-list-btn');
 
   // Close speed menu if open
-  if (speedPopup) speedPopup.style.display = 'none';
+  if (speedPopup) speedPopup.classList.add('hidden');
 
   // Toggle chunk menu
   if (popup) {
-    popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+    const isHidden = popup.classList.contains('hidden');
+    popup.classList.toggle('hidden');
+
+    // Position popup if showing
+    if (isHidden && chunkBtn) {
+      positionPopup(chunkBtn, popup);
+    }
   }
 }
 
@@ -2789,11 +2855,11 @@ function jumpToChunk(index) {
   playAudio(chunk, index);
 
   // Close all menus
-  const titleDropdown = document.getElementById('title-dropdown');
-  if (titleDropdown) titleDropdown.style.display = 'none';
-
   const chunkPopup = document.getElementById('chunk-popup');
-  if (chunkPopup) chunkPopup.style.display = 'none';
+  if (chunkPopup) chunkPopup.classList.add('hidden');
+
+  const speedPopup = document.getElementById('speed-popup');
+  if (speedPopup) speedPopup.classList.add('hidden');
 }
 
 function togglePlayPause() {
@@ -2831,16 +2897,21 @@ function skipTime(seconds) {
 }
 
 function scrubTimeline() {
-  const timeline = document.getElementById('timeline');
-  const seekTime = (timeline.value / 100) * globalAudioPlayer.duration;
-  globalAudioPlayer.currentTime = seekTime;
+  const timeline = document.getElementById('timeline-slider');
+  if (timeline && globalAudioPlayer.duration) {
+    const seekTime = (timeline.value / 100) * globalAudioPlayer.duration;
+    globalAudioPlayer.currentTime = seekTime;
+  }
 }
 
 function updateTimeline() {
   if (globalAudioPlayer.duration) {
     const progress = (globalAudioPlayer.currentTime / globalAudioPlayer.duration) * 100;
-    document.getElementById('timeline').value = progress;
-    document.getElementById('current-time').textContent = formatTime(globalAudioPlayer.currentTime);
+    const timeline = document.getElementById('timeline-slider');
+    if (timeline) timeline.value = progress;
+
+    const currentTimeEl = document.getElementById('current-time');
+    if (currentTimeEl) currentTimeEl.textContent = formatTime(globalAudioPlayer.currentTime);
   }
 }
 
@@ -3506,13 +3577,71 @@ function searchTextRangeInPDF(startSearchText, endSearchText) {
   };
 }
 
+/**
+ * Handles volume slider changes.
+ * @param {Event} e - Input event from volume slider
+ */
+function handleVolumeChange(e) {
+  const volume = parseInt(e.target.value) / 100;
+  globalAudioPlayer.volume = volume;
+  updateVolumeIcon(volume);
+}
+
+/**
+ * Updates the volume icon based on current volume level.
+ * @param {number} volume - Volume level (0.0 to 1.0)
+ */
+function updateVolumeIcon(volume) {
+  const icon = document.getElementById('volume-icon');
+  if (!icon) return;
+
+  if (volume === 0) {
+    icon.textContent = 'volume_off';
+  } else if (volume < 0.3) {
+    icon.textContent = 'volume_mute';
+  } else if (volume < 0.7) {
+    icon.textContent = 'volume_down';
+  } else {
+    icon.textContent = 'volume_up';
+  }
+}
+
+/**
+ * Positions a popup above a button, preventing off-screen overflow.
+ * @param {HTMLElement} button - The button triggering the popup
+ * @param {HTMLElement} popup - The popup element to position
+ */
+function positionPopup(button, popup) {
+  const btnRect = button.getBoundingClientRect();
+  const popupRect = popup.getBoundingClientRect();
+
+  // Center the popup horizontally with the button
+  let left = btnRect.left + (btnRect.width / 2) - (popupRect.width / 2);
+
+  // Position popup above the button
+  const top = btnRect.top - popupRect.height - 10; // 10px spacing
+
+  // Prevent popup from going off-screen
+  if (left < 10) left = 10;
+  if (left + popupRect.width > window.innerWidth - 10) {
+    left = window.innerWidth - popupRect.width - 10;
+  }
+
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
+  popup.style.position = 'fixed';
+  popup.style.bottom = 'auto'; // Override Tailwind's 'bottom-0'
+}
+
 function toggleFocusMode() {
   isFocusMode = !isFocusMode;
   document.body.classList.toggle('focus-mode', isFocusMode);
 
-  const focusBtn = document.getElementById('focus-mode-btn');
-  focusBtn.classList.toggle('active', isFocusMode);
-  focusBtn.setAttribute('aria-pressed', isFocusMode.toString());
+  const focusBtn = document.getElementById('focus-btn');
+  if (focusBtn) {
+    focusBtn.classList.toggle('active', isFocusMode);
+    focusBtn.setAttribute('aria-pressed', isFocusMode.toString());
+  }
 }
 
 function handleKeyboard(event) {
