@@ -94,6 +94,43 @@
       padding-bottom: 96px; /* h-24 toolbar height */
     }
 
+    /* Ensure toolbar stays above all content including dimmed focus mode elements */
+    #audio-toolbar {
+      z-index: 1000;
+    }
+
+    /* Ensure popups appear above toolbar */
+    #speed-popup,
+    #chunk-popup {
+      z-index: 1001;
+    }
+
+    /* Fix toolbar button shapes - ensure perfect circles */
+    #speed-btn,
+    #skip-back-btn,
+    #prev-btn,
+    #next-btn,
+    #skip-forward-btn,
+    #focus-btn,
+    #chunk-list-btn {
+      width: 40px !important;
+      height: 40px !important;
+      min-width: 40px !important;
+      min-height: 40px !important;
+      aspect-ratio: 1 / 1 !important;
+      padding: 0 !important; /* Override Tailwind p-2 */
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex-shrink: 0 !important;
+    }
+
+    /* Play/pause button is larger */
+    #play-pause-btn {
+      aspect-ratio: 1 / 1 !important;
+      flex-shrink: 0 !important;
+    }
+
     /* Custom styles for timeline progress slider */
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
@@ -133,10 +170,15 @@
     /* Highlight boxes for PDF text (line-by-line) */
     .highlight-box {
       position: absolute;
-      background-color: rgba(255, 235, 59, 0.8);
+      background-color: rgba(255, 235, 59, 1.0);
       border-radius: 2px;
       pointer-events: none;
       z-index: 1;
+      /* Fix blurry rendering caused by sub-pixel positioning */
+      transform: translateZ(0);
+      will-change: transform;
+      backface-visibility: hidden;
+      -webkit-font-smoothing: subpixel-antialiased;
     }
 
     @keyframes spin {
@@ -206,6 +248,29 @@
       padding: 0;
       width: 32px;
       height: 32px;
+      aspect-ratio: 1 / 1; /* Ensure perfect circular shape */
+      flex-shrink: 0; /* Prevent button from being compressed */
+    }
+
+    /* Ensure Material Icons inside buttons maintain size */
+    .control-btn .material-icons {
+      display: block;
+      line-height: 1;
+    }
+
+    /* Fix toolbar title overflow - ensure proper text truncation */
+    #toolbar-title {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Constrain the text container in Zone 1 to prevent overflow */
+    #audio-toolbar .w-64 > .flex > div:last-child {
+      min-width: 0; /* Allow flex item to shrink below content size */
+      flex: 1; /* Take remaining space */
+      overflow: hidden; /* Prevent overflow */
     }
 
     .control-btn:hover:not(:disabled) {
@@ -659,8 +724,8 @@
        Dims individual text spans, not entire pages
        ======================================== */
 
-    /* Only dim non-highlighted text spans when highlighting is active */
-    .has-highlight .textLayer > span {
+    /* Only dim non-highlighted text spans when focus mode is active */
+    body.focus-mode .has-highlight .textLayer > span {
       background-color: rgba(255, 255, 255, 0.65);
       transition: background-color 0.4s ease;
       z-index: 1;
@@ -675,7 +740,7 @@
 
     .highlighted-chunk,
     .html-assessment-container .highlighted-element {
-      background-color: rgba(255, 235, 59, 0.8) !important;
+      background-color: rgba(255, 235, 59, 1.0) !important;
       color: #000 !important;
       border-radius: 2px;
       opacity: 1 !important;
@@ -696,10 +761,15 @@
     /* Highlight boxes for PDF text (single box per chunk) */
     .highlight-box {
       position: absolute;
-      background-color: rgba(255, 235, 59, 0.8);
+      background-color: rgba(255, 235, 59, 1.0);
       border-radius: 2px;
       pointer-events: none;
       z-index: 1;
+      /* Fix blurry rendering caused by sub-pixel positioning */
+      transform: translateZ(0);
+      will-change: transform;
+      backface-visibility: hidden;
+      -webkit-font-smoothing: subpixel-antialiased;
     }
 
     /* Loading spinner animation */
@@ -843,6 +913,7 @@
       max-width: 1200px;
       display: none;
       position: relative;
+      margin-bottom: 96px; /* Ensure content doesn't overlap fixed toolbar */
     }
 
     #status {
@@ -858,6 +929,7 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       position: relative;
       width: 100%;
+      margin-bottom: 96px; /* Additional margin to prevent content overlap with toolbar */
     }
 
     .page-container {
@@ -929,7 +1001,7 @@
     .html-assessment-container {
       padding: 50px 60px;
       max-width: 900px; /* Wider for better space utilization while maintaining readability */
-      margin: 0 auto;
+      margin: 0 auto 96px auto; /* Bottom margin to prevent content overlap with toolbar */
       background: white; /* Match pdf-container background */
       line-height: 2.0; /* Generous spacing prevents line confusion */
       font-family: 'Inter', sans-serif;
@@ -1098,11 +1170,11 @@
 
     /* ========================================
        AUTO-DIM INACTIVE CONTENT (HTML Assessments)
-       Dims all content elements by default, highlights active question
+       Dims all content elements when focus mode is active, highlights active question
        ======================================== */
 
-    /* Dim direct children only to prevent opacity stacking on nested elements */
-    .html-assessment-container > * {
+    /* Dim direct children only when focus mode is active to prevent opacity stacking on nested elements */
+    body.focus-mode .html-assessment-container > * {
       opacity: 0.35;
       transition: opacity 0.4s ease;
     }
@@ -1510,7 +1582,7 @@
         <!-- ZONE 3: RIGHT (Tools) -->
         <div class="w-64 hidden md:flex items-center justify-end flex-shrink-0 space-x-4">
           <!-- Chunk List -->
-          <button id="chunk-list-btn" title="Question List" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <button id="chunk-list-btn" title="Audio List" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <span class="material-icons">list</span>
           </button>
           <!-- Volume Control -->
@@ -1542,7 +1614,7 @@
 
   <!-- Chunk List Popup -->
   <div id="chunk-popup" class="hidden fixed bottom-0 right-0 mb-28 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 z-50">
-    <p class="text-sm font-medium text-center text-gray-700 dark:text-gray-200 mb-2">Question List</p>
+    <p class="text-sm font-medium text-center text-gray-700 dark:text-gray-200 mb-2">Audio List</p>
     <div id="title-dropdown" class="max-h-64 overflow-y-auto space-y-1">
       <!-- Items will be populated dynamically -->
     </div>
@@ -2456,7 +2528,7 @@ function createChunkMarkers() {
     marker.className = 'absolute w-0.5 h-1.5 bg-white dark:bg-gray-800';
     // Position evenly across the progress bar
     marker.style.left = `${(i / serverChunks.length) * 100}%`;
-    marker.title = `Question ${i + 1}: ${getCleanedChunkText(serverChunks[i].text)}`;
+    marker.title = `Audio ${i + 1}: ${getCleanedChunkText(serverChunks[i].text)}`;
     markersContainer.appendChild(marker);
   }
 }
@@ -2468,7 +2540,7 @@ function populateTitleDropdown() {
   serverChunks.forEach((chunk, index) => {
     const item = document.createElement('button');
     item.className = 'chunk-item w-full text-left text-sm text-gray-700 dark:text-gray-200 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 truncate';
-    item.textContent = `${index + 1}. ${getCleanedChunkText(chunk.text)}`;
+    item.textContent = `${getCleanedChunkText(chunk.text)}`;
 
     // Highlight current chunk
     if (index === currentChunkIndex) {
@@ -2488,7 +2560,7 @@ function updateToolbarDisplay() {
     const toolbarTitle = document.getElementById('toolbar-title');
     if (toolbarTitle) {
       const chunkText = getCleanedChunkText(currentChunk.text);
-      toolbarTitle.textContent = `Q${currentChunkIndex + 1}: ${chunkText}`;
+      toolbarTitle.textContent = `${chunkText}`;
       toolbarTitle.title = chunkText;
     }
   }
@@ -2496,7 +2568,7 @@ function updateToolbarDisplay() {
   // Update subtitle with assessment info
   const toolbarSubtitle = document.getElementById('toolbar-subtitle');
   if (toolbarSubtitle) {
-    toolbarSubtitle.textContent = `Question ${currentChunkIndex + 1} of ${serverChunks.length}`;
+    toolbarSubtitle.textContent = `Audio ${currentChunkIndex + 1} of ${serverChunks.length}`;
   }
 
   // Update speed preset buttons with Tailwind styling
@@ -3479,10 +3551,11 @@ function createHighlightBoxes(spans, pageContainer) {
     // Create highlight box for this line
     const box = document.createElement('div');
     box.className = 'highlight-box active-highlight';
-    box.style.left = left + 'px';
-    box.style.top = top + 'px';
-    box.style.width = width + 'px';
-    box.style.height = height + 'px';
+    // Round pixel values to prevent sub-pixel rendering blur
+    box.style.left = Math.round(left) + 'px';
+    box.style.top = Math.round(top) + 'px';
+    box.style.width = Math.round(width) + 'px';
+    box.style.height = Math.round(height) + 'px';
 
     highlightLayer.appendChild(box);
     boxes.push(box);

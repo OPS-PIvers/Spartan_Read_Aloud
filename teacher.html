@@ -392,7 +392,61 @@
     }
 
     .th-actions {
-      width: 140px;
+      width: 200px;
+    }
+
+    /* Save feedback styles */
+    .save-feedback {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      vertical-align: middle;
+    }
+
+    .save-feedback.saving {
+      color: #1967d2;
+    }
+
+    .save-feedback.success {
+      color: #137333;
+      animation: fadeOut 2s forwards;
+    }
+
+    .save-feedback.error {
+      color: #d93025;
+    }
+
+    @keyframes fadeOut {
+      0% { opacity: 1; }
+      70% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* Spinner for save button */
+    .action-button.save.saving {
+      position: relative;
+      color: transparent;
+      pointer-events: none;
+    }
+
+    .action-button.save.saving::after {
+      content: "";
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      top: 50%;
+      left: 50%;
+      margin-left: -7px;
+      margin-top: -7px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spinner 0.6s linear infinite;
+    }
+
+    @keyframes spinner {
+      to { transform: rotate(360deg); }
     }
   </style>
   <style>
@@ -695,7 +749,8 @@ function renderAssessmentTable() {
           <textarea data-field="studentEmails" class="table-textarea">${escapeHtml(assessment.studentEmails)}</textarea>
         </td>
         <td class="actions-cell">
-          <button onclick="saveAssessmentRow(${assessment.rowIndex})" class="action-button save" title="Save">✓</button>
+          <button onclick="saveAssessmentRow(${assessment.rowIndex})" class="action-button save" id="save-btn-${assessment.rowIndex}" title="Save">✓</button>
+          <span class="save-feedback" id="save-feedback-${assessment.rowIndex}"></span>
           ${userRole === 'super_admin' ? `
             <button onclick="deleteAssessmentRow(${assessment.rowIndex})" class="action-button delete" title="Delete">✕</button>
             <button onclick="reprocessAssessmentRow(${assessment.rowIndex})" class="action-button reprocess" title="Re-run analysis and audio generation">⟳</button>
@@ -882,6 +937,9 @@ function saveAssessmentRow(rowIndex) {
   const row = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
   if (!row) return;
 
+  const saveButton = document.getElementById(`save-btn-${rowIndex}`);
+  const feedbackElement = document.getElementById(`save-feedback-${rowIndex}`);
+
   const className = row.querySelector('[data-field="className"]').value.trim();
   const instructor = row.querySelector('[data-field="instructor"]').value.trim();
   const password = row.querySelector('[data-field="password"]').value.trim();
@@ -890,17 +948,50 @@ function saveAssessmentRow(rowIndex) {
 
   console.log('Saving assessment row', rowIndex);
 
+  // Show loading state
+  saveButton.classList.add('saving');
+  saveButton.disabled = true;
+  feedbackElement.textContent = 'Saving...';
+  feedbackElement.className = 'save-feedback saving';
+
   google.script.run
     .withSuccessHandler((result) => {
+      // Remove loading state
+      saveButton.classList.remove('saving');
+      saveButton.disabled = false;
+
       if (result.error) {
-        alert('Error: ' + result.error);
+        feedbackElement.textContent = 'Error: ' + result.error;
+        feedbackElement.className = 'save-feedback error';
+        setTimeout(() => {
+          feedbackElement.textContent = '';
+        }, 3000);
         return;
       }
-      alert('Assessment updated successfully!');
+
+      // Show success message
+      feedbackElement.textContent = 'Saved!';
+      feedbackElement.className = 'save-feedback success';
+
+      // Clear message after animation
+      setTimeout(() => {
+        feedbackElement.textContent = '';
+        feedbackElement.className = 'save-feedback';
+      }, 2000);
+
+      // Reload assessments to reflect changes
       loadAllAssessments();
     })
     .withFailureHandler((error) => {
-      alert('Failed to update: ' + error.message);
+      // Remove loading state
+      saveButton.classList.remove('saving');
+      saveButton.disabled = false;
+
+      feedbackElement.textContent = 'Failed to update';
+      feedbackElement.className = 'save-feedback error';
+      setTimeout(() => {
+        feedbackElement.textContent = '';
+      }, 3000);
     })
     .updateAssessmentRow(adminSessionToken, rowIndex, {
       className: className,

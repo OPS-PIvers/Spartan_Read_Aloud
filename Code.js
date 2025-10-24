@@ -2574,19 +2574,7 @@ function getAssessmentPdf(email, password, assessmentUrl) {
           // Generate session token for secure audio access
           const sessionToken = generateSessionToken(cleanEmail, pdfUrl);
 
-          // PDFs: Return base64 data for PDF.js rendering
-          if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.PDF) {
-            Logger.log('→ Serving PDF with base64 encoding');
-            return {
-              fileType: 'pdf',
-              pdfData: Utilities.base64Encode(file.getBlob().getBytes()),
-              fileName: fileName,
-              audioChunks: audioChunks,
-              sessionToken: sessionToken
-            };
-          }
-
-          // Docs/Word: Convert to HTML and return sanitized HTML
+          // Convert all files (PDF, Docs, Word) to HTML with embedded images
           Logger.log('→ Converting to HTML for native rendering');
           const conversionResult = convertFileToHtml(fileId);
           if (conversionResult.error) {
