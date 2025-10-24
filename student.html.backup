@@ -3,6 +3,8 @@
 <head>
   <base target="_top">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/text_layer_builder.css">
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -23,25 +25,6 @@
       padding: 20px;
       overscroll-behavior-y: none; /* Specifically prevent vertical bounce */
       -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
-    }
-
-    /* Responsive body padding to prevent content cutoff */
-    @media (max-width: 1100px) {
-      body {
-        padding: 10px; /* Reduce padding for narrow desktops */
-      }
-    }
-
-    @media (max-width: 768px) {
-      body {
-        padding: 8px; /* Even less padding for tablets */
-      }
-    }
-
-    @media (max-width: 480px) {
-      body {
-        padding: 5px; /* Minimal padding for mobile */
-      }
     }
 
     h1 {
@@ -736,6 +719,24 @@
       opacity: 1 !important;
     }
 
+    /* ========================================
+       AUTO-DIM INACTIVE CONTENT (PDF Assessments)
+       Dims individual text spans, not entire pages
+       ======================================== */
+
+    /* Only dim non-highlighted text spans when focus mode is active */
+    body.focus-mode .has-highlight .textLayer > span {
+      background-color: rgba(255, 255, 255, 0.65);
+      transition: background-color 0.4s ease;
+      z-index: 1;
+    }
+
+    /* Remove dimming from highlighted text spans (active question) */
+    .has-highlight .textLayer > span.highlighted-text-span {
+      background-color: transparent !important;
+      color: #000 !important;
+      z-index: 2;
+    }
 
     .highlighted-chunk,
     .html-assessment-container .highlighted-element {
@@ -930,6 +931,66 @@
       width: 100%;
       margin-bottom: 96px; /* Additional margin to prevent content overlap with toolbar */
     }
+
+    .page-container {
+      position: relative;
+      margin: 0 auto 0 auto;
+      display: block;
+    }
+
+    .page-container canvas {
+      display: block;
+    }
+
+    .textLayer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      opacity: 0;
+      line-height: 1.0;
+    }
+
+    /* Highlight layer sits between canvas and text layer */
+    .highlightLayer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    /* Make text layer visible when page has highlighting */
+    .has-highlight .textLayer {
+      opacity: 1;
+    }
+
+    .textLayer > span {
+      color: transparent;
+      position: absolute;
+      white-space: pre;
+      cursor: text;
+      transform-origin: 0% 0%;
+    }
+
+    .textLayer .highlight {
+      margin: -1px;
+      padding: 1px;
+      background-color: rgba(255, 235, 59, 0.6);
+      border-radius: 4px;
+    }
+
+    /* Ensure text is selectable but invisible */
+    .textLayer > span {
+      color: transparent;
+      -webkit-user-select: text;
+      -moz-user-select: text;
+      -ms-user-select: text;
+      user-select: text;
     }
 
     /* ========================================
@@ -946,8 +1007,6 @@
       font-family: 'Inter', sans-serif;
       color: #4a4a4a; /* Soft dark gray, not harsh black */
       font-size: clamp(16px, 2vw, 18px);
-      box-sizing: border-box; /* Include padding in max-width calculation */
-      overflow-x: hidden; /* Prevent horizontal scrolling */
     }
 
     /* Generous spacing between all elements - white space is key */
@@ -1092,16 +1151,50 @@
        ======================================== */
 
     /* Focus mode - very subtle dimming */
-    body.focus-mode .html-assessment-container > *:not(.highlighted-element):not(.has-highlight) {
+    body.focus-mode .html-assessment-container > * {
       opacity: 0.3;
       transition: opacity 0.3s ease;
     }
 
-    /* Keep highlighted elements and their parents fully visible */
+    /* Keep highlighted elements and their parents visible */
     body.focus-mode .html-assessment-container .highlighted-element,
     body.focus-mode .html-assessment-container .has-highlight {
-      opacity: 1;
+      opacity: 1 !important;
     }
+
+    /* Ensure all ancestors with highlights stay visible */
+    body.focus-mode .html-assessment-container > .highlighted-element,
+    body.focus-mode .html-assessment-container > .has-highlight {
+      opacity: 1 !important;
+    }
+
+    /* ========================================
+       AUTO-DIM INACTIVE CONTENT (HTML Assessments)
+       Dims all content elements when focus mode is active, highlights active question
+       ======================================== */
+
+    /* Dim direct children only when focus mode is active to prevent opacity stacking on nested elements */
+    body.focus-mode .html-assessment-container > * {
+      opacity: 0.35;
+      transition: opacity 0.4s ease;
+    }
+
+    /* Active question elements are fully visible */
+    .html-assessment-container .highlighted-element {
+      opacity: 1 !important;
+    }
+
+    /* All descendants of highlighted elements are fully visible */
+    .html-assessment-container .highlighted-element * {
+      opacity: 1 !important;
+    }
+
+    /* Parent containers with highlights don't affect dimming (stay transparent) */
+    .html-assessment-container .has-highlight {
+      opacity: inherit;
+    }
+
+    /* Highlighted table cells inherit unified highlighting styles above */
 
     /* ========================================
        MOBILE RESPONSIVE - MINIMAL & SPACIOUS
@@ -1563,7 +1656,9 @@ let availableAssessments = [];
 // Loading state for assessment preloading
 let currentLoadingCard = null; // Reference to the card currently being loaded
 let currentLoadingOverlay = null; // Reference to the loading overlay element
-let pendingAssessmentData = null; // Stores assessment data while preloading audio
+let pendingAssessmentData = null; // Stores PDF data while preloading audio
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
 function initializePasswordlessStudentView(user) {
   console.log('initializePasswordlessStudentView called with:', user);
@@ -2301,7 +2396,7 @@ function updateLoadingProgress() {
 }
 
 function normalizeText(text) {
-  // Normalize text to handle variations from different source formats
+  // Normalize text to handle OCR vs PDF.js differences
   return text.trim().toLowerCase()
     .replace(/\s+/g, ' ')  // Normalize whitespace
     .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '');  // Remove punctuation
@@ -2835,8 +2930,8 @@ function toggleTitleDropdown() {
 }
 
 /**
- * Highlights text chunks in HTML-rendered assessments (all file types).
- * Uses element-based matching for consistent highlighting.
+ * Highlights text chunks in HTML-rendered assessments.
+ * Uses element-based matching instead of PDF.js text layer spans.
  * @param {string} currentSearchWords First few words of current chunk
  * @param {string} nextSearchWords First few words of next chunk (boundary)
  * @returns {boolean} True if highlighting succeeded
@@ -2943,6 +3038,522 @@ function highlightChunkInHTML(currentSearchWords, nextSearchWords) {
   return false;
 }
 
+function highlightChunkInPDF(currentSearchWords, nextSearchWords) {
+  // Detect rendering mode and route to appropriate highlighting function
+  const isHtmlMode = document.querySelector('.html-assessment-container') !== null;
+
+  if (isHtmlMode) {
+    // Use HTML-based highlighting
+    highlightChunkInHTML(currentSearchWords, nextSearchWords);
+    return;
+  }
+
+  // EXISTING PDF HIGHLIGHTING LOGIC BELOW
+  // Remove previous highlights and has-highlight classes
+  if (currentHighlight) {
+    currentHighlight.classList.remove('highlighted-chunk');
+  }
+  document.querySelectorAll('.highlighted-text-span').forEach(span => {
+    span.classList.remove('highlighted-text-span');
+  });
+  document.querySelectorAll('.has-highlight').forEach(el => {
+    el.classList.remove('has-highlight');
+  });
+
+  // NEW: Remove previous highlight boxes
+  clearAllHighlightBoxes();
+
+  // Use range-based search with current and next chunk boundaries
+  console.log('Using range-based highlighting with chunk boundaries...');
+  const found = searchTextRangeInPDF(currentSearchWords, nextSearchWords);
+
+  if (found) {
+    if (found.spans && found.spans.length > 0) {
+      // NEW: Create highlight boxes instead of adding background to spans
+      createHighlightBoxes(found.spans, found.container);
+
+      // KEEP: Add marker classes for focus mode (but no background color)
+      found.spans.forEach(span => {
+        span.classList.add('highlighted-text-span');
+      });
+      currentHighlight = found.container;
+
+      // Add has-highlight class to page container (parent of textLayer)
+      if (found.container && found.container.classList.contains('page-container')) {
+        found.container.classList.add('has-highlight');
+      }
+
+      // Scroll to first highlighted span (with programmatic scroll flag)
+      isProgrammaticScroll = true;
+      const rect = found.spans[0].getBoundingClientRect();
+      const offset = window.innerHeight * 0.3; // 30% from top
+      window.scrollTo({
+        top: window.scrollY + rect.top - offset,
+        behavior: 'smooth'
+      });
+
+      // Clear flag after scroll animation completes
+      setTimeout(() => {
+        isProgrammaticScroll = false;
+      }, 800);
+
+      console.log(`✓ Highlighted ${found.spans.length} spans with highlight boxes`);
+    } else {
+      // Fallback to container highlighting
+      found.classList.add('highlighted-chunk');
+      found.classList.add('has-highlight');
+      currentHighlight = found;
+
+      // Programmatic scroll with flag
+      isProgrammaticScroll = true;
+      const rect = found.getBoundingClientRect();
+      const offset = window.innerHeight * 0.3; // 30% from top
+      window.scrollTo({
+        top: window.scrollY + rect.top - offset,
+        behavior: 'smooth'
+      });
+
+      setTimeout(() => {
+        isProgrammaticScroll = false;
+      }, 800);
+
+      console.log('→ Using page-level highlighting fallback');
+    }
+  } else {
+    console.log('✗ Could not find or highlight chunk');
+  }
+}
+
+function searchTextInPDF(searchText) {
+  if (!searchText) return null;
+
+  // Normalize the search text
+  const searchPhrase = normalizeText(searchText);
+  console.log('=== SEARCH DEBUG ===');
+  console.log('Original search text:', searchText);
+  console.log('Normalized search phrase:', searchPhrase);
+
+  const textLayers = document.querySelectorAll('.textLayer');
+  console.log('Found', textLayers.length, 'text layers');
+
+  // Try exact normalized phrase match first
+  for (let layer of textLayers) {
+    const spans = layer.querySelectorAll('span');
+
+    // Method 1: Check each individual span for the complete phrase
+    for (let span of spans) {
+      const spanText = normalizeText(span.textContent);
+      if (spanText && spanText.includes(searchPhrase)) {
+        console.log('✓ FOUND normalized phrase in single span');
+        return {
+          container: layer.closest('.page-container'),
+          spans: [span]
+        };
+      }
+    }
+
+    // Method 2: Check combinations of consecutive spans
+    for (let i = 0; i < spans.length; i++) {
+      let combinedText = '';
+      let consecutiveSpans = [];
+
+      // Try combining up to 15 consecutive spans for longer text
+      for (let j = i; j < Math.min(i + 15, spans.length); j++) {
+        const span = spans[j];
+        const spanText = span.textContent.trim();
+
+        if (spanText.length > 0) {
+          if (combinedText.length > 0) combinedText += ' ';
+          combinedText += spanText;
+          consecutiveSpans.push(span);
+
+          // Check normalized text
+          const normalizedCombined = normalizeText(combinedText);
+          if (normalizedCombined.includes(searchPhrase)) {
+            console.log('✓ FOUND normalized phrase across', consecutiveSpans.length, 'spans');
+            console.log('  Combined text:', combinedText.substring(0, 100));
+            return {
+              container: layer.closest('.page-container'),
+              spans: consecutiveSpans
+            };
+          }
+        }
+
+        // Stop if combined text is much longer than search phrase
+        if (combinedText.length > searchPhrase.length * 4) break;
+      }
+    }
+  }
+
+  // Fallback: Try first 4 normalized words only
+  const words = searchPhrase.split(/\s+/).filter(w => w.length > 0);
+  if (words.length > 4) {
+    const firstFourWords = words.slice(0, 4).join(' ');
+    console.log('Trying first 4 normalized words:', firstFourWords);
+
+    for (let layer of textLayers) {
+      const spans = layer.querySelectorAll('span');
+
+      for (let i = 0; i < spans.length; i++) {
+        let combinedText = '';
+        let consecutiveSpans = [];
+
+        for (let j = i; j < Math.min(i + 8, spans.length); j++) {
+          const span = spans[j];
+          const spanText = span.textContent.trim();
+
+          if (spanText.length > 0) {
+            if (combinedText.length > 0) combinedText += ' ';
+            combinedText += spanText;
+            consecutiveSpans.push(span);
+
+            const normalizedCombined = normalizeText(combinedText);
+            if (normalizedCombined.includes(firstFourWords)) {
+              console.log('✓ FOUND first 4 normalized words in:', combinedText.substring(0, 100));
+              return {
+                container: layer.closest('.page-container'),
+                spans: consecutiveSpans
+              };
+            }
+          }
+        }
+      }
+    }
+  }
+
+  console.log('✗ No text matches found, falling back to page-level highlighting');
+
+  // Final fallback to page container based on chunk index
+  const pageContainers = document.querySelectorAll('.page-container');
+  if (pageContainers.length > 0) {
+    const fallbackPageIndex = Math.min(currentChunkIndex, pageContainers.length - 1);
+    console.log('Using fallback page:', fallbackPageIndex + 1);
+    return pageContainers[fallbackPageIndex];
+  }
+
+  return null;
+}
+
+function getAllSpansFromPageRange(startPageContainer, maxPages = 3) {
+  /**
+   * Collects spans from multiple consecutive pages starting from startPageContainer.
+   * Returns an object with all spans and metadata for multi-page highlighting.
+   */
+  const pageContainers = Array.from(document.querySelectorAll('.page-container'));
+  const startPageIndex = pageContainers.indexOf(startPageContainer);
+
+  if (startPageIndex === -1) {
+    console.warn('Start page container not found in document');
+    return { allSpans: [], spanToPage: new Map(), pages: [], startPageIndex: -1 };
+  }
+
+  const result = {
+    allSpans: [],
+    spanToPage: new Map(), // Track which page each span belongs to
+    pages: [],
+    startPageIndex: startPageIndex
+  };
+
+  // Collect spans from current page and up to maxPages-1 subsequent pages
+  for (let i = 0; i < maxPages && (startPageIndex + i) < pageContainers.length; i++) {
+    const pageContainer = pageContainers[startPageIndex + i];
+    const textLayer = pageContainer.querySelector('.textLayer');
+    if (textLayer) {
+      const spans = Array.from(textLayer.querySelectorAll('span'));
+      spans.forEach(span => result.spanToPage.set(span, pageContainer));
+      result.allSpans.push(...spans);
+      result.pages.push(pageContainer);
+    }
+  }
+
+  console.log(`→ Collected ${result.allSpans.length} spans from ${result.pages.length} pages`);
+  return result;
+}
+
+function findEndBoundaryAfterStart(allSpans, startIndex, endSearchText) {
+  /**
+   * Searches for endSearchText only in spans AFTER startIndex.
+   * This ensures sequential ordering and includes all text between boundaries.
+   * Returns the index where the end boundary starts, or -1 if not found.
+   */
+  const normalizedEndSearch = normalizeText(endSearchText);
+  console.log('→ Searching for end boundary in spans after index', startIndex);
+
+  // Search through remaining spans, trying consecutive combinations
+  for (let i = startIndex + 1; i < allSpans.length; i++) {
+    let combinedText = '';
+    let consecutiveSpans = [];
+
+    // Try combining up to 15 consecutive spans (consistent with searchTextInPDF)
+    for (let j = i; j < Math.min(i + 15, allSpans.length); j++) {
+      const span = allSpans[j];
+      const spanText = span.textContent.trim();
+
+      if (spanText.length > 0) {
+        if (combinedText.length > 0) combinedText += ' ';
+        combinedText += spanText;
+        consecutiveSpans.push(span);
+
+        // Check if we've found the end boundary
+        const normalizedCombined = normalizeText(combinedText);
+        if (normalizedCombined.includes(normalizedEndSearch)) {
+          console.log(`→ Found end boundary at span index ${i} (matched across ${consecutiveSpans.length} spans)`);
+          return i; // Return where the search started (first span in range)
+        }
+      }
+
+      // Stop if combined text is much longer than search phrase
+      // Increased multiplier to handle large gaps (blank paragraphs, images)
+      if (combinedText.length > normalizedEndSearch.length * 10) break;
+    }
+  }
+
+  // Fallback: Try first 4 words of end search text
+  const words = normalizedEndSearch.split(/\s+/).filter(w => w.length > 0);
+  if (words.length > 4) {
+    const firstFourWords = words.slice(0, 4).join(' ');
+    console.log('→ Trying first 4 words of end boundary:', firstFourWords);
+
+    for (let i = startIndex + 1; i < allSpans.length; i++) {
+      let combinedText = '';
+      let consecutiveSpans = [];
+
+      // Check up to 8 consecutive spans (consistent with searchTextInPDF)
+      for (let j = i; j < Math.min(i + 8, allSpans.length); j++) {
+        const span = allSpans[j];
+        const spanText = span.textContent.trim();
+
+        if (spanText.length > 0) {
+          if (combinedText.length > 0) combinedText += ' ';
+          combinedText += spanText;
+          consecutiveSpans.push(span);
+
+          const normalizedCombined = normalizeText(combinedText);
+          if (normalizedCombined.includes(firstFourWords)) {
+            console.log(`→ Found end boundary using first 4 words at span index ${i}`);
+            return i; // Return where the search started
+          }
+        }
+      }
+    }
+  }
+
+  return -1; // Not found
+}
+
+/**
+ * Trims trailing empty or whitespace-only spans from a span array.
+ * This prevents highlighting from extending into blank space before the next chunk.
+ * @param {Array<HTMLElement>} spans - Array of span elements
+ * @returns {Array<HTMLElement>} - Trimmed array with trailing whitespace removed
+ */
+function trimTrailingEmptySpans(spans) {
+  if (!spans || spans.length === 0) return spans;
+
+  // Find the last non-empty span by working backwards
+  let lastNonEmptyIndex = spans.length - 1;
+
+  while (lastNonEmptyIndex >= 0) {
+    const text = spans[lastNonEmptyIndex].textContent;
+    // Check if span has meaningful content (not just whitespace)
+    if (text && text.trim().length > 0) {
+      break;
+    }
+    lastNonEmptyIndex--;
+  }
+
+  // Return trimmed array (include the last non-empty span)
+  return spans.slice(0, lastNonEmptyIndex + 1);
+}
+
+/**
+ * Creates highlight boxes - one per line of text in the chunk.
+ * @param {Array<HTMLElement>} spans - Text layer spans to highlight
+ * @param {HTMLElement} pageContainer - The page container
+ * @returns {Array<HTMLElement>} Created highlight box elements (one per line)
+ */
+function createHighlightBoxes(spans, pageContainer) {
+  if (!spans || spans.length === 0) return [];
+
+  const highlightLayer = pageContainer.querySelector('.highlightLayer');
+  if (!highlightLayer) {
+    console.warn('No highlight layer found in page container');
+    return [];
+  }
+
+  const highlightLayerRect = highlightLayer.getBoundingClientRect();
+
+  // Group spans by line (Y position with tolerance)
+  const lineGroups = [];
+  const lineTolerance = 5; // pixels tolerance for same line
+
+  spans.forEach(span => {
+    const rect = span.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return; // Skip empty spans
+
+    // Check if span text is only whitespace
+    const text = span.textContent || '';
+    if (text.trim().length === 0) return; // Skip whitespace-only spans
+
+    // Find existing line group or create new one
+    const spanTop = rect.top;
+    let foundGroup = false;
+
+    for (let group of lineGroups) {
+      // Check if span is on same line as this group
+      if (Math.abs(group.top - spanTop) <= lineTolerance) {
+        group.spans.push(span);
+        group.rects.push(rect);
+        foundGroup = true;
+        break;
+      }
+    }
+
+    if (!foundGroup) {
+      lineGroups.push({
+        top: spanTop,
+        spans: [span],
+        rects: [rect]
+      });
+    }
+  });
+
+  // Sort line groups by vertical position (top to bottom)
+  lineGroups.sort((a, b) => a.top - b.top);
+
+  // Create one highlight box per line
+  const boxes = [];
+  const padding = 4;
+
+  lineGroups.forEach((group, index) => {
+    if (group.rects.length === 0) return;
+
+    // Calculate bounding box for this line
+    let minLeft = Infinity;
+    let minTop = Infinity;
+    let maxRight = -Infinity;
+    let maxBottom = -Infinity;
+
+    group.rects.forEach(rect => {
+      minLeft = Math.min(minLeft, rect.left);
+      minTop = Math.min(minTop, rect.top);
+      maxRight = Math.max(maxRight, rect.right);
+      maxBottom = Math.max(maxBottom, rect.bottom);
+    });
+
+    // Add padding
+    minLeft -= padding;
+    minTop -= padding;
+    maxRight += padding;
+    maxBottom += padding;
+
+    // Calculate dimensions relative to highlight layer
+    const left = minLeft - highlightLayerRect.left;
+    const top = minTop - highlightLayerRect.top;
+    const width = maxRight - minLeft;
+    const height = maxBottom - minTop;
+
+    // Create highlight box for this line
+    const box = document.createElement('div');
+    box.className = 'highlight-box active-highlight';
+    // Round pixel values to prevent sub-pixel rendering blur
+    box.style.left = Math.round(left) + 'px';
+    box.style.top = Math.round(top) + 'px';
+    box.style.width = Math.round(width) + 'px';
+    box.style.height = Math.round(height) + 'px';
+
+    highlightLayer.appendChild(box);
+    boxes.push(box);
+  });
+
+  console.log(`✓ Created ${boxes.length} highlight boxes (one per line)`);
+  return boxes;
+}
+
+/**
+ * Removes all highlight boxes from all highlight layers.
+ */
+function clearAllHighlightBoxes() {
+  document.querySelectorAll('.highlight-box').forEach(box => box.remove());
+}
+
+function searchTextRangeInPDF(startSearchText, endSearchText) {
+  /**
+   * Searches for a range of text between two searchWords boundaries.
+   * Returns all spans from the start position to the end position.
+   * If no end boundary, highlights to end of page/document.
+   */
+  if (!startSearchText) return null;
+
+  console.log('=== RANGE SEARCH DEBUG ===');
+  console.log('Start search text:', startSearchText);
+  console.log('End search text:', endSearchText || '(end of page)');
+
+  // Find the starting position using the proven searchWords method
+  const startResult = searchTextInPDF(startSearchText);
+  if (!startResult) {
+    console.log('✗ Could not find start boundary');
+    return null;
+  }
+
+  console.log('✓ Found start boundary');
+
+  // If we only have a container (page-level fallback), return it as-is
+  if (!startResult.spans || startResult.spans.length === 0) {
+    return startResult;
+  }
+
+  // Get spans from current page AND subsequent pages (multi-page support)
+  const pageContainer = startResult.container;
+  const multiPageData = getAllSpansFromPageRange(pageContainer, 3);
+
+  if (multiPageData.allSpans.length === 0) {
+    console.log('✗ No spans found in page range');
+    return startResult;
+  }
+
+  const allSpans = multiPageData.allSpans;
+  const startSpanIndex = allSpans.indexOf(startResult.spans[0]);
+
+  if (startSpanIndex === -1) {
+    console.log('✗ Could not locate start span in multi-page range');
+    return startResult;
+  }
+
+  console.log(`→ Searching across ${multiPageData.pages.length} pages for end boundary`);
+
+  // If no end search text, highlight from start to end of page
+  if (!endSearchText) {
+    console.log('→ Highlighting from start to end of page');
+    const spanRange = allSpans.slice(startSpanIndex);
+    return {
+      container: pageContainer,
+      spans: trimTrailingEmptySpans(spanRange)
+    };
+  }
+
+  // Search for end boundary ONLY in spans after the start position
+  // This ensures we find the NEXT occurrence and include all text (even after images)
+  const endSpanIndex = findEndBoundaryAfterStart(allSpans, startSpanIndex, endSearchText);
+
+  if (endSpanIndex === -1) {
+    console.log('→ End boundary not found after start position, highlighting to end of page');
+    const spanRange = allSpans.slice(startSpanIndex);
+    return {
+      container: pageContainer,
+      spans: trimTrailingEmptySpans(spanRange)
+    };
+  }
+
+  // Return the precise range between boundaries (trimmed of trailing whitespace)
+  const spanRange = allSpans.slice(startSpanIndex, endSpanIndex);
+  const trimmedSpans = trimTrailingEmptySpans(spanRange);
+  console.log(`✓ Precise range: ${endSpanIndex - startSpanIndex} spans, trimmed to ${trimmedSpans.length} (removed ${spanRange.length - trimmedSpans.length} trailing whitespace spans)`);
+  return {
+    container: pageContainer,
+    spans: trimmedSpans
+  };
+}
 
 /**
  * Handles volume slider changes.

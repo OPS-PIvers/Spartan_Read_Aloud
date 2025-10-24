@@ -842,7 +842,8 @@ function getAutomatedBatchStatus() {
 // --- MAIN CONTROL FUNCTIONS ---
 
 /**
- * STEP 0: Finds new PDFs in the designated Drive folder and adds them to the sheet.
+ * STEP 0: Finds new assessment files in the designated Drive folder and adds them to the sheet.
+ * Supports PDF, Google Docs, and MS Word formats.
  */
 function step0_addNewPdfs() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -913,7 +914,8 @@ function step0_addNewPdfs() {
 
 
 /**
- * STEP 1: Analyzes new PDFs to count their text chunks.
+ * STEP 1: Analyzes new assessment files to count their text chunks.
+ * Supports PDF, Google Docs, and MS Word formats.
  */
 function step1_AnalyzePdfsAndCountChunks() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -1360,16 +1362,155 @@ function convertWordToPdf(fileId, file) {
 }
 
 /**
- * Sanitizes HTML from Google Docs export for safe rendering.
- * Removes style blocks, scripts, and most inline styles.
- * @param {string} html Raw HTML from Google Docs export
- * @returns {string} Sanitized HTML
+ * Converts a number to a lowercase letter (a, b, c..., z, aa, ab, etc.)
+ * @param {number} num The number to convert (1-based)
+ * @returns {string} The corresponding lowercase letter(s)
+ */
+function numberToLowerAlpha(num) {
+  let result = '';
+  while (num > 0) {
+    const remainder = (num - 1) % 26;
+    result = String.fromCharCode(97 + remainder) + result;
+    num = Math.floor((num - 1) / 26);
+  }
+  return result;
+}
+
+/**
+ * Converts a number to an uppercase letter (A, B, C..., Z, AA, AB, etc.)
+ * @param {number} num The number to convert (1-based)
+ * @returns {string} The corresponding uppercase letter(s)
+ */
+function numberToUpperAlpha(num) {
+  return numberToLowerAlpha(num).toUpperCase();
+}
+
+/**
+ * Converts a number to lowercase Roman numerals (i, ii, iii, iv, v, etc.)
+ * @param {number} num The number to convert
+ * @returns {string} The corresponding lowercase Roman numeral
+ */
+function numberToLowerRoman(num) {
+  const romanNumerals = [
+    ['m', 1000], ['cm', 900], ['d', 500], ['cd', 400],
+    ['c', 100], ['xc', 90], ['l', 50], ['xl', 40],
+    ['x', 10], ['ix', 9], ['v', 5], ['iv', 4], ['i', 1]
+  ];
+  let result = '';
+  for (const [roman, value] of romanNumerals) {
+    while (num >= value) {
+      result += roman;
+      num -= value;
+    }
+  }
+  return result;
+}
+
+/**
+ * Converts a number to uppercase Roman numerals (I, II, III, IV, V, etc.)
+ * @param {number} num The number to convert
+ * @returns {string} The corresponding uppercase Roman numeral
+ */
+function numberToUpperRoman(num) {
+  return numberToLowerRoman(num).toUpperCase();
+}
+
+/**
+ * Converts a number to the appropriate list marker based on list-style-type.
+ * @param {number} num The number to convert
+ * @param {string} listStyleType The list-style-type (decimal, lower-alpha, etc.)
+ * @returns {string} The formatted marker with trailing period/parenthesis
+ */
+function getListMarker(num, listStyleType) {
+  switch (listStyleType) {
+    case 'lower-alpha':
+      return numberToLowerAlpha(num) + '. ';
+    case 'upper-alpha':
+      return numberToUpperAlpha(num) + '. ';
+    case 'lower-roman':
+      return numberToLowerRoman(num) + '. ';
+    case 'upper-roman':
+      return numberToUpperRoman(num) + '. ';
+    case 'decimal':
+    default:
+      return num + '. ';
+  }
+}
+
+/**
+ * Sanitizes and normalizes HTML from any source (PDF, Google Docs, Word) for consistent rendering.
+ * Removes styles, scripts, Google artifacts, and normalizes structure to ensure
+ * identical appearance regardless of original file type.
+ * @param {string} html Raw HTML from Google Docs export or OCR conversion
+ * @returns {string} Sanitized and normalized HTML
  */
 function sanitizeHtml(html) {
-  // Remove style blocks entirely
-  let sanitized = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  // 0. FIRST: Convert native numbered/lettered lists to explicit text
+  // This must happen BEFORE removing classes/styles, otherwise list markers disappear
+  let sanitized = html;
 
-  // Remove inline styles, keeping only basic formatting
+  // Multi-pass list conversion to handle nesting:
+  // Process lists from innermost to outermost to correctly identify nested lists (answer choices)
+
+  // Process lists from innermost to outermost
+  let passCount = 0;
+  let totalOlCount = (sanitized.match(/<ol[^>]*>/gi) || []).length;
+
+  while (/<ol[^>]*>/i.test(sanitized) && passCount < 10) { // Safety limit of 10 passes
+    passCount++;
+
+    sanitized = sanitized.replace(/<ol([^>]*)>([\s\S]*?)<\/ol>/i, function(match, attributes, listContent) {
+      // Don't process if this listContent contains another <ol> (not the innermost yet)
+      if (/<ol[^>]*>/i.test(listContent)) {
+        return match; // Skip this one, process inner ones first
+      }
+
+      // Extract start attribute (default to 1)
+      const startMatch = attributes.match(/start=["']?(\d+)["']?/i);
+      const startNum = startMatch ? parseInt(startMatch[1], 10) : 1;
+
+      // Extract list-style-type from style attribute (though Google Docs often doesn't export this)
+      const styleMatch = attributes.match(/list-style-type:\s*([a-z-]+)/i);
+      let listStyleType = styleMatch ? styleMatch[1] : null;
+
+      // Heuristic to detect nested lists (answer choices):
+      // 1. start="1" suggests beginning of a list
+      // 2. If there were multiple <ol> tags initially and this starts at 1, likely nested
+      // 3. If listContent already contains <p> tags (from previously processed nested lists), this is outer
+      const hasConvertedLists = /<p>/i.test(listContent);
+      const isLikelyNested = (startNum === 1 && totalOlCount > 1 && !hasConvertedLists);
+
+      if (!listStyleType) {
+        listStyleType = isLikelyNested ? 'lower-alpha' : 'decimal';
+      }
+
+      let itemNumber = startNum;
+      return listContent.replace(/<li[^>]*>/gi, function() {
+        return `<p>${getListMarker(itemNumber++, listStyleType)}`;
+      }).replace(/<\/li>/gi, '</p>');
+    });
+  }
+
+  if (passCount >= 10) {
+    Logger.log('⚠ Warning: Reached maximum list processing passes (possible infinite loop)');
+  }
+
+  // Convert unordered lists (<ul><li>) to bulleted paragraphs
+  sanitized = sanitized.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, function(match, listContent) {
+    return listContent.replace(/<li[^>]*>/gi, '<p>• ').replace(/<\/li>/gi, '</p>');
+  });
+
+  // 1. Remove security risks
+  sanitized = sanitized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  sanitized = sanitized.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  sanitized = sanitized.replace(/\son\w+="[^"]*"/gi, '');
+
+  // 2. Remove Google Docs artifacts (IDs, classes, metadata)
+  sanitized = sanitized.replace(/\sid="[^"]*"/gi, '');
+  sanitized = sanitized.replace(/\sclass="[^"]*"/gi, '');
+  sanitized = sanitized.replace(/\sdata-[^=]*="[^"]*"/gi, '');
+
+  // 3. Remove inline styles, keeping only basic formatting
   sanitized = sanitized.replace(/style="[^"]*"/gi, (match) => {
     const allowedStyles = ['font-weight', 'font-style', 'text-decoration'];
     const styles = match.match(/([a-z-]+):\s*([^;]+)/gi) || [];
@@ -1379,13 +1520,46 @@ function sanitizeHtml(html) {
     return filtered.length > 0 ? `style="${filtered.join('; ')}"` : '';
   });
 
-  // Remove script tags for security
-  sanitized = sanitized.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  // 4. Normalize images: Remove inline dimensions, standardize structure
+  sanitized = sanitized.replace(/<img([^>]*?)>/gi, (match, attrs) => {
+    // Keep only src and alt attributes
+    const srcMatch = attrs.match(/src="([^"]*)"/i);
+    const altMatch = attrs.match(/alt="([^"]*)"/i);
+    const src = srcMatch ? srcMatch[1] : '';
+    const alt = altMatch ? altMatch[1] : '';
+    return src ? `<img src="${src}" alt="${alt}">` : '';
+  });
 
-  // Remove event handlers (onclick, etc.)
-  sanitized = sanitized.replace(/\son\w+="[^"]*"/gi, '');
+  // 5. Normalize whitespace and character entities
+  sanitized = sanitized.replace(/&nbsp;/g, ' '); // Replace non-breaking spaces
+  sanitized = sanitized.replace(/[\r\n]+/g, '\n'); // Normalize line breaks
+  sanitized = sanitized.replace(/[ \t]+/g, ' '); // Collapse multiple spaces
 
-  Logger.log(`Sanitized HTML: ${html.length} chars → ${sanitized.length} chars`);
+  // 6. Remove empty elements
+  sanitized = sanitized.replace(/<p>\s*<\/p>/gi, '');
+  sanitized = sanitized.replace(/<span>\s*<\/span>/gi, '');
+  sanitized = sanitized.replace(/<div>\s*<\/div>/gi, '');
+  sanitized = sanitized.replace(/<td>\s*<\/td>/gi, '<td></td>'); // Keep structure but clear content
+  sanitized = sanitized.replace(/<th>\s*<\/th>/gi, '<th></th>');
+
+  // 7. Normalize table structure: Ensure tbody wrapping
+  sanitized = sanitized.replace(/<table([^>]*)>\s*<tr/gi, '<table$1><tbody><tr');
+  sanitized = sanitized.replace(/<\/tr>\s*<\/table>/gi, '</tr></tbody></table>');
+
+  // 8. Remove empty table rows
+  sanitized = sanitized.replace(/<tr>\s*<\/tr>/gi, '');
+
+  // 9. Standardize div elements to paragraphs where appropriate
+  // (Divs containing only text should be paragraphs for consistency)
+  sanitized = sanitized.replace(/<div>([^<]+)<\/div>/gi, '<p>$1</p>');
+
+  // 10. Collapse excessive whitespace between tags
+  sanitized = sanitized.replace(/>\s+</g, '><');
+
+  // 11. Trim leading/trailing whitespace
+  sanitized = sanitized.trim();
+
+  Logger.log(`Sanitized & normalized HTML: ${html.length} chars → ${sanitized.length} chars`);
   return sanitized;
 }
 
@@ -2523,13 +2697,11 @@ function getStudentAssessmentsForEmail(email) {
 
 /**
  * Retrieves assessment data for authenticated student.
- * Returns different data structures based on file type:
- * - PDFs: base64 pdfData for PDF.js rendering
- * - Docs/Word: assessmentHtml for native HTML rendering
+ * All file types (PDF, Google Docs, Word) are converted to HTML for consistent rendering.
  * @param {string} email Student email
  * @param {string} password Assessment password
  * @param {string} assessmentUrl Optional - specific assessment URL to load (for multi-assessment selection)
- * @returns {Object} Assessment data or error (includes sessionToken for secure audio access)
+ * @returns {Object} Assessment data with assessmentHtml and sessionToken for secure audio access
  */
 function getAssessmentPdf(email, password, assessmentUrl) {
   try {
