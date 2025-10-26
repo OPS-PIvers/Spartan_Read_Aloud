@@ -724,19 +724,6 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
-    /* Focus Mode Styles */
-    body.focus-mode #pdf-container > * {
-      opacity: 0.2;
-      transition: opacity 0.3s ease;
-    }
-
-    /* Keep highlighted chunks and their parents visible */
-    body.focus-mode #pdf-container > .highlighted-chunk,
-    body.focus-mode #pdf-container > .has-highlight {
-      opacity: 1 !important;
-    }
-
-
     .highlighted-chunk,
     .html-assessment-container .highlighted-element {
       background-color: rgba(255, 235, 59, 1.0) !important;
@@ -2872,28 +2859,6 @@ function highlightChunkInHTML(currentSearchWords, nextSearchWords) {
         parent = parent.parentElement;
       }
 
-      // If there's a next chunk, highlight all elements up to it
-      if (nextSearchWords) {
-        const normalizedNext = normalizeText(nextSearchWords);
-        console.log('Highlighting range to next chunk:', nextSearchWords);
-
-        for (let j = i + 1; j < pageTextContent.length; j++) {
-          if (pageTextContent[j].normalizedText.includes(normalizedNext)) {
-            console.log(`✓ Found end boundary at element ${j}`);
-            break; // Stop before next chunk
-          }
-          // Highlight all elements between current and next
-          const elem = pageTextContent[j].element;
-          elem.classList.add('highlighted-element');
-
-          // Add has-highlight to parents
-          let p = elem.parentElement;
-          while (p && !p.classList.contains('html-assessment-container')) {
-            p.classList.add('has-highlight');
-            p = p.parentElement;
-          }
-        }
-      }
 
       // Scroll to first highlighted element (with programmatic scroll flag)
       isProgrammaticScroll = true;
