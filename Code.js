@@ -1639,9 +1639,10 @@ function extractTextFromFile(fileId) {
     let plainText = htmlContent
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove style blocks
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove scripts
-      .replace(/<\/(tr|td|th|p|div|li|h[1-6])>/gi, '\n</$1>') // Preserve structure with newlines
-      .replace(/<br\s*\/?>/gi, '\n') // Convert <br> to newlines
-      .replace(/<[^>]+>/g, ' ') // Remove HTML tags
+      // Convert <br> tags and closing block-level/table tags to newlines to linearize the content.
+      // This ensures list items and table cells are treated as separate lines.
+      .replace(/<br\s*\/?>|<\/(p|div|h[1-6]|li|tr|th|td)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ') // Remove all remaining HTML tags
       .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
       .replace(/&lt;/g, '<') // Decode entities
       .replace(/&gt;/g, '>')
@@ -1662,11 +1663,8 @@ function extractTextFromFile(fileId) {
     Logger.log(`→ Plain text AFTER normalization (first 1500 chars): ${plainText.substring(0, 1500)}`);
 
     // STEP 3: Split on numbered questions (handles both "1." and "1)" formats)
-    // Pattern explanation:
-    // - [\n\r]+ = one or more newlines (Unix or Windows)
-    // - (?=\s*\d+[.)\]]\s+) = lookahead for optional spaces + digit(s) + period/paren/bracket + whitespace
-    // This handles questions with leading indentation/spaces
-    const chunks = plainText.split(/[\n\r]+(?=\s*\d+[.)\]]\s+)/)
+    // Using CHUNK_SPLIT_REGEX from Constants.js (limits leading spaces to prevent splitting on indented lists)
+    const chunks = plainText.split(CONSTANTS.CHUNK_SPLIT_REGEX)
       .map(chunk => chunk.trim())
       .filter(chunk => chunk);
 
@@ -2797,17 +2795,38 @@ function testConvertFileToHtml() {
  * Test function: Extract text chunks from a file
  * Instructions: Replace the fileId with your test file's ID
  */
-function testExtractTextFromFile() {
-  const testFileId = 'PASTE_YOUR_TEST_FILE_ID_HERE';
-  Logger.log('=== Testing extractTextFromFile ===');
+function testExtractTextFromFile(testFileId) {
+  if (!testFileId) {
+    Logger.log('ERROR: No file ID provided for testing.');
+    return;
+  }
+  Logger.log(`=== Testing extractTextFromFile for file ID: ${testFileId} ===`);
   const chunks = extractTextFromFile(testFileId);
   if (chunks) {
     Logger.log(`Extracted ${chunks.length} chunks`);
     chunks.forEach((chunk, i) => {
-      Logger.log(`\nChunk ${i+1}: ${chunk.substring(0, 100)}...`);
+      Logger.log(`\nChunk ${i+1}: ${chunk}`);
     });
   } else {
     Logger.log('✗ Extraction failed');
   }
 }
 
+/**
+ * Run all test functions.
+ * @param {string} listBasedFileId - File ID for list-based test file
+ * @param {string} tableBasedFileId - File ID for table-based test file
+ * Usage: runTests('YOUR_LIST_FILE_ID', 'YOUR_TABLE_FILE_ID');
+ */
+function runTests(listBasedFileId, tableBasedFileId) {
+  if (!listBasedFileId || !tableBasedFileId) {
+    Logger.log('ERROR: Please provide both file IDs as arguments to runTests.');
+    Logger.log('Usage: runTests("YOUR_LIST_FILE_ID", "YOUR_TABLE_FILE_ID")');
+    return;
+  }
+
+  Logger.log('--- STARTING TEST RUN ---');
+  testExtractTextFromFile(listBasedFileId);
+  testExtractTextFromFile(tableBasedFileId);
+  Logger.log('--- FINISHED TEST RUN ---');
+}
