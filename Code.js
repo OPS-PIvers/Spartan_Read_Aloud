@@ -1663,11 +1663,8 @@ function extractTextFromFile(fileId) {
     Logger.log(`→ Plain text AFTER normalization (first 1500 chars): ${plainText.substring(0, 1500)}`);
 
     // STEP 3: Split on numbered questions (handles both "1." and "1)" formats)
-    // Pattern explanation:
-    // - [\n\r]+ = one or more newlines (Unix or Windows)
-    // - (?=\s{0,3}\d+[.)\]]\s+) = lookahead for max 3 spaces (prevents splitting on indented lists)
-    // This handles questions with some leading indentation, but avoids nested lists
-    const chunks = plainText.split(/[\n\r]+(?=\s{0,3}\d+[.)\]]\s+)/)
+    // Using CHUNK_SPLIT_REGEX from Constants.js (limits leading spaces to prevent splitting on indented lists)
+    const chunks = plainText.split(CONSTANTS.CHUNK_SPLIT_REGEX)
       .map(chunk => chunk.trim())
       .filter(chunk => chunk);
 
@@ -2815,9 +2812,18 @@ function testExtractTextFromFile(testFileId) {
   }
 }
 
-function runTests() {
-  const listBasedFileId = '1JFcVaHgiiLNnYvRIdM5RTY207m5gqXzXFCYBcYBOf-o';
-  const tableBasedFileId = '1xZPjsBIlOwmjoC-WW9oxE4zTvrmGy22-';
+/**
+ * Run all test functions.
+ * @param {string} listBasedFileId - File ID for list-based test file
+ * @param {string} tableBasedFileId - File ID for table-based test file
+ * Usage: runTests('YOUR_LIST_FILE_ID', 'YOUR_TABLE_FILE_ID');
+ */
+function runTests(listBasedFileId, tableBasedFileId) {
+  if (!listBasedFileId || !tableBasedFileId) {
+    Logger.log('ERROR: Please provide both file IDs as arguments to runTests.');
+    Logger.log('Usage: runTests("YOUR_LIST_FILE_ID", "YOUR_TABLE_FILE_ID")');
+    return;
+  }
 
   Logger.log('--- STARTING TEST RUN ---');
   testExtractTextFromFile(listBasedFileId);

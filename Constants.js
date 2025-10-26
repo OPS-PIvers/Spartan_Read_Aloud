@@ -45,7 +45,8 @@ const CONSTANTS = {
 
   // --- Text & Audio Processing ---
   // Robust regex that handles numbered list formats: "1.", "1)", "1]" with varying whitespace and line endings
-  CHUNK_SPLIT_REGEX: /[\n\r]+(?=\s*\d+[.)\]]\s+)/,
+  // Limited to max 3 leading spaces to prevent splitting on deeply indented lists
+  CHUNK_SPLIT_REGEX: /[\n\r]+(?=\s{0,3}\d+[.)\]]\s+)/,
   SEARCH_WORDS_COUNT: 8,
   SAFE_FILENAME_WORD_COUNT: 6,
 
