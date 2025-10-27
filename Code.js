@@ -38,24 +38,66 @@ function parseStudentEmails(input) {
 
 // --- TRIGGER & MENU ---
 
-/**
- * Adds a custom menu to the spreadsheet UI.
- */
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
 
-  ui.createMenu(CONSTANTS.MENU_NAME)
-      .addItem(CONSTANTS.MENU_ITEMS.RUN_MANUAL, 'runAllStepsManual')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('Automated Batching')
-        .addItem('Setup Automation', 'setupAutomatedBatchProcessing')
-        .addItem('Stop Automation', 'stopAutomatedBatchProcessing')
-        .addItem('Check Status', 'getAutomatedBatchStatus'))
-      .addSeparator()
-      .addItem(CONSTANTS.MENU_ITEMS.START_BATCH, 'startBatchProcessing')
-      .addItem(CONSTANTS.MENU_ITEMS.CHECK_BATCH, 'checkBatchStatus')
-      .addItem(CONSTANTS.MENU_ITEMS.STOP_BATCH, 'stopBatchProcessing')
-      .addToUi();
+
+/**
+ * The function that is called by the on-edit trigger.
+ * Checks if the edit was in the "Assessment Database" sheet.
+ * @param {Object} e The edit event object.
+ */
+function onEditTrigger(e) {
+  try {
+    const sheet = e.range.getSheet();
+    if (sheet.getName() === 'Assessment Database') {
+      Logger.log('Edit detected in Assessment Database. Running all steps.');
+      runAllStepsManual();
+    }
+  } catch (err) {
+    Logger.log('Error in onEditTrigger: ' + err.toString());
+  }
+}
+
+/**
+ * Deletes the on-edit trigger for this project.
+ */
+function deleteOnEditTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let deleted = false;
+  for (const trigger of triggers) {
+    if (trigger.getHandlerFunction() === 'onEditTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+      deleted = true;
+      Logger.log('Deleted existing on-edit trigger.');
+    }
+  }
+
+  if (deleted) {
+    Logger.log('On-Edit trigger has been disabled.');
+  } else {
+    Logger.log('No On-Edit trigger was found to delete.');
+  }
+}
+
+/**
+ * Creates a trigger that runs automatically when the spreadsheet is edited.
+ */
+function createOnEditTrigger() {
+  // First, delete any existing edit triggers to avoid duplicates.
+  const triggers = ScriptApp.getProjectTriggers();
+  for (const trigger of triggers) {
+    if (trigger.getHandlerFunction() === 'onEditTrigger') {
+      ScriptApp.deleteTrigger(trigger);
+      Logger.log('Deleted existing on-edit trigger before creating a new one.');
+    }
+  }
+
+  const ss = SpreadsheetApp.getActive();
+  ScriptApp.newTrigger('onEditTrigger')
+      .forSpreadsheet(ss)
+      .onEdit()
+      .create();
+
+  Logger.log('Successfully created the on-edit trigger.');
 }
 
 /**

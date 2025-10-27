@@ -13,34 +13,40 @@
       overscroll-behavior: none; /* Prevent bounce/rubber-band scrolling */
     }
 
-    body {
+body {
       font-family: 'Inter', sans-serif;
       background-color: #f0f2f5;
       display: flex;
       flex-direction: column;
       align-items: center;
       margin: 0;
-      padding: 20px;
-      overscroll-behavior-y: none; /* Specifically prevent vertical bounce */
-      -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+      /* Increased padding for larger screens */
+      padding: 40px; /* Adjust this value (e.g., 40px, 60px) as needed */
+      overscroll-behavior-y: none;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 96px; /* Ensure bottom padding for toolbar remains */
     }
 
-    /* Responsive body padding to prevent content cutoff */
+    /* Keep the responsive overrides for smaller screens */
     @media (max-width: 1100px) {
       body {
-        padding: 10px; /* Reduce padding for narrow desktops */
+        /* You might want to adjust this too, or keep it */
+        padding: 20px; /* Example: slightly more than original 10px */
+        padding-bottom: 96px; /* Re-apply bottom padding */
       }
     }
 
     @media (max-width: 768px) {
       body {
-        padding: 8px; /* Even less padding for tablets */
+        padding: 12px; /* Example: slightly more than original 8px */
+        padding-bottom: 96px; /* Re-apply bottom padding */
       }
     }
 
     @media (max-width: 480px) {
       body {
-        padding: 5px; /* Minimal padding for mobile */
+        padding: 8px; /* Example: slightly more than original 5px */
+        padding-bottom: 96px; /* Re-apply bottom padding */
       }
     }
 
@@ -915,8 +921,11 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       position: relative;
       width: 100%;
-      margin-bottom: 96px; /* Additional margin to prevent content overlap with toolbar */
-    }
+      margin-bottom: 96px;
+      /* --- ADD PADDING HERE --- */
+      padding: 20px; /* Adjust as needed, e.g., 20px, 30px */
+      /* --- Ensures padding is included in width calculation --- */
+      box-sizing: border-box;
     }
 
     /* ========================================
@@ -925,16 +934,21 @@
        ======================================== */
 
     .html-assessment-container {
-      padding: 50px 60px;
-      max-width: 900px; /* Wider for better space utilization while maintaining readability */
-      margin: 0 auto 96px auto; /* Bottom margin to prevent content overlap with toolbar */
-      background: white; /* Match pdf-container background */
-      line-height: 2.0; /* Generous spacing prevents line confusion */
+      /* You might REMOVE or REDUCE padding here if #pdf-container padding is enough */
+      padding: 30px 40px; /* Example: Reduced from 50px 60px */
+      /* Or keep original padding if you want combined padding */
+      /* padding: 50px 60px; */
+
+      max-width: 900px;
+      /* Remove margin: 0 auto; if #pdf-container handles centering */
+      margin: 0 auto 96px auto; /* Keep if #pdf-container is full width */
+      background: transparent; /* Make background transparent if #pdf-container provides white bg */
+      line-height: 2.0;
       font-family: 'Inter', sans-serif;
-      color: #4a4a4a; /* Soft dark gray, not harsh black */
+      color: #4a4a4a;
       font-size: clamp(16px, 2vw, 18px);
-      box-sizing: border-box; /* Include padding in max-width calculation */
-      overflow-x: hidden; /* Prevent horizontal scrolling */
+      box-sizing: border-box;
+      overflow-x: hidden;
     }
 
     /* Generous spacing between all elements - white space is key */
@@ -1087,7 +1101,7 @@
     /* Keep highlighted elements and their parents fully visible */
     body.focus-mode .html-assessment-container .highlighted-element,
     body.focus-mode .html-assessment-container .has-highlight {
-      opacity: 1;
+      opacity: 1 !important;
     }
 
     /* ========================================
