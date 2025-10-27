@@ -5,13 +5,19 @@ const CONSTANTS = {
   TEACHERS_SHEET_NAME: "Teachers",
 
   // --- Batch Processing ---
-  BATCH_API_ENABLED: false,
+  BATCH_API_ENABLED: true, // KEEP FALSE until Google confirms TTS batch support
   BATCH_CHECK_INTERVAL_MINUTES: 30,
 
   // --- Automated Batch Processing ---
   AUTOMATED_BATCH_ENABLED: true,
-  AUTOMATED_BATCH_INTERVAL_HOURS: 12,  // Twice daily (configurable)
-  BATCH_ACCUMULATION_ENABLED: true,    // Accumulate assessments before batching
+  AUTOMATED_BATCH_INTERVAL_HOURS: 12,
+  BATCH_ACCUMULATION_ENABLED: true,
+
+  // --- NEW: Vertex AI Configuration ---
+  GCP_PROJECT_ID: PropertiesService.getScriptProperties().getProperty('GCP_PROJECT_ID'),
+  VERTEX_AI_REGION: PropertiesService.getScriptProperties().getProperty('VERTEX_AI_REGION') || 'us-central1', // Default if not set
+  GCS_BUCKET_NAME: PropertiesService.getScriptProperties().getProperty('GCS_BUCKET_NAME'),
+  VERTEX_AI_ENDPOINT: `https://${PropertiesService.getScriptProperties().getProperty('VERTEX_AI_REGION') || 'us-central1'}-aiplatform.googleapis.com/v1`,
 
   // --- Spreadsheet Column Mapping (0-based) ---
   COL: {
@@ -50,17 +56,12 @@ const CONSTANTS = {
   SEARCH_WORDS_COUNT: 8,
   SAFE_FILENAME_WORD_COUNT: 6,
 
-  // --- TTS Provider Configuration ---
-  TTS_PROVIDER: 'GOOGLE_CLOUD', // Options: 'GOOGLE_CLOUD' or 'GEMINI'
-
-  // --- Gemini API ---
-  GEMINI_TTS_MODEL: 'gemini-2.5-flash-preview-tts',
-  GEMINI_API_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/',
-  GEMINI_BATCH_API_ENDPOINT: 'https://generativelanguage.googleapis.com/v1beta/',
+// --- TTS Provider Configuration ---
+  TTS_PROVIDER: 'GOOGLE_CLOUD',
+  GEMINI_TTS_MODEL: 'gemini-2.5-flash-preview-tts', // Model *used* for batch job
+  GEMINI_API_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/', // Keep for potential fallback/other uses
   GEMINI_VOICE_NAME: "Kore",
-
-  // --- Google Cloud Text-to-Speech API ---
-  GOOGLE_CLOUD_TTS_VOICE: 'en-US-Standard-H', // Standard voice (4M chars free/month) - Options: en-US-Standard-H (female), en-US-Standard-I (male)
+  GOOGLE_CLOUD_TTS_VOICE: 'en-US-Standard-H',
 
   // --- Audio Generation (WAV Header) ---
   WAV_SAMPLE_RATE: 24000,

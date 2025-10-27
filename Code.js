@@ -36,6 +36,152 @@ function parseStudentEmails(input) {
   return uniqueEmails.join(', ');
 }
 
+/**
+ * Creates an OAuth2 service for authenticating to Vertex AI with service account.
+ * @returns {OAuth2.Service} Configured OAuth2 service
+ */
+function getVertexAIService() {
+  const serviceAccountEmail = PropertiesService.getScriptProperties().getProperty('SERVICE_ACCOUNT_EMAIL');
+  const privateKey = PropertiesService.getScriptProperties().getProperty('SERVICE_ACCOUNT_PRIVATE_KEY');
+
+  if (!serviceAccountEmail || !privateKey) {
+    throw new Error('Service account credentials not configured. See BATCH_API_DEPLOYMENT.md');
+  }
+
+  return OAuth2.createService('VertexAI')
+    .setTokenUrl('https://oauth2.googleapis.com/token')
+    .setPrivateKey(privateKey)
+    .setIssuer(serviceAccountEmail)
+    .setSubject(serviceAccountEmail)
+    .setPropertyStore(PropertiesService.getUserProperties())
+    .setScope('https://www.googleapis.com/auth/cloud-platform')
+    .setParam('access_type', 'offline');
+}
+
+/**
+ * Gets a valid access token for Vertex AI API calls.
+ * @returns {string} OAuth2 access token
+ */
+function getVertexAIAccessToken() {
+  const service = getVertexAIService();
+
+  if (!service.hasAccess()) {
+    throw new Error('Failed to authenticate with Vertex AI. Check service account configuration.');
+  }
+
+  return service.getAccessToken();
+}
+
+/**
+ * Uploads a file to Google Cloud Storage.
+ * Note: This requires setting up a GCS bucket and appropriate permissions.
+ *
+ * @param {GoogleAppsScript.Drive.File} file - File to upload
+ * @param {string} objectName - Name for the GCS object
+ * @returns {string|null} GCS URI (gs://bucket/object) or null on failure
+ */
+function uploadToCloudStorage(file, objectName) {
+  const bucketName = PropertiesService.getScriptProperties().getProperty('GCS_BUCKET_NAME');
+
+  if (!bucketName) {
+    Logger.log('GCS_BUCKET_NAME not configured. Batch processing requires Cloud Storage.');
+    return null;
+  }
+
+  const gcsPath = `batch-tts-input/${objectName}-${Date.now()}.jsonl`;
+  const url = `https://storage.googleapis.com/upload/storage/v1/b/${bucketName}/o?uploadType=media&name=${encodeURIComponent(gcsPath)}`;
+
+  const options = {
+    method: 'POST',
+    contentType: 'application/octet-stream',
+    headers: {
+      'Authorization': `Bearer ${getVertexAIAccessToken()}`
+    },
+    payload: file.getBlob().getBytes(),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+
+    if (response.getResponseCode() === 200) {
+      Logger.log(`Successfully uploaded to gs://${bucketName}/${gcsPath}`);
+      return `gs://${bucketName}/${gcsPath}`;
+    } else {
+      Logger.log(`GCS upload failed: ${response.getContentText()}`);
+      return null;
+    }
+  } catch (e) {
+    Logger.log(`Exception during GCS upload: ${e.toString()}`);
+    return null;
+  }
+}
+
+/**
+ * Downloads a file from Google Cloud Storage.
+ *
+ * @param {string} gcsUri - GCS URI (gs://bucket/path)
+ * @returns {string|null} File contents or null on failure
+ */
+function downloadFromCloudStorage(gcsUri) {
+  // Parse gs://bucket/path format
+  const match = gcsUri.match(/^gs:\/\/([^\/]+)\/(.+)$/);
+  if (!match) {
+    Logger.log(`Invalid GCS URI: ${gcsUri}`);
+    return null;
+  }
+
+  const [, bucket, path] = match;
+
+  // List objects in the output directory (batch jobs create prediction.results-xxxxx-of-xxxxx files)
+  const listUrl = `https://storage.googleapis.com/storage/v1/b/${bucket}/o?prefix=${encodeURIComponent(path)}`;
+
+  const listOptions = {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${getVertexAIAccessToken()}`
+    },
+    muteHttpExceptions: true
+  };
+
+  try {
+    const listResponse = UrlFetchApp.fetch(listUrl, listOptions);
+    const items = JSON.parse(listResponse.getContentText()).items || [];
+
+    // Find the prediction results file
+    const resultFile = items.find(item => item.name.includes('prediction.results'));
+
+    if (!resultFile) {
+      Logger.log('No prediction results file found in output directory');
+      return null;
+    }
+
+    // Download the results file
+    const downloadUrl = `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(resultFile.name)}?alt=media`;
+
+    const downloadOptions = {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${getVertexAIAccessToken()}`
+      },
+      muteHttpExceptions: true
+    };
+
+    const downloadResponse = UrlFetchApp.fetch(downloadUrl, downloadOptions);
+
+    if (downloadResponse.getResponseCode() === 200) {
+      return downloadResponse.getContentText();
+    } else {
+      Logger.log(`Failed to download results: ${downloadResponse.getContentText()}`);
+      return null;
+    }
+
+  } catch (e) {
+    Logger.log(`Exception during GCS download: ${e.toString()}`);
+    return null;
+  }
+}
+
 // --- TRIGGER & MENU ---
 
 
@@ -188,122 +334,93 @@ function createBatchJobForFile(rowIndex, rowData) {
 }
 
 /**
- * Submits a batch job to the Gemini API.
- * This uses the correct two-step process: file upload, then batch job creation.
- * Returns the job name on success, or null if the API returns an error indicating batch is not supported.
+ * Submits a batch prediction job to Vertex AI.
+ * This uses the proper Vertex AI batch prediction API with OAuth2 authentication.
+ *
+ * @param {GoogleAppsScript.Drive.File} jsonlFile - JSONL file containing batch requests
+ * @param {string} displayName - Human-readable name for the batch job
+ * @returns {string|null} Batch job resource name, or null if batch not supported
  */
 function submitGeminiBatchJob(jsonlFile, displayName) {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  const projectId = PropertiesService.getScriptProperties().getProperty('GCP_PROJECT_ID');
+  const region = PropertiesService.getScriptProperties().getProperty('VERTEX_AI_REGION') || 'us-central1';
 
-  // STEP 1: Upload the JSONL file to the Gemini File API
-  const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
-  const fileBlob = jsonlFile.getBlob();
-
-  const uploadOptions = {
-    method: 'POST',
-    payload: fileBlob.getBytes(),
-    headers: {
-      'Content-Type': 'application/jsonl',
-      'X-Goog-Upload-Protocol': 'raw'
-    },
-    muteHttpExceptions: true
-  };
-
-  Logger.log('=== FILE UPLOAD DEBUG ===');
-  Logger.log('Upload URL: ' + uploadUrl);
-  Logger.log('File size (bytes): ' + fileBlob.getBytes().length);
-  Logger.log('File content type: ' + fileBlob.getContentType());
-  Logger.log('========================');
-
-  const uploadResponse = UrlFetchApp.fetch(uploadUrl, uploadOptions);
-
-  Logger.log('=== UPLOAD RESPONSE DEBUG ===');
-  Logger.log('Upload Response Code: ' + uploadResponse.getResponseCode());
-  Logger.log('Upload Response Body: ' + uploadResponse.getContentText());
-  Logger.log('=============================');
-
-  const uploadResult = JSON.parse(uploadResponse.getContentText());
-
-  if (uploadResponse.getResponseCode() !== 200) {
-    Logger.log(`File upload failed: ${uploadResponse.getContentText()}`);
-    throw new Error(`File upload failed for batch job: ${uploadResult.error?.message || 'Unknown error'}`);
+  if (!projectId) {
+    throw new Error('GCP_PROJECT_ID not set in script properties');
   }
 
-  const uploadedFileName = uploadResult.file.name;
-  Logger.log(`Successfully uploaded file for batch processing: ${uploadedFileName}`);
+  // Step 1: Upload JSONL to Cloud Storage (required for Vertex AI batch jobs)
+  const gcsUri = uploadToCloudStorage(jsonlFile, displayName);
 
-  // STEP 2: Create the batch job using the correct Gemini Batch REST API endpoint
-  const batchCreateUrl = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}models/${CONSTANTS.GEMINI_TTS_MODEL}:batchGenerateContent?key=${apiKey}`;
+  if (!gcsUri) {
+    Logger.log('Failed to upload input file to Cloud Storage');
+    return null;
+  }
 
-  const batchPayload = {
-    batch: {
-      display_name: displayName,
-      input_config: {
-        file_name: uploadedFileName
+  // Step 2: Create batch prediction job
+  const endpoint = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/batchPredictionJobs`;
+
+  const jobPayload = {
+    displayName: displayName,
+    model: `projects/${projectId}/locations/${region}/publishers/google/models/${CONSTANTS.GEMINI_TTS_MODEL}`,
+    inputConfig: {
+      instancesFormat: 'jsonl',
+      gcsSource: {
+        uris: [gcsUri]
+      }
+    },
+    outputConfig: {
+      predictionsFormat: 'jsonl',
+      gcsDestination: {
+        outputUriPrefix: `gs://${PropertiesService.getScriptProperties().getProperty('GCS_BUCKET_NAME')}/batch-tts-results/${displayName}/`
       }
     }
   };
 
-  Logger.log('=== BATCH PAYLOAD DEBUG ===');
-  Logger.log('Batch Create URL: ' + batchCreateUrl);
-  Logger.log('Batch Payload JSON: ' + JSON.stringify(batchPayload, null, 2));
-  Logger.log('===========================');
-
-  const batchOptions = {
+  const options = {
     method: 'POST',
     contentType: 'application/json',
-    payload: JSON.stringify(batchPayload),
+    headers: {
+      'Authorization': `Bearer ${getVertexAIAccessToken()}`
+    },
+    payload: JSON.stringify(jobPayload),
     muteHttpExceptions: true
   };
 
-  const batchResponse = UrlFetchApp.fetch(batchCreateUrl, batchOptions);
+  try {
+    const response = UrlFetchApp.fetch(endpoint, options);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
 
-  const responseCode = batchResponse.getResponseCode();
-  const responseBody = batchResponse.getContentText();
-
-  Logger.log('=== BATCH RESPONSE DEBUG ===');
-  Logger.log('Response Code: ' + responseCode);
-  Logger.log('Response Body: ' + responseBody);
-  Logger.log('Response Body Length: ' + responseBody.length);
-  Logger.log('============================');
-
-  // Check for empty response
-  if (!responseBody || responseBody.length === 0) {
-    Logger.log(`Batch API returned empty response (404 or unsupported). Falling back to manual processing.`);
-    // Clean up the uploaded file since we can't use it
-    try {
-      const fileIdToDelete = uploadedFileName.split('/')[1];
-      Drive.Files.delete(fileIdToDelete);
-    } catch(e) {
-      Logger.log(`Could not clean up temporary batch file ${uploadedFileName}: ${e.toString()}`);
+    if (responseCode === 404) {
+      Logger.log('Batch prediction not supported for this model. Falling back to manual processing.');
+      return null;
     }
+
+    if (responseCode !== 200) {
+      Logger.log(`Batch job creation failed (${responseCode}): ${responseBody}`);
+      const errorData = JSON.parse(responseBody);
+
+      // Check if error indicates TTS models don't support batch
+      if (errorData.error?.message?.includes('not supported') ||
+          errorData.error?.message?.includes('does not support batch')) {
+        Logger.log('TTS model does not support batch prediction');
+        return null;
+      }
+
+      throw new Error(`Batch job creation failed: ${errorData.error?.message || 'Unknown error'}`);
+    }
+
+    const result = JSON.parse(responseBody);
+    const jobName = result.name; // Format: projects/{project}/locations/{location}/batchPredictionJobs/{job_id}
+
+    Logger.log(`Successfully created batch job: ${jobName}`);
+    return jobName;
+
+  } catch (e) {
+    Logger.log(`Exception during batch job creation: ${e.toString()}`);
     return null;
   }
-
-  const batchResult = JSON.parse(responseBody);
-
-  // Check for errors that indicate batching is not supported for this model/region
-  if (responseCode === 404 || (batchResult.error && batchResult.error.message && batchResult.error.message.includes("not found"))) {
-    Logger.log(`Batch API not supported for this model or region (404). Falling back to manual processing.`);
-    // Clean up the uploaded file since we can't use it
-    try {
-      const fileIdToDelete = uploadedFileName.split('/')[1];
-      Drive.Files.delete(fileIdToDelete);
-    } catch(e) {
-      Logger.log(`Could not clean up temporary batch file ${uploadedFileName}: ${e.toString()}`);
-    }
-    return null;
-  }
-
-  if (responseCode !== 200) {
-    Logger.log(`Batch job creation failed: ${responseBody}`);
-    throw new Error(`Batch job creation failed: ${batchResult.error?.message || 'Unknown error'}`);
-  }
-
-  // The response contains the batch job name in the format "batches/{batch-id}"
-  const batchJobName = batchResult.name;
-  Logger.log(`Successfully created batch job: ${batchJobName} for ${displayName}`);
-  return batchJobName;
 }
 
 /**
@@ -393,23 +510,36 @@ function checkBatchJobsStatus() {
 }
 
 /**
- * Checks the status of a Gemini batch job using the Gemini Batch API endpoint.
+ * Checks the status of a Vertex AI batch prediction job.
+ *
+ * @param {string} jobName - Full resource name of the batch job
+ * @returns {Object} Job status object
  */
-function checkGeminiBatchJobStatus(batchJobId) {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  // Use the correct Gemini Batch API endpoint for checking batch status
-  const url = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}${batchJobId}?key=${apiKey}`;
+function checkGeminiBatchJobStatus(jobName) {
+  const region = PropertiesService.getScriptProperties().getProperty('VERTEX_AI_REGION') || 'us-central1';
+  const url = `https://${region}-aiplatform.googleapis.com/v1/${jobName}`;
 
-  const response = UrlFetchApp.fetch(url, {
+  const options = {
     method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${getVertexAIAccessToken()}`,
+      'Content-Type': 'application/json'
+    },
     muteHttpExceptions: true
-  });
+  };
 
+  const response = UrlFetchApp.fetch(url, options);
   return JSON.parse(response.getContentText());
 }
 
 /**
- * Processes the results of a completed batch job by downloading the output file.
+ * Processes results from a completed Vertex AI batch prediction job.
+ * Downloads the output JSONL from GCS and converts audio files.
+ *
+ * @param {number} rowIndex - Spreadsheet row index
+ * @param {Array} rowData - Row data from spreadsheet
+ * @param {Object} jobStatus - Completed job status object
+ * @returns {boolean} True if processing succeeded
  */
 function processBatchJobResults(rowIndex, rowData, jobStatus) {
   const fileUrl = rowData[CONSTANTS.COL.PDF_URL];
@@ -426,61 +556,56 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
   if (!assessmentSubfolder) return false;
 
   try {
-    // Get the output file name from the batch job status (REST API uses snake_case)
-    const outputFileName = jobStatus.output_config?.file_name;
-    if (!outputFileName) {
-      Logger.log('No output file name found in batch job status.');
-      Logger.log('Job status: ' + JSON.stringify(jobStatus, null, 2));
+    // Get output location from job status
+    const outputInfo = jobStatus.outputInfo;
+
+    if (!outputInfo || !outputInfo.gcsOutputDirectory) {
+      Logger.log('No output directory found in completed job');
       return false;
     }
 
-    // Download the output file (JSONL format)
-    const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-    const outputUrl = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}${outputFileName}?key=${apiKey}`;
+    // Download results from Cloud Storage
+    const outputUri = outputInfo.gcsOutputDirectory;
+    const resultsJsonl = downloadFromCloudStorage(outputUri);
 
-    const outputResponse = UrlFetchApp.fetch(outputUrl, { muteHttpExceptions: true });
-    if (outputResponse.getResponseCode() !== 200) {
-      Logger.log(`Failed to download batch output file: ${outputResponse.getContentText()}`);
+    if (!resultsJsonl) {
+      Logger.log('Failed to download results from Cloud Storage');
       return false;
     }
 
-    const outputContent = outputResponse.getContentText();
-    const outputLines = outputContent.trim().split('\n');
+    // Parse JSONL results
+    const results = resultsJsonl.split('\n')
+      .filter(line => line.trim())
+      .map(line => JSON.parse(line));
 
-    if (!outputLines || outputLines.length === 0) {
-      Logger.log('No results found in the batch output file.');
-      return false;
-    }
-
-    // Process each audio result from the JSONL output
     const audioFileObjects = [];
     const textChunks = extractTextFromFile(fileId);
 
-    for (let i = 0; i < outputLines.length; i++) {
-      const resultLine = JSON.parse(outputLines[i]);
-      const chunkIndex = i;
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      const prediction = result.prediction;
 
-      // Check if the response contains audio data
-      if (resultLine.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-        const audioData = resultLine.response.candidates[0].content.parts[0].inlineData.data;
-        const chunkText = textChunks[chunkIndex];
-        const audioFileName = generateSafeFilenameFromText(chunkText, chunkIndex);
+      if (prediction?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+        const audioData = prediction.candidates[0].content.parts[0].inlineData.data;
+        const chunkText = textChunks[i];
+        const audioFileName = generateSafeFilenameFromText(chunkText, i);
 
-        // Convert and save audio file
+        // Convert base64 to WAV and save
         const decodedData = Utilities.base64Decode(audioData);
         const wavBlob = createWavBlob(decodedData);
         const audioFile = assessmentSubfolder.createFile(wavBlob.setName(audioFileName));
 
-        // Generate searchWords (first 8 words)
+        // Generate searchWords
         const words = chunkText.trim().split(/\s+/);
-        const searchWords = words.slice(0, CONSTANTS.SEARCH_WORDS_COUNT).join(' ') + (words.length > CONSTANTS.SEARCH_WORDS_COUNT ? '...' : '');
+        const searchWords = words.slice(0, CONSTANTS.SEARCH_WORDS_COUNT).join(' ') +
+                           (words.length > CONSTANTS.SEARCH_WORDS_COUNT ? '...' : '');
 
-        audioFileObjects[chunkIndex] = {
+        audioFileObjects.push({
           text: chunkText,
           searchWords: searchWords,
           audioUrl: `https://drive.google.com/uc?id=${audioFile.getId()}&export=media`,
           audioFilename: audioFile.getName()
-        };
+        });
       }
     }
 
@@ -577,8 +702,7 @@ function debugBatchAPIPayload() {
   Logger.log(JSON.stringify(batchPayload, null, 2));
   Logger.log('');
 
-  const batchCreateUrl = `${CONSTANTS.GEMINI_BATCH_API_ENDPOINT}models/${CONSTANTS.GEMINI_TTS_MODEL}:batchGenerateContent?key=${apiKey}`;
-  Logger.log('=== BATCH CREATE URL (REST API) ===');
+  const batchCreateUrl = `${CONSTANTS.GEMINI_API_BASE_URL}models/${CONSTANTS.GEMINI_TTS_MODEL}:batchGenerateContent?key=${apiKey}`;  Logger.log('=== BATCH CREATE URL (REST API) ===');
   Logger.log(batchCreateUrl);
   Logger.log('');
 
