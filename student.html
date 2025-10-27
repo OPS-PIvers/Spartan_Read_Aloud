@@ -2866,6 +2866,26 @@ function highlightChunkInHTML(currentSearchWords, nextSearchWords) {
       // Highlight current element
       item.element.classList.add('highlighted-element');
 
+      // If the current element is a detected question, highlight associated answers and images
+      if (item.element.classList.contains('detected-question')) {
+        let nextSibling = item.element.nextElementSibling;
+        let answerCount = parseInt(item.element.getAttribute('data-answer-count')) || 0;
+        let answersHighlighted = 0;
+
+        while (nextSibling && answersHighlighted < answerCount + 5) { // Add a buffer for images/other elements
+          if (nextSibling.classList.contains('detected-answer-choice') || nextSibling.tagName === 'IMG') {
+            nextSibling.classList.add('highlighted-element');
+            if (nextSibling.classList.contains('detected-answer-choice')) {
+              answersHighlighted++;
+            }
+          } else if (nextSibling.classList.contains('detected-question') || nextSibling.classList.contains('detected-passage')) {
+            // Stop if we hit another question or passage
+            break;
+          }
+          nextSibling = nextSibling.nextElementSibling;
+        }
+      }
+
       // Add has-highlight class to all parent elements up to html-assessment-container
       let parent = item.element.parentElement;
       while (parent && !parent.classList.contains('html-assessment-container')) {

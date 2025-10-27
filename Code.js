@@ -40,65 +40,7 @@ function parseStudentEmails(input) {
 
 
 
-/**
- * The function that is called by the on-edit trigger.
- * Checks if the edit was in the "Assessment Database" sheet.
- * @param {Object} e The edit event object.
- */
-function onEditTrigger(e) {
-  try {
-    const sheet = e.range.getSheet();
-    if (sheet.getName() === 'Assessment Database') {
-      Logger.log('Edit detected in Assessment Database. Running all steps.');
-      runAllStepsManual();
-    }
-  } catch (err) {
-    Logger.log('Error in onEditTrigger: ' + err.toString());
-  }
-}
 
-/**
- * Deletes the on-edit trigger for this project.
- */
-function deleteOnEditTrigger() {
-  const triggers = ScriptApp.getProjectTriggers();
-  let deleted = false;
-  for (const trigger of triggers) {
-    if (trigger.getHandlerFunction() === 'onEditTrigger') {
-      ScriptApp.deleteTrigger(trigger);
-      deleted = true;
-      Logger.log('Deleted existing on-edit trigger.');
-    }
-  }
-
-  if (deleted) {
-    Logger.log('On-Edit trigger has been disabled.');
-  } else {
-    Logger.log('No On-Edit trigger was found to delete.');
-  }
-}
-
-/**
- * Creates a trigger that runs automatically when the spreadsheet is edited.
- */
-function createOnEditTrigger() {
-  // First, delete any existing edit triggers to avoid duplicates.
-  const triggers = ScriptApp.getProjectTriggers();
-  for (const trigger of triggers) {
-    if (trigger.getHandlerFunction() === 'onEditTrigger') {
-      ScriptApp.deleteTrigger(trigger);
-      Logger.log('Deleted existing on-edit trigger before creating a new one.');
-    }
-  }
-
-  const ss = SpreadsheetApp.getActive();
-  ScriptApp.newTrigger('onEditTrigger')
-      .forSpreadsheet(ss)
-      .onEdit()
-      .create();
-
-  Logger.log('Successfully created the on-edit trigger.');
-}
 
 /**
  * Runs all the processing steps in sequence using manual (real-time) mode.
@@ -1334,6 +1276,42 @@ function convertPdfToHtml(fileId, file) {
   }
 }
 
+function convertGoogleDocToPdf(fileId, fileName) {
+  try {
+    Logger.log(`→ Converting Google Doc ID ${fileId} to PDF`);
+    const token = ScriptApp.getOAuthToken();
+    const exportUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/pdf`;
+
+    const options = {
+      method: 'get',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(exportUrl, options);
+    const responseCode = response.getResponseCode();
+
+    if (responseCode !== 200) {
+      Logger.log(`✗ Google Doc to PDF export failed: ${responseCode}`);
+      Logger.log(`Response: ${response.getContentText()}`);
+      return null;
+    }
+
+    const pdfBlob = response.getBlob();
+    const pdfFileName = fileName.replace(/\.(gdoc)$/i, '.pdf'); // Ensure .pdf extension
+    pdfBlob.setName(pdfFileName);
+
+    Logger.log(`✓ Google Doc successfully converted to PDF: ${pdfFileName}`);
+    return pdfBlob;
+
+  } catch (e) {
+    Logger.log(`✗ Google Doc to PDF conversion failed: ${e.toString()}`);
+    return null;
+  }
+}
+
 /**
  * Converts a Word document to PDF for permanent storage.
  * This ensures formatting preservation and image embedding.
@@ -1491,14 +1469,11 @@ function sanitizeHtml(html) {
   // This must happen BEFORE removing classes/styles, otherwise list markers disappear
   let sanitized = html;
 
-  // Multi-pass list conversion to handle nesting:
-  // Process lists from innermost to outermost to correctly identify nested lists (answer choices)
-
-  // Process lists from innermost to outermost
+  // --- Start Restoration in sanitizeHtml ---
   let passCount = 0;
   let totalOlCount = (sanitized.match(/<ol[^>]*>/gi) || []).length;
 
-  while (/<ol[^>]*>/i.test(sanitized) && passCount < 10) { // Safety limit of 10 passes
+  while (/<ol[^>]*>/i.test(sanitized) && passCount < 10) { // Safety limit
     passCount++;
 
     sanitized = sanitized.replace(/<ol([^>]*)>([\s\S]*?)<\/ol>/i, function(match, attributes, listContent) {
@@ -1520,13 +1495,16 @@ function sanitizeHtml(html) {
       // 2. If there were multiple <ol> tags initially and this starts at 1, likely nested
       // 3. If listContent already contains <p> tags (from previously processed nested lists), this is outer
       const hasConvertedLists = /<p>/i.test(listContent);
+      // Restore the original heuristic
       const isLikelyNested = (startNum === 1 && totalOlCount > 1 && !hasConvertedLists);
 
       if (!listStyleType) {
+        // Use the heuristic if no explicit style found
         listStyleType = isLikelyNested ? 'lower-alpha' : 'decimal';
       }
 
       let itemNumber = startNum;
+      // Convert <li> to <p> with the text marker
       return listContent.replace(/<li[^>]*>/gi, function() {
         return `<p>${getListMarker(itemNumber++, listStyleType)}`;
       }).replace(/<\/li>/gi, '</p>');
@@ -1534,13 +1512,14 @@ function sanitizeHtml(html) {
   }
 
   if (passCount >= 10) {
-    Logger.log('⚠ Warning: Reached maximum list processing passes (possible infinite loop)');
+    Logger.log('⚠ Warning: Reached maximum list processing passes (possible infinite loop) in sanitizeHtml');
   }
 
-  // Convert unordered lists (<ul><li>) to bulleted paragraphs
+  // Convert unordered lists (same as before)
   sanitized = sanitized.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, function(match, listContent) {
     return listContent.replace(/<li[^>]*>/gi, '<p>• ').replace(/<\/li>/gi, '</p>');
   });
+  // --- End Restoration in sanitizeHtml ---
 
   // 1. Remove security risks
   sanitized = sanitized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
@@ -1618,8 +1597,7 @@ function getFileIdFromUrl(url) {
 
 /**
  * Extracts text chunks from a file (PDF, Google Doc, or Word doc).
- * For PDFs: Uses OCR extraction
- * For Docs/Word: Converts to HTML and extracts plain text
+ * Uses robust list conversion before stripping tags and splitting.
  * @param {string} fileId The Drive file ID
  * @returns {string[]|null} Array of text chunks or null on failure
  */
@@ -1627,92 +1605,69 @@ function extractTextFromFile(fileId) {
   try {
     const file = DriveApp.getFileById(fileId);
     const mimeType = file.getMimeType();
-
     Logger.log(`Extracting text from: ${file.getName()} (${mimeType})`);
 
-    // For PDFs: Use existing OCR method (fast, optimized)
+    // --- PDF OCR Handling (Keep as is) ---
     if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.PDF) {
       Logger.log('→ Using OCR extraction for PDF');
+      // ... (Your existing PDF OCR logic using CHUNK_SPLIT_REGEX) ...
       const blob = file.getBlob();
-      const metadata = {
-        name: blob.getName(),
-        mimeType: MimeType.GOOGLE_DOCS // Convert to Google Doc with OCR
-      };
-
-      if (typeof Drive === 'undefined' || !Drive.Files || typeof Drive.Files.create !== 'function') {
-        throw new Error("Drive API v3 not configured.");
-      }
-
-      const tempDoc = Drive.Files.create(metadata, blob, {
-        ocrLanguage: 'en',
-        fields: 'id'
-      });
+      const metadata = { name: blob.getName(), mimeType: MimeType.GOOGLE_DOCS };
+      const tempDoc = Drive.Files.create(metadata, blob, { ocrLanguage: 'en', fields: 'id' });
       const doc = DocumentApp.openById(tempDoc.id);
       const text = doc.getBody().getText();
       Drive.Files.remove(tempDoc.id);
-
-      const chunks = text.split(CONSTANTS.CHUNK_SPLIT_REGEX).map(chunk => chunk.trim()).filter(chunk => chunk);
-      Logger.log(`✓ Extracted ${chunks.length} chunks from PDF`);
-      return chunks;
+      const pdfChunks = text.split(CONSTANTS.CHUNK_SPLIT_REGEX)
+                            .map(chunk => chunk.trim())
+                            .filter(chunk => chunk);
+      Logger.log(`✓ Extracted ${pdfChunks.length} chunks from PDF via OCR`);
+      return pdfChunks;
     }
+    // --- End PDF Handling ---
 
-    // For Docs/Word: Convert to HTML and extract text
+    // --- Google Docs / Word Handling ---
     Logger.log('→ Using HTML conversion for text extraction');
     const conversionResult = convertFileToHtml(fileId);
     if (conversionResult.error) {
       Logger.log(`✗ Failed to convert file: ${conversionResult.error}`);
       return null;
     }
-
     let htmlContent = conversionResult.html;
     Logger.log(`→ Raw HTML length: ${htmlContent.length} chars`);
-    Logger.log(`→ HTML preview: ${htmlContent.substring(0, 500)}...`);
 
-    // STEP 1: Convert native numbered lists (<ol><li>) to explicit numbers
-    // This handles Google Docs numbered lists where numbers are CSS-generated
-    htmlContent = htmlContent.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, function(match, listContent) {
-      let itemNumber = 1;
-      return listContent.replace(/<li[^>]*>/gi, function() {
-        return `<p>${itemNumber++}. `;
-      }).replace(/<\/li>/gi, '</p>');
-    });
-
-    // STEP 2: Strip HTML tags and extract plain text (preserving structure)
+    // STEP 2: Strip HTML tags and extract plain text
     let plainText = htmlContent
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove style blocks
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove scripts
-      // Convert <br> tags and closing block-level/table tags to newlines to linearize the content.
-      // This ensures list items and table cells are treated as separate lines.
-      .replace(/<br\s*\/?>|<\/(p|div|h[1-6]|li|tr|th|td)>/gi, '\n')
-      .replace(/<[^>]+>/g, ' ') // Remove all remaining HTML tags
-      .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
-      .replace(/&lt;/g, '<') // Decode entities
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&[a-z]+;/gi, ' '); // Remove remaining entities
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove style/script
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<br\s*\/?>|<\/(p|div|h[1-6]|li|tr|th|td)>/gi, '\n') // Convert block ends to newlines
+      .replace(/<[^>]+>/g, ' ') // Remove all remaining tags (including <img>)
+      .replace(/&nbsp;/g, ' ') // Decode entities
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/&[a-z]+;/gi, ' '); // Remove other entities
 
-    // Log text BEFORE normalization to debug
     Logger.log(`→ Plain text BEFORE normalization (first 1500 chars): ${plainText.substring(0, 1500)}`);
 
-    // Now normalize whitespace
+    // Normalize whitespace AFTER stripping tags
     plainText = plainText
-      .replace(/\n\s*\n\s*\n/g, '\n\n') // Collapse 3+ newlines to 2
-      .replace(/[ \t]+/g, ' '); // Collapse multiple spaces/tabs to single space
+      .replace(/[\r\n]+/g, '\n') // Normalize line breaks first
+      .replace(/\n\s*\n+/g, '\n\n') // Collapse multiple line breaks to max 2
+      .replace(/[ \t]+/g, ' ') // Collapse multiple spaces/tabs to single space
+      .trim();
 
-    Logger.log(`→ Plain text length: ${plainText.length} chars`);
     Logger.log(`→ Plain text AFTER normalization (first 1500 chars): ${plainText.substring(0, 1500)}`);
 
-    // STEP 3: Split on numbered questions (handles both "1." and "1)" formats)
-    // Using CHUNK_SPLIT_REGEX from Constants.js (limits leading spaces to prevent splitting on indented lists)
+    // STEP 3: Split on numbered questions using original CHUNK_SPLIT_REGEX
+    // This regex only looks for digits at the start of a line after normalization.
     const chunks = plainText.split(CONSTANTS.CHUNK_SPLIT_REGEX)
-      .map(chunk => chunk.trim())
-      .filter(chunk => chunk);
+      .map(chunk => chunk.trim()) // Trim each resulting chunk
+      .filter(chunk => chunk); // Remove empty chunks
 
-    Logger.log(`✓ Extracted ${chunks.length} chunks from HTML`);
+    Logger.log(`✓ Extracted ${chunks.length} chunks from HTML (using List Convert -> Strip -> Split method)`);
     chunks.forEach((chunk, i) => {
-      Logger.log(`  Chunk ${i + 1}: ${chunk.substring(0, 100)}...`);
+        const markerMatch = chunk.match(/^\s*(\d+[.)\]])/);
+        const logPrefix = markerMatch ? `Chunk ${markerMatch[1]}` : `Chunk ${i + 1}`;
+        Logger.log(`  ${logPrefix} (first 100 chars): ${chunk.substring(0, 100)}...`);
     });
 
     return chunks;
@@ -2050,7 +2005,6 @@ function handleGoogleDocUrl(sessionToken, docUrl) {
       return { error: 'Unauthorized. Admin access required.' };
     }
 
-    // Extract file ID from URL
     const fileId = getFileIdFromUrl(docUrl);
     if (!fileId) {
       return { error: 'Invalid Google Doc URL.' };
@@ -2069,47 +2023,36 @@ function handleGoogleDocUrl(sessionToken, docUrl) {
       pdfFolder = mainAudioFolder.createFolder(CONSTANTS.PDF_SOURCE_FOLDER_NAME);
     }
 
-    // Try to make a copy first
-    try {
-      const originalFile = DriveApp.getFileById(fileId);
-      const copiedFile = originalFile.makeCopy(originalFile.getName() + ' (Copy)', pdfFolder);
-      const copiedUrl = copiedFile.getUrl();
+    const originalFile = DriveApp.getFileById(fileId);
+      const originalFileName = originalFile.getName();
 
-      Logger.log(`Created copy of Google Doc: ${copiedUrl}`);
+      Logger.log(`→ Detected Google Doc URL, converting to PDF for storage: ${originalFileName}`);
+
+      // Convert to PDF
+      const pdfBlob = convertGoogleDocToPdf(fileId, originalFileName);
+
+      if (!pdfBlob) {
+        return { error: 'Failed to convert Google Doc to PDF.' };
+      }
+
+      // Upload the PDF blob
+      const uploadedFile = pdfFolder.createFile(pdfBlob);
+      const fileUrl = uploadedFile.getUrl();
+
+      Logger.log(`✓ Google Doc converted and uploaded as PDF: ${uploadedFile.getName()} (${fileUrl})`);
+
       return {
         success: true,
-        fileUrl: copiedUrl,
-        isCopy: true,
-        message: 'Successfully created a copy of the document.'
+        fileUrl: fileUrl,
+        fileId: uploadedFile.getId(),
+        isCopy: false, // It's a new PDF, not a copy of the original Doc
+        message: 'Google Doc converted to PDF for optimal text extraction.'
       };
 
-    } catch (copyError) {
-      Logger.log(`Could not copy file (viewer-only?): ${copyError.toString()}`);
-
-      // Create shortcut instead
-      try {
-        const originalFile = DriveApp.getFileById(fileId);
-        const shortcut = pdfFolder.createShortcut(fileId);
-        const shortcutUrl = shortcut.getUrl();
-
-        Logger.log(`Created shortcut to Google Doc: ${shortcutUrl}`);
-        return {
-          success: true,
-          fileUrl: docUrl, // Use original URL for shortcut
-          isCopy: false,
-          message: 'Could not copy document (viewer-only). Using original document. Note: You must maintain access to this document.'
-        };
-
-      } catch (shortcutError) {
-        Logger.log(`Could not create shortcut: ${shortcutError.toString()}`);
-        return { error: 'Could not access document. Please check sharing permissions.' };
-      }
+    } catch (e) {
+      Logger.log(`Error in handleGoogleDocUrl: ${e.toString()}`);
+      return { error: 'Failed to process Google Doc: ' + e.toString() };
     }
-
-  } catch (e) {
-    Logger.log(`Error in handleGoogleDocUrl: ${e.toString()}`);
-    return { error: 'Failed to process Google Doc: ' + e.toString() };
-  }
 }
 
 /**
