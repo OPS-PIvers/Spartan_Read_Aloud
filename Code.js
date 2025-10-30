@@ -1614,17 +1614,45 @@ function sanitizeHtml(html) {
       const styleMatch = attributes.match(/list-style-type:\s*([a-z-]+)/i);
       let listStyleType = styleMatch ? styleMatch[1] : null;
 
-      // Heuristic to detect nested lists (answer choices):
+      // Enhanced heuristic to detect nested lists (answer choices):
       // 1. start="1" suggests beginning of a list
       // 2. If there were multiple <ol> tags initially and this starts at 1, likely nested
       // 3. If listContent already contains <p> tags (from previously processed nested lists), this is outer
       const hasConvertedLists = /<p>/i.test(listContent);
-      // Restore the original heuristic
       const isLikelyNested = (startNum === 1 && totalOlCount > 1 && !hasConvertedLists);
 
+      // NEW: Content-based detection for answer choices
+      // Extract all <li> items to analyze their content
+      const listItems = listContent.match(/<li[^>]*>([\s\S]*?)<\/li>/gi) || [];
+      const itemCount = listItems.length;
+
+      // Calculate average length of list items (strip tags first)
+      let totalLength = 0;
+      listItems.forEach(item => {
+        const textOnly = item.replace(/<[^>]+>/g, '').trim();
+        totalLength += textOnly.length;
+      });
+      const avgLength = itemCount > 0 ? totalLength / itemCount : 0;
+
+      // Heuristic: If there are 3-5 items with average length < 100 chars, likely answer choices
+      const isLikelyAnswerChoices = (itemCount >= 3 && itemCount <= 5 && avgLength < 100);
+
+      Logger.log(`List conversion: items=${itemCount}, avgLength=${avgLength.toFixed(0)}, startNum=${startNum}, totalOlCount=${totalOlCount}, isLikelyNested=${isLikelyNested}, isLikelyAnswerChoices=${isLikelyAnswerChoices}`);
+
       if (!listStyleType) {
-        // Use the heuristic if no explicit style found
-        listStyleType = isLikelyNested ? 'lower-alpha' : 'decimal';
+        // Prioritize content-based detection over positional heuristic
+        if (isLikelyAnswerChoices) {
+          listStyleType = 'lower-alpha';
+          Logger.log(`→ Using 'lower-alpha' based on content analysis (short items)`);
+        } else if (isLikelyNested) {
+          listStyleType = 'lower-alpha';
+          Logger.log(`→ Using 'lower-alpha' based on nesting heuristic`);
+        } else {
+          listStyleType = 'decimal';
+          Logger.log(`→ Using 'decimal' (default for question lists)`);
+        }
+      } else {
+        Logger.log(`→ Using explicit list-style-type: '${listStyleType}'`);
       }
 
       let itemNumber = startNum;
@@ -1644,6 +1672,86 @@ function sanitizeHtml(html) {
     return listContent.replace(/<li[^>]*>/gi, '<p>• ').replace(/<\/li>/gi, '</p>');
   });
   // --- End Restoration in sanitizeHtml ---
+
+  // POST-PROCESSING: Ensure answer choices are in separate paragraphs
+  // This handles cases where answer choices weren't properly converted from lists
+  // or where they appear inline with question text
+  // NEW POST-PROCESSING: Force new paragraph for answer choices merged with question text
+  // This targets cases like "<p>Question text</span><span>a) Answer text</p>"
+  sanitized = sanitized.replace(
+    /(<span[^>]*>.*?<\/span>)(<span[^>]*>\s*(?:\([a-dA-D]\)|[a-dA-D][.)])\s*.*?<\/span>)/gi,
+    function(match, questionPartSpan, answerPartSpan) {
+      // Only apply if the questionPartSpan is not itself an answer choice
+      // and the answerPartSpan actually contains an answer pattern
+      const answerPatternCheck = /^\s*(?:\([a-dA-D]\)|[a-dA-D][.)])\s+/;
+      if (answerPatternCheck.test(answerPartSpan.replace(/<[^>]+>/g, '')) &&
+          !answerPatternCheck.test(questionPartSpan.replace(/<[^>]+>/g, ''))) {
+        Logger.log(`Forcing paragraph split: ${questionPartSpan.substring(0, 50)}... + ${answerPartSpan.substring(0, 50)}...`);
+        return `${questionPartSpan}</p><p>${answerPartSpan}`;
+      }
+      return match;
+    }
+  );
+
+  sanitized = sanitized.replace(/<p>([\s\S]*?)<\/p>/gi, function(match, content) {
+    // Check if this paragraph contains answer choice patterns
+    // Matches: "a.", "A.", "a)", "A)", "(a)", "(A)" etc. for letters a-d
+    // ENHANCED: Now matches at start OR in middle of paragraph
+    const answerSplitPattern = /(\s+|^)(\([a-dA-D]\)|[a-dA-D][.)])\s+/g;
+
+    // Test if content contains answer patterns
+    if (answerSplitPattern.test(content)) {
+      answerSplitPattern.lastIndex = 0; // Reset lastIndex for consistent splitting
+
+      // Split on answer patterns while keeping the patterns with their respective content
+      // This regex captures the delimiter so it's included in the parts array
+      const parts = content.split(/(\s*(?:\([a-dA-D]\)|[a-dA-D][.)])\s+)/);
+      let result = '';
+      let currentPart = '';
+
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        if (!part || part.trim() === '') continue;
+
+        // Check if this part is an answer pattern (the delimiter itself)
+        if (/^\s*(?:\([a-dA-D]\)|[a-dA-D][.)])\s*$/.test(part)) {
+          // If we have accumulated content before this delimiter, close it as a paragraph
+          if (currentPart.trim()) {
+            result += '<p>' + currentPart.trim() + '</p>';
+          }
+          // Start a new paragraph with the delimiter
+          currentPart = part.trim();
+        } else {
+          // If it's not a delimiter, append to current part
+          currentPart += part;
+        }
+      }
+
+      // Add the final accumulated part as a paragraph
+      if (currentPart.trim()) {
+        result += '<p>' + currentPart.trim() + '</p>';
+      }
+
+      Logger.log(`Split answer choices in paragraph: ${content.substring(0, 50)}... → ${result.substring(0, 100)}...`);
+      return result || match;
+    }
+
+    return match;
+  });
+
+  // POST-PROCESSING 2: Detect and fix incorrectly converted numeric answer choices
+  // Sometimes "A. B. C. D." gets converted to "1. 2. 3. 4." - we need to detect and fix this
+  // Use in-place replacement to preserve ALL HTML structure (tables, images, etc.)
+  sanitized = sanitized.replace(
+    /<p>1\.\s+(.{1,150}?)<\/p>\s*<p>2\.\s+(.{1,150}?)<\/p>\s*<p>3\.\s+(.{1,150}?)<\/p>\s*<p>4\.\s+(.{1,150}?)<\/p>/gi,
+    function(match, text1, text2, text3, text4) {
+      Logger.log(`Detected incorrectly converted answer choices (1-4) → Converting to (a-d)`);
+      Logger.log(`  First option: ${text1.substring(0, 50)}...`);
+
+      // Convert "1. 2. 3. 4." to "a. b. c. d."
+      return `<p>a. ${text1}</p><p>b. ${text2}</p><p>c. ${text3}</p><p>d. ${text4}</p>`;
+    }
+  );
 
   // 1. Remove security risks
   sanitized = sanitized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
@@ -1799,6 +1907,50 @@ function extractTextFromFile(fileId) {
   } catch (e) {
     Logger.log(`Failed to extract text from file ID ${fileId}. Error: ${e.toString()}`);
     return null;
+  }
+}
+
+/**
+ * Adds SSML pause markers to text for more natural speech pacing.
+ * @param {string} text The plain text to enhance with pauses
+ * @returns {string} SSML-formatted text wrapped in <speak> tags, or original text if SSML disabled
+ */
+function addPausesToText(text) {
+  // Return plain text if SSML pauses are disabled
+  if (!CONSTANTS.ENABLE_SSML_PAUSES) {
+    return text;
+  }
+
+  try {
+    // Step 1: Escape special XML characters to prevent SSML errors
+    let ssmlText = text
+      .replace(/&/g, '&amp;')   // Must be first to avoid double-escaping
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+
+    // Step 2: Add pause after question number at the very start (e.g., "1. ", "2) ", "3] ")
+    ssmlText = ssmlText.replace(/^(\d+[.)\]])\s+/, `$1 <break time="${CONSTANTS.PAUSE_AFTER_QUESTION_NUMBER_MS}ms"/> `);
+
+    // Step 3: Add pauses after paragraph breaks (double line breaks or more)
+    ssmlText = ssmlText.replace(/\n\n+/g, `\n<break time="${CONSTANTS.PAUSE_AFTER_PARAGRAPH_MS}ms"/>\n`);
+
+    // Step 4: Add pauses after answer choices (A., B., C., D. or a), b), c), d))
+    // Matches: "A." or "A)" (uppercase or lowercase, periods or parentheses), with optional whitespace
+    ssmlText = ssmlText.replace(/([A-Da-d][.)])\s*/g, `$1 <break time="${CONSTANTS.PAUSE_AFTER_ANSWER_CHOICE_MS}ms"/> `);
+
+    // Step 5: Wrap in SSML speak tags
+    const result = `<speak>${ssmlText}</speak>`;
+
+    Logger.log(`addPausesToText - Original text (first 200 chars): ${text.substring(0, 200)}`);
+    Logger.log(`addPausesToText - SSML text (first 200 chars): ${result.substring(0, 200)}`);
+    Logger.log(`✓ Added SSML pauses to text (${text.length} chars -> ${result.length} chars)`);
+    return result;
+
+  } catch (e) {
+    Logger.log(`✗ Error adding SSML pauses: ${e.toString()}. Returning plain text.`);
+    return text; // Fallback to plain text on error
   }
 }
 

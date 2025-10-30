@@ -110,11 +110,15 @@ function generateAudioWithStandardVoice(text, fileName, folder) {
   // Use the Cloud Text-to-Speech API endpoint (not Gemini endpoint)
   const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
 
+  // Add SSML pauses to text for more natural pacing
+  const processedText = addPausesToText(text);
+
+  // Determine if we're using SSML or plain text
+  const isSSML = processedText.startsWith('<speak>');
+
   // Payload structure for Cloud TTS API
   const payload = {
-    "input": {
-      "text": text
-    },
+    "input": isSSML ? { "ssml": processedText } : { "text": processedText },
     "voice": {
       "languageCode": "en-US",
       "name": CONSTANTS.GOOGLE_CLOUD_TTS_VOICE

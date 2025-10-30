@@ -1,0 +1,5 @@
+description="Retrieve the Google Apps Script execution logs for debugging."
+prompt = """
+You must run the following clasp command to retrieve the Google Apps Script execution log for project ID 672300785825:
+1. clasp tail-logs
+"""

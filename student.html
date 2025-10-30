@@ -1841,6 +1841,7 @@ function onAssessmentLoaded(result) {
  */
 function renderHtmlAssessment(htmlContent) {
   console.log("Rendering HTML assessment");
+  console.log("Received HTML Content:", htmlContent); // Log the HTML content
 
   // Create container with CSS reset
   const htmlContainer = document.createElement('div');
@@ -1856,6 +1857,7 @@ function renderHtmlAssessment(htmlContent) {
 
   // Extract text content structure for highlighting
   extractTextContentFromHtml(htmlContainer);
+  mapChunksToElements(pageTextContent, serverChunks);
 
   console.log("✓ HTML assessment rendered with pattern enhancement");
 }
@@ -1886,10 +1888,51 @@ function extractTextContentFromHtml(container) {
 }
 
 /**
+ * Maps server audio chunks to their corresponding HTML elements.
+ * Assigns a data-chunk-index to each element for direct lookup.
+ * @param {Array<Object>} pageTextContent - Array of {element, text, normalizedText}
+ * @param {Array<Object>} serverChunks - Array of audio chunk objects
+ */
+function mapChunksToElements(pageTextContent, serverChunks) {
+  console.log('=== MAPPING CHUNKS TO ELEMENTS ===');
+  let currentChunkIdx = 0;
+
+  for (let i = 0; i < pageTextContent.length; i++) {
+    const pageItem = pageTextContent[i];
+    let foundMatch = false;
+
+    // Try to match current page item with current or next few server chunks
+    for (let j = 0; j < 5 && (currentChunkIdx + j) < serverChunks.length; j++) {
+      const serverChunk = serverChunks[currentChunkIdx + j];
+      const normalizedChunkText = normalizeText(serverChunk.text);
+
+      // Check if the page item's text contains the chunk's text
+      if (pageItem.normalizedText.includes(normalizedChunkText) || normalizedChunkText.includes(pageItem.normalizedText)) {
+        pageItem.element.setAttribute('data-chunk-index', currentChunkIdx + j);
+        console.log(`→ Mapped element "${pageItem.text.substring(0, 30)}..." to chunk ${currentChunkIdx + j}`);
+        currentChunkIdx = currentChunkIdx + j + 1; // Advance chunk index
+        foundMatch = true;
+        break;
+      }
+    }
+
+    // If no direct match, but it's a significant text block, assign the current chunk index
+    // This handles cases where a single HTML element might contain multiple small chunks,
+    // or a chunk might be split across multiple elements.
+    if (!foundMatch && pageItem.normalizedText.length > 50 && currentChunkIdx < serverChunks.length) {
+      pageItem.element.setAttribute('data-chunk-index', currentChunkIdx);
+      console.log(`→ Fallback mapped element "${pageItem.text.substring(0, 30)}..." to chunk ${currentChunkIdx}`);
+      // Do not advance currentChunkIdx here, as this might be a partial match
+    }
+  }
+  console.log('✓ Chunk mapping complete.');
+}
+
+/**
  * Detects assessment patterns and adds CSS classes for enhanced styling.
  * Patterns detected:
  * - Questions: paragraphs starting with "1.", "2.", etc.
- * - Answer choices: text starting with "A.", "B.", "C.", "D."
+ * - Answer choices: text starting with "a.", "A.", "a)", "A)", "(a)", "(A)"
  * - Passages: longer paragraphs without numbering
  * @param {HTMLElement} container The HTML assessment container
  */
@@ -1898,7 +1941,7 @@ function detectAndEnhanceAssessmentPatterns(container) {
 
   // Patterns to detect
   const questionPattern = /^\s*(\d+)\.\s+/; // Matches "1. ", "2. ", etc.
-  const answerPattern = /^\s*([A-D])\.\s+/i; // Matches "A. ", "B. ", "C. ", "D. "
+  const answerPattern = /^\s*(\([a-dA-D]\)|[a-dA-D][.)])\s+/; // Matches "a.", "A.", "a)", "A)", "(a)", "(A)"
   const passageLengthThreshold = 150; // Characters
 
   let questionsDetected = 0;
@@ -2640,6 +2683,25 @@ function setupEventListeners() {
       if (chunkPopup) chunkPopup.classList.add('hidden');
     }
   });
+
+  // Add click listeners to text chunks for direct playback
+  const htmlAssessmentContainer = document.querySelector('.html-assessment-container');
+  if (htmlAssessmentContainer) {
+    htmlAssessmentContainer.addEventListener('click', (event) => {
+      let targetElement = event.target;
+      // Traverse up the DOM tree to find an element with data-chunk-index
+      while (targetElement && targetElement !== htmlAssessmentContainer) {
+        const chunkIndex = targetElement.getAttribute('data-chunk-index');
+        if (chunkIndex !== null) {
+          event.stopPropagation(); // Prevent other click handlers from firing
+          jumpToChunk(parseInt(chunkIndex, 10));
+          return;
+        }
+        targetElement = targetElement.parentElement;
+      }
+    });
+  }
+}
 }
 
 let isSecondaryPanelExpanded = false;
@@ -2883,6 +2945,36 @@ function highlightChunkInHTML(currentSearchWords, nextSearchWords) {
             break;
           }
           nextSibling = nextSibling.nextElementSibling;
+        }
+
+        // FALLBACK: If no answer choices were detected, highlight next few paragraphs
+        // This handles cases where answer choice pattern detection failed
+        if (answersHighlighted === 0) {
+          console.log('→ No detected answer choices found, using fallback highlighting');
+          nextSibling = item.element.nextElementSibling;
+          let fallbackCount = 0;
+          const maxFallbackElements = 6; // Highlight up to 6 elements (typically 4 answers + possible images)
+
+          while (nextSibling && fallbackCount < maxFallbackElements) {
+            // Stop if we hit another question
+            const questionPattern = /^\s*(\d+)\.\s+/;
+            if (nextSibling.textContent && questionPattern.test(nextSibling.textContent.trim())) {
+              console.log('→ Stopped fallback at next question');
+              break;
+            }
+
+            // Highlight paragraph or image elements
+            if (nextSibling.tagName === 'P' || nextSibling.tagName === 'IMG') {
+              nextSibling.classList.add('highlighted-element');
+              fallbackCount++;
+            }
+
+            nextSibling = nextSibling.nextElementSibling;
+          }
+
+          if (fallbackCount > 0) {
+            console.log(`→ Fallback highlighted ${fallbackCount} additional elements`);
+          }
         }
       }
 

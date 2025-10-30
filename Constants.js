@@ -56,7 +56,13 @@ const CONSTANTS = {
   SEARCH_WORDS_COUNT: 8,
   SAFE_FILENAME_WORD_COUNT: 6,
 
-// --- TTS Provider Configuration ---
+  // --- SSML Pause Configuration ---
+  ENABLE_SSML_PAUSES: true,
+  PAUSE_AFTER_PARAGRAPH_MS: 800,
+  PAUSE_AFTER_ANSWER_CHOICE_MS: 500,
+  PAUSE_AFTER_QUESTION_NUMBER_MS: 400,
+
+  // --- TTS Provider Configuration ---
   TTS_PROVIDER: 'GOOGLE_CLOUD',
   GEMINI_TTS_MODEL: 'gemini-2.5-flash-preview-tts', // Model *used* for batch job
   GEMINI_API_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/', // Keep for potential fallback/other uses
