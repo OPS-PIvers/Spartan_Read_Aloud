@@ -13,9 +13,9 @@ Since this is a Google Apps Script project, traditional build commands don't app
 - **Push local changes to Apps Script**: `clasp push`
 - **Pull changes from Apps Script**: `clasp pull`
 - **Open project in Apps Script editor**: `clasp open`
-- **Deploy as web app**: `clasp deploy --deploymentId AKfycbylBrrX4PQLzbDhLv_5OjXw6weF0oNVMaMtr7g5WJj4rlxukqHx81qlY2FvWXVLAwLHvw`
+- **Deploy as web app**: Use the `/deploy` slash command, which runs `clasp push` followed by `clasp deploy --deploymentId AKfycbwbnej8CBXrgSt7YFbpkAs9uj2f4OYB5518KRjjhP2a6N5RdWNwxVmzUuF54xslyOt6Ww`
 
-The active deployment ID for the web app is: `AKfycbylBrrX4PQLzbDhLv_5OjXw6weF0oNVMaMtr7g5WJj4rlxukqHx81qlY2FvWXVLAwLHvw`
+The active deployment ID for the web app is: `AKfycbwbnej8CBXrgSt7YFbpkAs9uj2f4OYB5518KRjjhP2a6N5RdWNwxVmzUuF54xslyOt6Ww`
 
 ## Architecture
 
@@ -61,10 +61,10 @@ The system operates in three sequential steps for assessment processing:
 
 The system includes batch processing capabilities configured in Constants.js:
 
-- **Batch API**: `BATCH_API_ENABLED: false` - Batch processing for cost savings
+- **Batch API**: `BATCH_API_ENABLED: false` - Batch processing for cost savings (currently disabled)
 - **Automated Batch**: Runs every 12 hours (`AUTOMATED_BATCH_INTERVAL_HOURS: 12`)
 - **Accumulation**: Collects multiple assessments before batching (`BATCH_ACCUMULATION_ENABLED: true`)
-- **Current Limitation**: TTS models don't support batch API on Vertex AI yet (see BATCH_API_DEPLOYMENT.md)
+- **Current Limitation**: TTS models don't support batch API on Vertex AI yet
 
 ### File Format Support
 
@@ -106,8 +106,6 @@ GOOGLE_CLOUD_TTS_VOICE: 'en-US-Standard-H'
 ```
 
 **Legacy Support**: Gemini TTS (`gemini-2.5-flash-preview-tts`) still available by changing `TTS_PROVIDER` setting
-
-See `google_cloud_tts.md` for detailed implementation notes.
 
 ### Authentication & Role System
 
@@ -312,7 +310,6 @@ Assessment Audio Files/
 **Batch API Integration** (October 2024):
 - Infrastructure prepared for batch processing
 - Note: Currently disabled due to lack of TTS model support on Vertex AI
-- See BATCH_API_DEPLOYMENT.md for full technical details
 
 ### Known Limitations
 
@@ -324,10 +321,8 @@ Assessment Audio Files/
 
 ### Related Documentation
 
-- `BATCH_API_DEPLOYMENT.md` - Detailed guide on batch processing architecture and limitations
-- `google_cloud_tts.md` - Instructions for Google Cloud TTS integration
-- `GEMINI.md` - Original Gemini API documentation (legacy)
-- `.claude/commands/deploy.md` - Deployment automation command
+- `GEMINI.md` - Original Gemini API documentation (legacy TTS provider)
+- `.claude/commands/deploy.md` - Deployment automation slash command
 
 ### Development Tips
 

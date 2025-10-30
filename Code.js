@@ -1250,6 +1250,7 @@ function convertFileToHtml(fileId) {
     }
 
     Logger.log(`✓ Successfully converted to HTML (${htmlContent.length} chars)`);
+    Logger.log(`Raw HTML content (first 1000 chars): ${htmlContent.substring(0, 1000)}`); // Added log
     return {
       html: htmlContent,
       mimeType: mimeType,
@@ -1694,6 +1695,12 @@ function sanitizeHtml(html) {
   );
 
   sanitized = sanitized.replace(/<p>([\s\S]*?)<\/p>/gi, function(match, content) {
+    // Skip paragraphs containing images - don't process them for answer patterns
+    // This prevents corrupting base64 image data that might contain sequences like "A."
+    if (/<img/i.test(content)) {
+      return match;
+    }
+
     // Check if this paragraph contains answer choice patterns
     // Matches: "a.", "A.", "a)", "A)", "(a)", "(A)" etc. for letters a-d
     // ENHANCED: Now matches at start OR in middle of paragraph
@@ -1745,6 +1752,11 @@ function sanitizeHtml(html) {
   sanitized = sanitized.replace(
     /<p>1\.\s+(.{1,150}?)<\/p>\s*<p>2\.\s+(.{1,150}?)<\/p>\s*<p>3\.\s+(.{1,150}?)<\/p>\s*<p>4\.\s+(.{1,150}?)<\/p>/gi,
     function(match, text1, text2, text3, text4) {
+      // Skip if any of the captured text contains images
+      if (/<img/i.test(text1) || /<img/i.test(text2) || /<img/i.test(text3) || /<img/i.test(text4)) {
+        return match;
+      }
+
       Logger.log(`Detected incorrectly converted answer choices (1-4) → Converting to (a-d)`);
       Logger.log(`  First option: ${text1.substring(0, 50)}...`);
 

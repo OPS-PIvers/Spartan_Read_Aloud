@@ -1508,14 +1508,10 @@ body {
   <!-- Speed Control Popup -->
   <div id="speed-popup" class="hidden fixed bottom-0 left-0 mb-28 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 z-50">
     <p class="text-sm font-medium text-center text-gray-700 dark:text-gray-200 mb-2">Playback Speed</p>
-    <div class="grid grid-cols-3 gap-2">
-      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="0.5">0.5x</button>
-      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="0.75">0.75x</button>
-      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="1.0">1.0x</button>
-      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="1.25">1.25x</button>
-      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="1.5">1.5x</button>
-      <button class="speed-preset text-sm font-medium text-gray-600 dark:text-gray-300 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" data-speed="2.0">2.0x</button>
+    <div class="flex items-center justify-between mb-2">
+      <span id="speed-display" class="text-sm font-semibold text-gray-900 dark:text-white">1.0x</span>
     </div>
+    <input type="range" id="speed-slider-popup" min="0.5" max="2.0" step="0.01" value="1.0" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer" aria-label="Fine-tune playback speed">
     <!-- Popup tail -->
     <div class="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-4 bg-white dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 transform rotate-45"></div>
   </div>
@@ -1532,7 +1528,6 @@ body {
 
   <!-- Hidden elements for compatibility -->
   <div id="toolbar-secondary" style="display: none;"></div>
-  <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.25" value="1.0" style="display: none;" aria-label="Fine-tune playback speed">
   <button id="toggle-secondary-btn" style="display: none;"></button>
   <button id="loop-btn" style="display: none;"></button>
   <div id="keyboard-hints" style="display: none;"></div>
@@ -1556,6 +1551,11 @@ let isLoadingAudio = false; // Track loading state
 let sessionToken = null; // Secure session token for audio access
 let totalChunks = 0; // Total number of audio chunks
 let chunksLoaded = 0; // Number of chunks currently loaded/cached
+
+// Audio playback delays
+const QUESTION_ANSWER_DELAY_MS = 1500; // 1.5 seconds
+const ANSWER_ANSWER_DELAY_MS = 1000;   // 1 second
+const DEFAULT_CHUNK_DELAY_MS = 500;    // 0.5 seconds
 
 // Session storage for multi-assessment flow
 let storedEmail = null;
@@ -1909,7 +1909,16 @@ function mapChunksToElements(pageTextContent, serverChunks) {
       // Check if the page item's text contains the chunk's text
       if (pageItem.normalizedText.includes(normalizedChunkText) || normalizedChunkText.includes(pageItem.normalizedText)) {
         pageItem.element.setAttribute('data-chunk-index', currentChunkIdx + j);
-        console.log(`→ Mapped element "${pageItem.text.substring(0, 30)}..." to chunk ${currentChunkIdx + j}`);
+        // Assign type to serverChunk based on element classes
+        if (pageItem.element.classList.contains('detected-question')) {
+          serverChunk.type = 'question';
+        } else if (pageItem.element.classList.contains('detected-answer-choice')) {
+          serverChunk.type = 'answer';
+              } else if (pageItem.element.classList.contains('detected-passage')) {
+                serverChunk.type = 'passage';
+              } else {          serverChunk.type = 'text';
+        }
+        console.log(`→ Mapped element "${pageItem.text.substring(0, 30)}..." to chunk ${currentChunkIdx + j} (type: ${serverChunk.type})`);
         currentChunkIdx = currentChunkIdx + j + 1; // Advance chunk index
         foundMatch = true;
         break;
@@ -1921,7 +1930,17 @@ function mapChunksToElements(pageTextContent, serverChunks) {
     // or a chunk might be split across multiple elements.
     if (!foundMatch && pageItem.normalizedText.length > 50 && currentChunkIdx < serverChunks.length) {
       pageItem.element.setAttribute('data-chunk-index', currentChunkIdx);
-      console.log(`→ Fallback mapped element "${pageItem.text.substring(0, 30)}..." to chunk ${currentChunkIdx}`);
+      // Assign type to serverChunk based on element classes (fallback)
+      if (pageItem.element.classList.contains('detected-question')) {
+        serverChunks[currentChunkIdx].type = 'question';
+      } else if (pageItem.element.classList.contains('detected-answer-choice')) {
+        serverChunks[currentChunkIdx].type = 'answer';
+      } else if (pageItem.element.classList.contains('detected-passage')) {
+        serverChunks[currentChunkIdx].type = 'passage';
+      } else {
+        serverChunks[currentChunkIdx].type = 'text';
+      }
+      console.log(`→ Fallback mapped element "${pageItem.text.substring(0, 30)}..." to chunk ${currentChunkIdx} (type: ${serverChunks[currentChunkIdx].type})`);
       // Do not advance currentChunkIdx here, as this might be a partial match
     }
   }
@@ -2425,18 +2444,11 @@ function updateToolbarDisplay() {
     toolbarSubtitle.textContent = `Audio ${currentChunkIndex + 1} of ${serverChunks.length}`;
   }
 
-  // Update speed preset buttons with Tailwind styling
-  document.querySelectorAll('.speed-preset').forEach(btn => {
-    const speed = parseFloat(btn.getAttribute('data-speed'));
-    const isActive = Math.abs(speed - currentPlaybackRate) < 0.01;
-
-    // Toggle Tailwind classes for active state
-    btn.classList.toggle('bg-indigo-50', isActive);
-    btn.classList.toggle('dark:bg-indigo-900/50', isActive);
-    btn.classList.toggle('text-indigo-700', isActive);
-    btn.classList.toggle('dark:text-indigo-300', isActive);
-    btn.classList.toggle('font-medium', isActive);
-  });
+  // Update speed display in popup
+  const speedDisplay = document.getElementById('speed-display');
+  if (speedDisplay) {
+    speedDisplay.textContent = `${currentPlaybackRate.toFixed(2)}x`;
+  }
 
   // Update speed button title
   const speedBtn = document.getElementById('speed-btn');
@@ -2616,18 +2628,12 @@ function setupEventListeners() {
     updateVolumeIcon(0.8); // Default 80%
   }
 
-  // Speed preset buttons
-  document.querySelectorAll('.speed-preset').forEach(btn => {
-    btn.onclick = () => {
-      const speed = parseFloat(btn.getAttribute('data-speed'));
-      setPlaybackSpeed(speed);
-    };
-  });
+  // Speed preset buttons (removed, now using slider)
 
-  // Speed slider
-  const speedSlider = document.getElementById('speed-slider');
-  if (speedSlider) {
-    speedSlider.oninput = (e) => {
+  // Speed slider (new popup slider)
+  const speedSliderPopup = document.getElementById('speed-slider-popup');
+  if (speedSliderPopup) {
+    speedSliderPopup.oninput = (e) => {
       setPlaybackSpeed(parseFloat(e.target.value));
     };
   }
@@ -2702,7 +2708,6 @@ function setupEventListeners() {
     });
   }
 }
-}
 
 let isSecondaryPanelExpanded = false;
 
@@ -2734,16 +2739,22 @@ function setPlaybackSpeed(speed) {
   globalAudioPlayer.playbackRate = currentPlaybackRate;
   updateToolbarDisplay();
 
-  // Update speed display
+  // Update speed display in popup
   const speedDisplay = document.getElementById('speed-display');
   if (speedDisplay) {
-    speedDisplay.textContent = speed + 'x';
+    speedDisplay.textContent = `${currentPlaybackRate.toFixed(2)}x`;
+  }
+
+  // Update slider position
+  const speedSliderPopup = document.getElementById('speed-slider-popup');
+  if (speedSliderPopup) {
+    speedSliderPopup.value = currentPlaybackRate;
   }
 
   // Close speed popup
   const speedPopup = document.getElementById('speed-popup');
   if (speedPopup) {
-    speedPopup.style.display = 'none';
+    speedPopup.classList.add('hidden');
   }
 }
 
@@ -2878,10 +2889,27 @@ function handleAudioEnd() {
     globalAudioPlayer.play();
     updatePlayPauseButton(true);
   } else {
-    // Audio finished - stay on current chunk (no auto-advance)
-    // Students must click Next button to move to next chunk
-    // Clicking Play will replay the same chunk
-    currentlyPlayingChunk = null;
+    // Check if there's a next chunk to play
+    if (currentChunkIndex + 1 < serverChunks.length) {
+      const currentChunk = serverChunks[currentChunkIndex];
+      const nextChunk = serverChunks[currentChunkIndex + 1];
+      let delay = DEFAULT_CHUNK_DELAY_MS; // Default delay
+
+      if (currentChunk.type === 'question' && nextChunk.type === 'answer') {
+        delay = QUESTION_ANSWER_DELAY_MS;
+      } else if (currentChunk.type === 'answer' && nextChunk.type === 'answer') {
+        delay = ANSWER_ANSWER_DELAY_MS;
+      }
+
+      console.log(`Audio ended. Waiting ${delay}ms before playing next chunk (current: ${currentChunk.type}, next: ${nextChunk.type})`);
+      setTimeout(() => {
+        jumpToChunk(currentChunkIndex + 1);
+      }, delay);
+    } else {
+      // Audio finished - no more chunks
+      currentlyPlayingChunk = null;
+      console.log('All audio chunks finished.');
+    }
   }
 }
 
