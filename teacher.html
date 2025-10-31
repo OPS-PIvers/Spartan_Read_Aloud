@@ -448,6 +448,26 @@
     @keyframes spinner {
       to { transform: rotate(360deg); }
     }
+
+    /* Alert banner styles */
+    .alert-banner {
+      margin-top: 12px;
+      padding: 12px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    .alert-banner.alert-danger {
+      background-color: #fce8e6;
+      color: #c5221f;
+      border-left: 4px solid #d93025;
+    }
+
+    .alert-banner strong {
+      font-weight: 700;
+    }
   </style>
   <style>
     .loader {
@@ -514,6 +534,9 @@
           <label for="gdoc-url-input" class="form-label">Google Doc URL</label>
           <input type="url" id="gdoc-url-input" placeholder="https://docs.google.com/document/d/..." class="form-input">
           <p class="form-hint">Note: If you only have view access, a shortcut will be created. Ensure you maintain access to the document.</p>
+          <div class="alert-banner alert-danger">
+            <strong>Important:</strong> Before adding your Google Doc assessment, you must share (viewer access) the assessment with <strong>notifications@orono.k12.mn.us</strong>. After your assessment successfully processes, you can remove the sharing rights.
+          </div>
         </div>
       </div>
 
