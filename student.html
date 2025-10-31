@@ -135,6 +135,7 @@ body {
     #next-btn,
     #skip-forward-btn,
     #focus-btn,
+    #line-spacing-btn,
     #chunk-list-btn {
       width: 40px !important;
       height: 40px !important;
@@ -943,7 +944,7 @@ body {
       /* Remove margin: 0 auto; if #pdf-container handles centering */
       margin: 0 auto 96px auto; /* Keep if #pdf-container is full width */
       background: transparent; /* Make background transparent if #pdf-container provides white bg */
-      line-height: 2.0;
+      line-height: var(--line-height, 2.0);
       font-family: 'Inter', sans-serif;
       color: #4a4a4a;
       font-size: clamp(16px, 2vw, 18px);
@@ -959,7 +960,7 @@ body {
     /* Paragraphs - calm and spacious */
     .html-assessment-container p {
       margin: 1.5em 0;
-      line-height: 2.0;
+      line-height: var(--line-height, 2.0);
       max-width: 65ch; /* Limit line length for readability */
     }
 
@@ -1012,7 +1013,7 @@ body {
 
     .html-assessment-container li {
       margin: 1em 0;
-      line-height: 2.0;
+      line-height: var(--line-height, 2.0);
     }
 
     /* Emphasis - subtle, no backgrounds */
@@ -1043,7 +1044,7 @@ body {
     .html-assessment-container th {
       padding: 0; /* No padding, just natural spacing */
       vertical-align: top;
-      line-height: 2.0;
+      line-height: var(--line-height, 2.0);
       font-size: 1em;
     }
 
@@ -1085,7 +1086,7 @@ body {
     /* Passages - just spacing */
     .html-assessment-container .detected-passage {
       margin: 2.5em 0;
-      line-height: 2.0;
+      line-height: var(--line-height, 2.0);
     }
 
     /* ========================================
@@ -1466,6 +1467,10 @@ body {
               <button id="focus-btn" title="Focus Mode" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                 <span class="material-icons text-xl">center_focus_strong</span>
               </button>
+              <!-- Line Spacing Control -->
+              <button id="line-spacing-btn" title="Line Spacing (2.0)" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <span class="material-icons text-xl">format_line_spacing</span>
+              </button>
             </div>
 
             <!-- Progress Bar & Time -->
@@ -1516,6 +1521,17 @@ body {
     <div class="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-4 bg-white dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 transform rotate-45"></div>
   </div>
 
+  <!-- Line Spacing Control Popup -->
+  <div id="line-spacing-popup" class="hidden fixed bottom-0 left-0 mb-28 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 z-50">
+    <p class="text-sm font-medium text-center text-gray-700 dark:text-gray-200 mb-2">Line Spacing</p>
+    <div class="flex items-center justify-between mb-2">
+      <span id="line-spacing-display" class="text-sm font-semibold text-gray-900 dark:text-white">2.0</span>
+    </div>
+    <input type="range" id="line-spacing-slider-popup" min="1.0" max="3.0" step="0.1" value="2.0" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer" aria-label="Adjust line spacing">
+    <!-- Popup tail -->
+    <div class="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-4 bg-white dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 transform rotate-45"></div>
+  </div>
+
   <!-- Chunk List Popup -->
   <div id="chunk-popup" class="hidden fixed bottom-0 right-0 mb-28 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 z-50">
     <p class="text-sm font-medium text-center text-gray-700 dark:text-gray-200 mb-2">Audio List</p>
@@ -1543,6 +1559,7 @@ let currentChunkIndex = 0;
 let isLooping = false;
 let isFocusMode = false;
 let currentPlaybackRate = 1.0;
+let currentLineSpacing = 2.0; // Default line spacing
 let currentHighlight = null;
 let pageTextContent = []; // Store extracted text content for each page
 let isProgrammaticScroll = false; // Flag to ignore auto-scroll during highlighting
@@ -1859,6 +1876,12 @@ function renderHtmlAssessment(htmlContent) {
   extractTextContentFromHtml(htmlContainer);
   mapChunksToElements(pageTextContent, serverChunks);
 
+  // Propagate chunk indices to answer choices so they're clickable
+  propagateChunkIndexToAnswers(htmlContainer);
+
+  // Initialize line spacing with default value
+  setLineSpacing(currentLineSpacing);
+
   console.log("✓ HTML assessment rendered with pattern enhancement");
 }
 
@@ -1899,52 +1922,102 @@ function mapChunksToElements(pageTextContent, serverChunks) {
 
   for (let i = 0; i < pageTextContent.length; i++) {
     const pageItem = pageTextContent[i];
-    let foundMatch = false;
+    let bestMatch = { score: 0, index: -1 };
 
-    // Try to match current page item with current or next few server chunks
+    // Try to find the best match for the current page item within the next few server chunks
     for (let j = 0; j < 5 && (currentChunkIdx + j) < serverChunks.length; j++) {
       const serverChunk = serverChunks[currentChunkIdx + j];
       const normalizedChunkText = normalizeText(serverChunk.text);
+      const normalizedPageText = pageItem.normalizedText;
 
-      // Check if the page item's text contains the chunk's text
-      if (pageItem.normalizedText.includes(normalizedChunkText) || normalizedChunkText.includes(pageItem.normalizedText)) {
-        pageItem.element.setAttribute('data-chunk-index', currentChunkIdx + j);
-        // Assign type to serverChunk based on element classes
-        if (pageItem.element.classList.contains('detected-question')) {
-          serverChunk.type = 'question';
-        } else if (pageItem.element.classList.contains('detected-answer-choice')) {
-          serverChunk.type = 'answer';
-              } else if (pageItem.element.classList.contains('detected-passage')) {
-                serverChunk.type = 'passage';
-              } else {          serverChunk.type = 'text';
-        }
-        console.log(`→ Mapped element "${pageItem.text.substring(0, 30)}..." to chunk ${currentChunkIdx + j} (type: ${serverChunk.type})`);
-        currentChunkIdx = currentChunkIdx + j + 1; // Advance chunk index
-        foundMatch = true;
-        break;
+      let score = 0;
+      if (normalizedPageText.includes(normalizedChunkText)) {
+        score = normalizedChunkText.length / normalizedPageText.length;
+      } else if (normalizedChunkText.includes(normalizedPageText)) {
+        score = normalizedPageText.length / normalizedChunkText.length;
+      }
+
+      // Prioritize question matches
+      if (pageItem.element.classList.contains('detected-question')) {
+        score *= 1.5;
+      }
+
+      if (score > bestMatch.score) {
+        bestMatch = { score: score, index: currentChunkIdx + j };
       }
     }
 
-    // If no direct match, but it's a significant text block, assign the current chunk index
-    // This handles cases where a single HTML element might contain multiple small chunks,
-    // or a chunk might be split across multiple elements.
-    if (!foundMatch && pageItem.normalizedText.length > 50 && currentChunkIdx < serverChunks.length) {
-      pageItem.element.setAttribute('data-chunk-index', currentChunkIdx);
-      // Assign type to serverChunk based on element classes (fallback)
+    if (bestMatch.index !== -1) {
+      const chunkIndex = bestMatch.index;
+      const serverChunk = serverChunks[chunkIndex];
+      pageItem.element.setAttribute('data-chunk-index', chunkIndex);
+
+      // Assign type to serverChunk based on element classes
       if (pageItem.element.classList.contains('detected-question')) {
-        serverChunks[currentChunkIdx].type = 'question';
+        serverChunk.type = 'question';
       } else if (pageItem.element.classList.contains('detected-answer-choice')) {
-        serverChunks[currentChunkIdx].type = 'answer';
+        serverChunk.type = 'answer';
       } else if (pageItem.element.classList.contains('detected-passage')) {
-        serverChunks[currentChunkIdx].type = 'passage';
+        serverChunk.type = 'passage';
       } else {
-        serverChunks[currentChunkIdx].type = 'text';
+        serverChunk.type = 'text';
       }
-      console.log(`→ Fallback mapped element "${pageItem.text.substring(0, 30)}..." to chunk ${currentChunkIdx} (type: ${serverChunks[currentChunkIdx].type})`);
-      // Do not advance currentChunkIdx here, as this might be a partial match
+      console.log(`→ Mapped element "${pageItem.text.substring(0, 30)}..." to chunk ${chunkIndex} (score: ${bestMatch.score.toFixed(2)}, type: ${serverChunk.type})`);
+      currentChunkIdx = chunkIndex + 1;
+    } else if (pageItem.normalizedText.length > 50 && currentChunkIdx < serverChunks.length) {
+      // Fallback for significant text blocks that didn't find a good match
+      const chunkIndex = currentChunkIdx;
+      const serverChunk = serverChunks[chunkIndex];
+      pageItem.element.setAttribute('data-chunk-index', chunkIndex);
+       if (pageItem.element.classList.contains('detected-question')) {
+        serverChunk.type = 'question';
+      } else if (pageItem.element.classList.contains('detected-answer-choice')) {
+        serverChunk.type = 'answer';
+      } else if (pageItem.element.classList.contains('detected-passage')) {
+        serverChunk.type = 'passage';
+      } else {
+        serverChunk.type = 'text';
+      }
+      console.log(`→ Fallback mapped element "${pageItem.text.substring(0, 30)}..." to chunk ${chunkIndex} (type: ${serverChunk.type})`);
+      // Do not advance currentChunkIdx here to allow next element to match against it
     }
   }
   console.log('✓ Chunk mapping complete.');
+}
+
+/**
+ * Propagates data-chunk-index from questions to their associated answer choices.
+ * This allows clicking on answer options to activate the same chunk as the question.
+ * @param {HTMLElement} container The HTML assessment container
+ */
+function propagateChunkIndexToAnswers(container) {
+  console.log('=== PROPAGATING CHUNK INDEX TO ANSWERS ===');
+
+  // Find all questions that have a chunk index assigned
+  const questions = container.querySelectorAll('[data-chunk-index].detected-question');
+
+  questions.forEach((question) => {
+    const chunkIndex = question.getAttribute('data-chunk-index');
+    const answerCount = parseInt(question.getAttribute('data-answer-count')) || 0;
+
+    if (!chunkIndex || answerCount === 0) return;
+
+    // Find answer choices that follow this question
+    let nextElement = question.nextElementSibling;
+    let answersFound = 0;
+
+    while (nextElement && answersFound < answerCount) {
+      if (nextElement.classList.contains('detected-answer-choice')) {
+        // Assign the same chunk index to this answer choice
+        nextElement.setAttribute('data-chunk-index', chunkIndex);
+        console.log(`→ Assigned chunk ${chunkIndex} to answer choice: "${nextElement.textContent.substring(0, 30).trim()}..."`);
+        answersFound++;
+      }
+      nextElement = nextElement.nextElementSibling;
+    }
+  });
+
+  console.log('✓ Chunk index propagation complete.');
 }
 
 /**
@@ -2647,6 +2720,23 @@ function setupEventListeners() {
     };
   }
 
+  // Line spacing slider
+  const lineSpacingSlider = document.getElementById('line-spacing-slider-popup');
+  if (lineSpacingSlider) {
+    lineSpacingSlider.oninput = (e) => {
+      setLineSpacing(parseFloat(e.target.value));
+    };
+  }
+
+  // Line spacing button
+  const lineSpacingBtn = document.getElementById('line-spacing-btn');
+  if (lineSpacingBtn) {
+    lineSpacingBtn.onclick = (e) => {
+      e.stopPropagation();
+      toggleLineSpacingMenu();
+    };
+  }
+
   // Chunk list button (new Tailwind UI)
   const chunkListBtn = document.getElementById('chunk-list-btn');
   if (chunkListBtn) {
@@ -2683,6 +2773,10 @@ function setupEventListeners() {
     if (!e.target.closest('#speed-btn') && !e.target.closest('#speed-popup')) {
       const speedPopup = document.getElementById('speed-popup');
       if (speedPopup) speedPopup.classList.add('hidden');
+    }
+    if (!e.target.closest('#line-spacing-btn') && !e.target.closest('#line-spacing-popup')) {
+      const lineSpacingPopup = document.getElementById('line-spacing-popup');
+      if (lineSpacingPopup) lineSpacingPopup.classList.add('hidden');
     }
     if (!e.target.closest('#chunk-list-btn') && !e.target.closest('#chunk-popup')) {
       const chunkPopup = document.getElementById('chunk-popup');
@@ -2769,6 +2863,56 @@ function toggleSpeedMenu() {
     if (isHidden && speedBtn) {
       positionPopup(speedBtn, popup);
     }
+  }
+}
+
+function toggleLineSpacingMenu() {
+  const popup = document.getElementById('line-spacing-popup');
+  const speedPopup = document.getElementById('speed-popup');
+  const chunkPopup = document.getElementById('chunk-popup');
+  const lineSpacingBtn = document.getElementById('line-spacing-btn');
+
+  // Close other menus if open
+  if (speedPopup) speedPopup.classList.add('hidden');
+  if (chunkPopup) chunkPopup.classList.add('hidden');
+
+  // Toggle line spacing menu
+  if (popup) {
+    const isHidden = popup.classList.contains('hidden');
+    popup.classList.toggle('hidden');
+
+    // Position popup if showing
+    if (isHidden && lineSpacingBtn) {
+      positionPopup(lineSpacingBtn, popup);
+    }
+  }
+}
+
+function setLineSpacing(spacing) {
+  currentLineSpacing = Math.max(1.0, Math.min(3.0, spacing));
+
+  // Apply to HTML container
+  const container = document.querySelector('.html-assessment-container');
+  if (container) {
+    container.style.setProperty('--line-height', currentLineSpacing);
+  }
+
+  // Update display in popup
+  const display = document.getElementById('line-spacing-display');
+  if (display) {
+    display.textContent = currentLineSpacing.toFixed(1);
+  }
+
+  // Update slider position
+  const slider = document.getElementById('line-spacing-slider-popup');
+  if (slider) {
+    slider.value = currentLineSpacing;
+  }
+
+  // Update button title
+  const btn = document.getElementById('line-spacing-btn');
+  if (btn) {
+    btn.title = `Line Spacing (${currentLineSpacing.toFixed(1)})`;
   }
 }
 

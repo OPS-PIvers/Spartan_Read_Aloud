@@ -1948,11 +1948,15 @@ function addPausesToText(text) {
     // Step 3: Add pauses after paragraph breaks (double line breaks or more)
     ssmlText = ssmlText.replace(/\n\n+/g, `\n<break time="${CONSTANTS.PAUSE_AFTER_PARAGRAPH_MS}ms"/>\n`);
 
-    // Step 4: Add pauses after answer choices (A., B., C., D. or a), b), c), d))
+    // Step 4: Add pause between question and first answer choice
+    // Matches a newline that is immediately followed by "a.", "b)", etc.
+    ssmlText = ssmlText.replace(/\n(?=[a-dA-D][.)])/g, ` <break time="${CONSTANTS.PAUSE_BEFORE_ANSWER_BLOCK_MS}ms"/>\n`);
+
+    // Step 5: Add pauses after answer choices (A., B., C., D. or a), b), c), d))
     // Matches: "A." or "A)" (uppercase or lowercase, periods or parentheses), with optional whitespace
     ssmlText = ssmlText.replace(/([A-Da-d][.)])\s*/g, `$1 <break time="${CONSTANTS.PAUSE_AFTER_ANSWER_CHOICE_MS}ms"/> `);
 
-    // Step 5: Wrap in SSML speak tags
+    // Step 6: Wrap in SSML speak tags
     const result = `<speak>${ssmlText}</speak>`;
 
     Logger.log(`addPausesToText - Original text (first 200 chars): ${text.substring(0, 200)}`);
