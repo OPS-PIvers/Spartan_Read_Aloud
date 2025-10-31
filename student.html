@@ -2750,12 +2750,6 @@ function setPlaybackSpeed(speed) {
   if (speedSliderPopup) {
     speedSliderPopup.value = currentPlaybackRate;
   }
-
-  // Close speed popup
-  const speedPopup = document.getElementById('speed-popup');
-  if (speedPopup) {
-    speedPopup.classList.add('hidden');
-  }
 }
 
 function toggleSpeedMenu() {
