@@ -2231,8 +2231,9 @@ function getAllAssessments(sessionToken) {
         const instructorLower = (assessment.instructor || '').toLowerCase();
         const teacherLower = teacherName.toLowerCase();
 
-        // Match if instructor field contains the teacher's name
-        return instructorLower.includes(teacherLower);
+        // Match if teacher's name contains the instructor field they typed
+        // (e.g., "John Smith" contains "Smith" or "smith@school.com" contains "smith")
+        return teacherLower.includes(instructorLower);
       });
 
       Logger.log(`Teacher ${teacherName} has ${assessments.length} assessment(s)`);
