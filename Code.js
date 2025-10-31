@@ -1250,6 +1250,11 @@ function convertFileToHtml(fileId) {
     }
 
     Logger.log(`✓ Successfully converted to HTML (${htmlContent.length} chars)`);
+
+    // Embed images as base64 data URIs to fix authentication issues
+    Logger.log('→ Embedding images as base64');
+    htmlContent = embedImagesAsBase64(htmlContent);
+
     Logger.log(`Raw HTML content (first 1000 chars): ${htmlContent.substring(0, 1000)}`); // Added log
     return {
       html: htmlContent,
@@ -1298,6 +1303,157 @@ function exportDocToHtml(fileId) {
     Logger.log(`✗ Exception in exportDocToHtml: ${e.toString()}`);
     return null;
   }
+}
+
+/**
+ * Embeds images in HTML as base64 data URIs by downloading them from Google CDN.
+ * This fixes broken images that require OAuth authentication.
+ * @param {string} html The HTML content containing image URLs
+ * @returns {string} HTML with images embedded as base64 data URIs
+ */
+function embedImagesAsBase64(html) {
+  try {
+    Logger.log('→ Scanning HTML for images to embed');
+
+    const token = ScriptApp.getOAuthToken();
+    let modifiedHtml = html;
+    let imageCount = 0;
+    let failedCount = 0;
+
+    // Find all <img> tags with src attributes
+    const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+    const matches = [];
+    let match;
+
+    // Collect all matches first
+    while ((match = imgRegex.exec(html)) !== null) {
+      matches.push({
+        fullTag: match[0],
+        url: match[1]
+      });
+    }
+
+    Logger.log(`→ Found ${matches.length} images to process`);
+
+    // Process each image
+    for (let i = 0; i < matches.length; i++) {
+      try {
+        const imgMatch = matches[i];
+        const imageUrl = imgMatch.url;
+
+        // Skip if already a data URI
+        if (imageUrl.startsWith('data:')) {
+          Logger.log(`→ [Image ${i+1}/${matches.length}] Already embedded, skipping`);
+          continue;
+        }
+
+        Logger.log(`→ [Image ${i+1}/${matches.length}] Processing: ${imageUrl.substring(0, 80)}...`);
+
+        // Try to download with retries
+        const blob = downloadImageWithRetry(imageUrl, token, 3);
+
+        if (blob) {
+          const base64Data = Utilities.base64Encode(blob.getBytes());
+          const mimeType = blob.getContentType() || 'image/png';
+          const dataUri = `data:${mimeType};base64,${base64Data}`;
+
+          // Replace the URL in the original tag
+          const newTag = imgMatch.fullTag.replace(imageUrl, dataUri);
+          modifiedHtml = modifiedHtml.replace(imgMatch.fullTag, newTag);
+
+          imageCount++;
+          Logger.log(`✓ [Image ${i+1}/${matches.length}] SUCCESS: Embedded (${mimeType}, ${Math.round(base64Data.length / 1024)}KB)`);
+        } else {
+          failedCount++;
+          Logger.log(`✗ [Image ${i+1}/${matches.length}] FAILED: Could not download after retries`);
+        }
+
+      } catch (imgError) {
+        failedCount++;
+        Logger.log(`✗ [Image ${i+1}/${matches.length}] ERROR: ${imgError.toString()}`);
+      }
+    }
+
+    Logger.log(`✓ Image embedding complete: ${imageCount} succeeded, ${failedCount} failed out of ${matches.length} total`);
+
+    if (failedCount > 0) {
+      Logger.log(`⚠ WARNING: ${failedCount} image(s) failed to embed and will appear broken in the student view`);
+    }
+
+    return modifiedHtml;
+
+  } catch (e) {
+    Logger.log(`✗ Exception in embedImagesAsBase64: ${e.toString()}`);
+    // Return original HTML if embedding fails
+    return html;
+  }
+}
+
+/**
+ * Downloads an image with retry logic and multiple authentication methods.
+ * @param {string} url The image URL
+ * @param {string} token OAuth token
+ * @param {number} maxRetries Maximum number of retry attempts
+ * @returns {GoogleAppsScript.Base.Blob|null} The image blob or null if failed
+ */
+function downloadImageWithRetry(url, token, maxRetries) {
+  const authMethods = [
+    // Method 1: OAuth Bearer token
+    { name: 'OAuth Bearer', headers: { 'Authorization': `Bearer ${token}` } },
+    // Method 2: No authentication (for public images)
+    { name: 'No Auth', headers: {} },
+    // Method 3: OAuth with cookies
+    { name: 'OAuth with cookies', headers: { 'Authorization': `Bearer ${token}`, 'Cookie': '' } }
+  ];
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    for (const method of authMethods) {
+      try {
+        Logger.log(`  → Attempt ${attempt}/${maxRetries} using ${method.name}`);
+
+        const response = UrlFetchApp.fetch(url, {
+          headers: method.headers,
+          muteHttpExceptions: true,
+          followRedirects: true
+        });
+
+        const responseCode = response.getResponseCode();
+        Logger.log(`  → HTTP ${responseCode}`);
+
+        if (responseCode === 200) {
+          const blob = response.getBlob();
+          const contentType = blob.getContentType();
+
+          // Verify it's actually an image
+          if (contentType && contentType.startsWith('image/')) {
+            Logger.log(`  → Success with ${method.name}`);
+            return blob;
+          } else {
+            Logger.log(`  → Unexpected content type: ${contentType}`);
+          }
+        } else if (responseCode === 302 || responseCode === 301) {
+          // Handle redirects manually
+          const redirectUrl = response.getHeaders()['Location'];
+          if (redirectUrl) {
+            Logger.log(`  → Following redirect to: ${redirectUrl.substring(0, 60)}...`);
+            return downloadImageWithRetry(redirectUrl, token, 1); // One retry for redirect
+          }
+        }
+
+      } catch (fetchError) {
+        Logger.log(`  → ${method.name} failed: ${fetchError.toString()}`);
+      }
+    }
+
+    // Wait before retry (exponential backoff)
+    if (attempt < maxRetries) {
+      const waitMs = Math.pow(2, attempt) * 100; // 200ms, 400ms, 800ms
+      Logger.log(`  → Waiting ${waitMs}ms before retry...`);
+      Utilities.sleep(waitMs);
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -1787,11 +1943,17 @@ function sanitizeHtml(html) {
 
   // 4. Normalize images: Remove inline dimensions, standardize structure
   sanitized = sanitized.replace(/<img([^>]*?)>/gi, (match, attrs) => {
-    // Keep only src and alt attributes
-    const srcMatch = attrs.match(/src="([^"]*)"/i);
-    const altMatch = attrs.match(/alt="([^"]*)"/i);
-    const src = srcMatch ? srcMatch[1] : '';
-    const alt = altMatch ? altMatch[1] : '';
+    // Keep only src and alt attributes, handling both single and double quotes
+    const srcMatch = attrs.match(/src=(?:"([^"]*)"|'([^']*)')/i);
+    const altMatch = attrs.match(/alt=(?:"([^"]*)"|'([^']*)')/i);
+    const src = srcMatch ? (srcMatch[1] || srcMatch[2] || '') : '';
+    let alt = altMatch ? (altMatch[1] || altMatch[2] || '') : '';
+
+    // Ensure alt is never undefined or just whitespace - provide default
+    if (!alt || alt.trim() === '') {
+      alt = 'Image';
+    }
+
     return src ? `<img src="${src}" alt="${alt}">` : '';
   });
 
@@ -1934,13 +2096,16 @@ function addPausesToText(text) {
   }
 
   try {
+    // PRONUNCIATION FIX: Replace "c." with "c " to avoid "circa" pronunciation
+    let processedText = text.replace(/\b[cC]\.\s/g, 'c ');
+
     // Step 1: Escape special XML characters to prevent SSML errors
-    let ssmlText = text
+    let ssmlText = processedText
       .replace(/&/g, '&amp;')   // Must be first to avoid double-escaping
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
+      .replace(/\'/g, '&apos;');
 
     // Step 2: Add pause after question number at the very start (e.g., "1. ", "2) ", "3] ")
     ssmlText = ssmlText.replace(/^(\d+[.)\]])\s+/, `$1 <break time="${CONSTANTS.PAUSE_AFTER_QUESTION_NUMBER_MS}ms"/> `);
