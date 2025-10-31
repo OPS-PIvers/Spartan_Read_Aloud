@@ -1922,6 +1922,13 @@ function mapChunksToElements(pageTextContent, serverChunks) {
 
   for (let i = 0; i < pageTextContent.length; i++) {
     const pageItem = pageTextContent[i];
+
+    // Skip answer choices - they will get their chunk indices from propagateChunkIndexToAnswers
+    if (pageItem.element.classList.contains('detected-answer-choice')) {
+      console.log(`→ Skipping answer choice: "${pageItem.text.substring(0, 30)}..." (will be assigned via propagation)`);
+      continue;
+    }
+
     let bestMatch = { score: 0, index: -1 };
 
     // Try to find the best match for the current page item within the next few server chunks
@@ -1955,8 +1962,6 @@ function mapChunksToElements(pageTextContent, serverChunks) {
       // Assign type to serverChunk based on element classes
       if (pageItem.element.classList.contains('detected-question')) {
         serverChunk.type = 'question';
-      } else if (pageItem.element.classList.contains('detected-answer-choice')) {
-        serverChunk.type = 'answer';
       } else if (pageItem.element.classList.contains('detected-passage')) {
         serverChunk.type = 'passage';
       } else {
@@ -1971,8 +1976,6 @@ function mapChunksToElements(pageTextContent, serverChunks) {
       pageItem.element.setAttribute('data-chunk-index', chunkIndex);
        if (pageItem.element.classList.contains('detected-question')) {
         serverChunk.type = 'question';
-      } else if (pageItem.element.classList.contains('detected-answer-choice')) {
-        serverChunk.type = 'answer';
       } else if (pageItem.element.classList.contains('detected-passage')) {
         serverChunk.type = 'passage';
       } else {
@@ -1998,22 +2001,49 @@ function propagateChunkIndexToAnswers(container) {
 
   questions.forEach((question) => {
     const chunkIndex = question.getAttribute('data-chunk-index');
-    const answerCount = parseInt(question.getAttribute('data-answer-count')) || 0;
 
-    if (!chunkIndex || answerCount === 0) return;
+    if (!chunkIndex) {
+      console.log(`⚠ Skipping question without chunk index: "${question.textContent.substring(0, 30).trim()}..."`);
+      return;
+    }
+
+    // Get expected answer count (if set), but don't rely solely on it
+    const expectedAnswerCount = parseInt(question.getAttribute('data-answer-count')) || 0;
 
     // Find answer choices that follow this question
     let nextElement = question.nextElementSibling;
     let answersFound = 0;
+    let elementsScanned = 0;
+    const maxScan = expectedAnswerCount > 0 ? expectedAnswerCount + 10 : 20; // Scan up to 20 elements if no count is set
 
-    while (nextElement && answersFound < answerCount) {
+    while (nextElement && elementsScanned < maxScan) {
+      elementsScanned++;
+
+      // Stop if we hit another question or passage
+      if (nextElement.classList.contains('detected-question') ||
+          nextElement.classList.contains('detected-passage')) {
+        break;
+      }
+
+      // Assign chunk index to answer choices
       if (nextElement.classList.contains('detected-answer-choice')) {
-        // Assign the same chunk index to this answer choice
         nextElement.setAttribute('data-chunk-index', chunkIndex);
         console.log(`→ Assigned chunk ${chunkIndex} to answer choice: "${nextElement.textContent.substring(0, 30).trim()}..."`);
         answersFound++;
+
+        // If we have an expected count and reached it, stop
+        if (expectedAnswerCount > 0 && answersFound >= expectedAnswerCount) {
+          break;
+        }
       }
+
       nextElement = nextElement.nextElementSibling;
+    }
+
+    if (answersFound > 0) {
+      console.log(`✓ Question "${question.textContent.substring(0, 30).trim()}..." → ${answersFound} answer choices assigned to chunk ${chunkIndex}`);
+    } else {
+      console.log(`⚠ No answer choices found for question "${question.textContent.substring(0, 30).trim()}..."`);
     }
   });
 
@@ -3027,27 +3057,9 @@ function handleAudioEnd() {
     globalAudioPlayer.play();
     updatePlayPauseButton(true);
   } else {
-    // Check if there's a next chunk to play
-    if (currentChunkIndex + 1 < serverChunks.length) {
-      const currentChunk = serverChunks[currentChunkIndex];
-      const nextChunk = serverChunks[currentChunkIndex + 1];
-      let delay = DEFAULT_CHUNK_DELAY_MS; // Default delay
-
-      if (currentChunk.type === 'question' && nextChunk.type === 'answer') {
-        delay = QUESTION_ANSWER_DELAY_MS;
-      } else if (currentChunk.type === 'answer' && nextChunk.type === 'answer') {
-        delay = ANSWER_ANSWER_DELAY_MS;
-      }
-
-      console.log(`Audio ended. Waiting ${delay}ms before playing next chunk (current: ${currentChunk.type}, next: ${nextChunk.type})`);
-      setTimeout(() => {
-        jumpToChunk(currentChunkIndex + 1);
-      }, delay);
-    } else {
-      // Audio finished - no more chunks
-      currentlyPlayingChunk = null;
-      console.log('All audio chunks finished.');
-    }
+    // Audio finished - stop playback (do not auto-advance)
+    currentlyPlayingChunk = null;
+    console.log('Audio chunk finished. Press play to replay, or use next/previous to navigate.');
   }
 }
 
