@@ -1,1559 +1,567 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <base target="_top">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <title>Student Assessment | Spartan Read Aloud</title>
+  
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
-  <script src="https://cdn.tailwindcss.com"></script>
+
   <style>
-    html, body {
-      min-height: 100vh;
-      position: relative;
-      overscroll-behavior: none; /* Prevent bounce/rubber-band scrolling */
+    /* --- DESIGN SYSTEM (Matches Student Portal) --- */
+    :root {
+      /* Palette */
+      --primary-blue: #2d3f89;
+      --primary-dark: #1d2a5d;
+      --primary-light: #4356a0;
+      --primary-lighter: #eaecf5;
+      
+      --gray-900: #1a1a1a;
+      --gray-700: #4a4a4a;
+      --gray-500: #737373;
+      --gray-300: #d4d4d4;
+      --gray-100: #f5f5f5;
+      
+      --bg-app: #f8f9fc;
+      --bg-surface: #ffffff;
+      --success-green: #0f9d58;
+      --success-bg: #e6f4ea;
+      
+      /* UI Variables */
+      --toolbar-height: 100px; /* Increased slightly for better mobile touch */
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      
+      --shadow-card: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+      --shadow-hover: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+      --shadow-up: 0 -4px 20px -1px rgba(0,0,0,0.1);
+      
+      --font-main: 'Lexend', sans-serif;
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-body {
-      font-family: 'Inter', sans-serif;
-      background-color: #f0f2f5;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin: 0;
-      /* Increased padding for larger screens */
-      padding: 40px; /* Adjust this value (e.g., 40px, 60px) as needed */
-      overscroll-behavior-y: none;
-      -webkit-overflow-scrolling: touch;
-      padding-bottom: 96px; /* Ensure bottom padding for toolbar remains */
-    }
+    * { box-sizing: border-box; }
 
-    /* Keep the responsive overrides for smaller screens */
-    @media (max-width: 1100px) {
-      body {
-        /* You might want to adjust this too, or keep it */
-        padding: 20px; /* Example: slightly more than original 10px */
-        padding-bottom: 96px; /* Re-apply bottom padding */
-      }
-    }
-
-    @media (max-width: 768px) {
-      body {
-        padding: 12px; /* Example: slightly more than original 8px */
-        padding-bottom: 96px; /* Re-apply bottom padding */
-      }
-    }
-
-    @media (max-width: 480px) {
-      body {
-        padding: 8px; /* Example: slightly more than original 5px */
-        padding-bottom: 96px; /* Re-apply bottom padding */
-      }
-    }
-
-    h1 {
-      color: #333;
-    }
-
-    #login-container {
-      background-color: white;
-      padding: 30px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      text-align: center;
-      width: 100%;
-      max-width: 400px;
-    }
-
-    #login-container h2 {
-      margin-top: 0;
-      margin-bottom: 20px;
-      color: #1a73e8;
-    }
-
-    #login-error {
-      color: #d93025;
-      margin-bottom: 15px;
-      min-height: 1.2em;
-      text-align: left;
-    }
-
-    input[type="email"],
-    input[type="password"] {
-      width: calc(100% - 22px);
-      padding: 10px;
-      margin-bottom: 15px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 16px;
-    }
-
-    button {
-      background-color: #1a73e8;
-      color: white;
-      border: none;
-      padding: 12px 20px;
-      border-radius: 4px;
-      font-size: 16px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-      width: 100%;
-    }
-
-    button:hover {
-      background-color: #155ab6;
-    }
-      button:disabled {
-      background-color: #ccc;
-      cursor: not-allowed;
-    }
-
-    /* ========================================
-       AUDIO TOOLBAR - MODERN TAILWIND DESIGN
-       Custom styles for range slider thumbs only
-       ======================================== */
-
-    /* Ensure padding for fixed toolbar */
     body {
-      padding-bottom: 96px; /* h-24 toolbar height */
-    }
-
-    /* Ensure toolbar stays above all content including dimmed focus mode elements */
-    #audio-toolbar {
-      z-index: 1000;
-    }
-
-    /* Ensure popups appear above toolbar */
-    #speed-popup,
-    #chunk-popup {
-      z-index: 1001;
-    }
-
-    /* Fix toolbar button shapes - ensure perfect circles */
-    #speed-btn,
-    #skip-back-btn,
-    #prev-btn,
-    #next-btn,
-    #skip-forward-btn,
-    #focus-btn,
-    #line-spacing-btn,
-    #chunk-list-btn {
-      width: 40px !important;
-      height: 40px !important;
-      min-width: 40px !important;
-      min-height: 40px !important;
-      aspect-ratio: 1 / 1 !important;
-      padding: 0 !important; /* Override Tailwind p-2 */
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      flex-shrink: 0 !important;
-    }
-
-    /* Play/pause button is larger */
-    #play-pause-btn {
-      aspect-ratio: 1 / 1 !important;
-      flex-shrink: 0 !important;
-    }
-
-    /* Custom styles for timeline progress slider */
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 14px;
-      height: 14px;
-      background: #4f46e5;
-      border-radius: 9999px;
-      cursor: pointer;
-      margin-top: -5px;
-      border: 2px solid white;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-    }
-
-    input[type="range"]::-moz-range-thumb {
-      width: 14px;
-      height: 14px;
-      background: #4f46e5;
-      border-radius: 9999px;
-      cursor: pointer;
-      border: 2px solid white;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-    }
-
-    /* Custom styles for volume slider thumb */
-    #volume-slider::-webkit-slider-thumb {
-      margin-top: -3px;
-      width: 12px;
-      height: 12px;
-    }
-
-    #volume-slider::-moz-range-thumb {
-      width: 12px;
-      height: 12px;
-    }
-
-    /* Highlight boxes for PDF text (line-by-line) */
-    .highlight-box {
-      position: absolute;
-      background-color: rgba(255, 235, 59, 1.0);
-      border-radius: 2px;
-      pointer-events: none;
-      z-index: 1;
-      /* Fix blurry rendering caused by sub-pixel positioning */
-      transform: translateZ(0);
-      will-change: transform;
-      backface-visibility: hidden;
-      -webkit-font-smoothing: subpixel-antialiased;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    .loading-spinner {
-      animation: spin 1s linear infinite;
-    }
-
-    .toolbar-controls {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-
-    /* Right Zone: Progress + Actions */
-    .toolbar-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex: 1;
-      min-width: 0;
-    }
-
-    .progress-compact {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex: 1;
-      min-width: 150px;
-    }
-
-    .time-displays {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    .time-separator {
-      color: #9CA3AF;
-      font-size: 11px;
-    }
-
-    .toolbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-
-    /* Control Buttons - Compact Sizes */
-    .control-btn {
-      background: transparent;
-      border: none;
-      border-radius: 9999px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s ease;
-      color: #6B7280;
+      font-family: var(--font-main);
+      background-color: var(--bg-app);
+      color: var(--gray-900);
+      margin: 0;
       padding: 0;
-      width: 32px;
-      height: 32px;
-      aspect-ratio: 1 / 1; /* Ensure perfect circular shape */
-      flex-shrink: 0; /* Prevent button from being compressed */
+      min-height: 100vh;
+      padding-bottom: 120px;
+      overscroll-behavior-y: none;
     }
 
-    /* Ensure Material Icons inside buttons maintain size */
-    .control-btn .material-icons {
-      display: block;
-      line-height: 1;
-    }
-
-    /* Fix toolbar title overflow - ensure proper text truncation */
-    #toolbar-title {
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    /* Constrain the text container in Zone 1 to prevent overflow */
-    #audio-toolbar .w-64 > .flex > div:last-child {
-      min-width: 0; /* Allow flex item to shrink below content size */
-      flex: 1; /* Take remaining space */
-      overflow: hidden; /* Prevent overflow */
-    }
-
-    .control-btn:hover:not(:disabled) {
-      color: #4F46E5;
-      background: #E5E7EB;
-      transform: scale(1.05);
-    }
-
-    .control-btn:active:not(:disabled) {
-      transform: scale(0.95);
-    }
-
-    .control-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-
-    .control-skip {
-      width: 32px;
-      height: 32px;
-    }
-
-    .control-skip .material-icons {
-      font-size: 24px;
-    }
-
-    .control-prev,
-    .control-next {
-      width: 32px;
-      height: 32px;
-    }
-
-    .control-prev .material-icons,
-    .control-next .material-icons {
-      font-size: 28px;
-    }
-
-    .control-play {
-      width: 40px;
-      height: 40px;
-      background: #4F46E5;
+    /* --- HEADER --- */
+    .app-header {
+      background-color: var(--primary-dark);
       color: white;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .control-play:hover:not(:disabled) {
-      background: #4338CA;
-      transform: scale(1.08);
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    .control-play .material-icons {
-      font-size: 32px;
-    }
-
-    /* Progress Bar - Compact Inline */
-    .progress-bar-container {
-      position: relative;
-      height: 5px;
-      flex: 1;
-      min-width: 120px;
-      background: #E5E7EB;
-      border-radius: 9999px;
-      overflow: hidden;
-      cursor: pointer;
-    }
-
-    .time-display {
-      font-family: 'Monaco', 'Consolas', monospace;
-      color: #6B7280;
-      font-size: 10px;
-      min-width: 30px;
-    }
-
-    .progress-bar-bg {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background: transparent;
-    }
-
-    .progress-bar-fill {
-      height: 100%;
-      background: #4F46E5; /* primary */
-      border-radius: 9999px; /* rounded-full */
-      width: 0%;
-      transition: width 0.1s linear;
-    }
-
-    .chunk-markers {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-
-    .chunk-marker {
-      position: absolute;
-      top: 0;
-      width: 2px;
-      height: 6px;
-      background: rgba(0, 0, 0, 0.2);
-    }
-
-    .timeline-slider {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 5px;
-      -webkit-appearance: none;
-      appearance: none;
-      background: transparent;
-      cursor: pointer;
-      z-index: 10;
-      margin: 0;
-    }
-
-    .timeline-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #4F46E5;
-      cursor: pointer;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .timeline-slider::-webkit-slider-thumb:hover {
-      transform: scale(1.2);
-      box-shadow: 0 2px 6px rgba(79, 70, 229, 0.5);
-    }
-
-    .timeline-slider::-moz-range-thumb {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #4F46E5;
-      cursor: pointer;
-      border: none;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .timeline-slider::-moz-range-thumb:hover {
-      transform: scale(1.2);
-      box-shadow: 0 2px 6px rgba(79, 70, 229, 0.5);
-    }
-
-    /* Tier 2: Secondary Controls */
-    .toolbar-secondary {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.4s ease, opacity 0.3s ease;
-      opacity: 0;
-      border-top: 1px solid transparent;
-    }
-
-    .toolbar-secondary.expanded {
-      max-height: 400px;
-      opacity: 1;
-      border-top-color: #e8eaed;
-    }
-
-    .secondary-panel {
-      padding: 16px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .control-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .control-label {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      color: #5f6368;
-      letter-spacing: 0.5px;
-      margin: 0;
-    }
-
-    /* Speed Control */
-    .speed-controls {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .speed-preset {
-      background: transparent;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      color: #6B7280; /* subtle-light */
-      cursor: pointer;
-      transition: all 0.2s ease;
-      width: auto;
-      min-width: 52px;
-      height: auto;
-    }
-
-    .speed-preset:hover {
-      background: #E5E7EB; /* border-light */
-      color: #1F2937; /* text-light */
-    }
-
-    .speed-preset.active {
-      background: #4F46E5; /* primary */
-      color: white;
-    }
-
-    .speed-slider-container {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 4px;
-    }
-
-    .speed-label-min,
-    .speed-label-max {
-      font-size: 11px;
-      color: #80868b;
-      min-width: 32px;
-      text-align: center;
-    }
-
-    #speed-slider {
-      flex: 1;
-      height: 4px;
-      -webkit-appearance: none;
-      appearance: none;
-      background: #e8eaed;
-      border-radius: 2px;
-      outline: none;
-    }
-
-    #speed-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: #1a73e8;
-      cursor: pointer;
-    }
-
-    #speed-slider::-moz-range-thumb {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: #1a73e8;
-      cursor: pointer;
-      border: none;
-    }
-
-    /* Chunk Navigation */
-    .chunk-list-btn {
-      width: 100%;
-      background: #f1f3f4;
-      border: 1px solid #e8eaed;
-      padding: 10px 12px;
-      border-radius: 8px;
+      padding: 0 24px;
+      height: 64px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      color: #202124;
-      font-size: 14px;
-      height: auto;
-    }
-
-    .chunk-list-btn:hover {
-      background: #e8eaed;
-      border-color: #dadce0;
-    }
-
-    #current-title-text {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      text-align: left;
-      flex: 1;
-    }
-
-    .chunk-dropdown {
-      position: absolute;
-      bottom: calc(100% + 8px);
-      left: 20px;
-      right: 20px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-      max-height: 320px;
-      overflow-y: auto;
-      border: 1px solid #e8eaed;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
       z-index: 100;
     }
 
-    .dropdown-item {
-      padding: 8px;
-      cursor: pointer;
-      border-radius: 8px;
-      font-size: 14px;
-      transition: all 0.2s ease;
-      color: #1F2937; /* text-light */
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      overflow: hidden;
-    }
-
-    .dropdown-item:hover {
-      background-color: #E5E7EB; /* border-light */
-    }
-
-    .dropdown-item.current {
-      background-color: rgba(79, 70, 229, 0.1); /* primary with opacity */
-      color: #4F46E5; /* primary */
+    .app-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       font-weight: 600;
+      font-size: 18px;
+      letter-spacing: -0.02em;
     }
 
-    /* Feature Toggles */
-    .feature-toggles {
-      flex-direction: row;
-      gap: 8px;
-    }
-
-    .toggle-btn {
-      flex: 1;
-      background: #f1f3f4;
-      border: 1px solid #e8eaed;
-      padding: 10px;
+    .logo-container {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      background: rgba(255,255,255,0.15);
       border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      color: #5f6368;
-      font-size: 13px;
-      font-weight: 500;
-      width: auto;
-      height: auto;
     }
 
-    .toggle-btn:hover {
-      background: #e8eaed;
-      border-color: #dadce0;
-    }
-
-    .toggle-btn.active {
-      background: #e8f0fe;
-      border-color: #1a73e8;
-      color: #1a73e8;
-    }
-
-    .toggle-btn svg {
-      flex-shrink: 0;
-    }
-
-    /* Toggle Secondary Button */
-    .toggle-secondary-btn {
-      width: 100%;
-      background: transparent;
-      border: none;
-      border-top: 1px solid #e8eaed;
-      padding: 10px;
-      cursor: pointer;
+    .logo-badge {
+      position: absolute;
+      bottom: -3px;
+      right: -3px;
+      width: 14px;
+      height: 14px;
+      background: white;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #5f6368;
-      transition: all 0.2s ease;
-      height: auto;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
     }
 
-    .toggle-secondary-btn:hover {
-      background: #f8f9fa;
-      color: #1a73e8;
+    .app-user {
+      display: flex;
+      gap: 12px;
+      align-items: center;
     }
 
-    /* Keyboard Hints */
-    .keyboard-hints {
-      position: absolute;
-      bottom: calc(100% + 12px);
-      right: 0;
-      background: rgba(32, 33, 36, 0.98); /* Increased opacity for solid background */
+    .logout-btn {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
       color: white;
-      border-radius: 12px;
-      padding: 16px;
-      min-width: 280px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      z-index: 1001;
-    }
-
-    .hints-header {
-      font-weight: 600;
-      font-size: 13px;
-      margin-bottom: 12px;
-      color: #e8eaed;
-    }
-
-    .hints-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .hints-list > div {
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
       font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      text-decoration: none;
+    }
+    
+    .logout-btn:hover {
+      background: rgba(255,255,255,0.2);
     }
 
-    .keyboard-hints kbd {
-      background: rgba(255, 255, 255, 0.15);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'Monaco', 'Consolas', monospace;
-      font-size: 11px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+    /* --- LAYOUT CONTAINERS --- */
+    .main-container {
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 0 24px;
     }
 
-    .highlighted-chunk,
-    .html-assessment-container .highlighted-element {
-      background-color: rgba(255, 235, 59, 1.0) !important;
-      color: #000 !important;
-      border-radius: 2px;
-      opacity: 1 !important;
-      transition: background-color 0.3s ease, box-shadow 0.3s ease !important;
-    }
-
-    .highlighted-chunk {
-      outline: 2px solid #ffc107 !important;
-      outline-offset: 2px;
-      border-radius: 4px;
-    }
-
-    body.focus-mode .highlighted-chunk {
-      opacity: 1 !important;
-      box-shadow: 0 0 20px rgba(255, 193, 7, 0.4) !important;
-    }
-
-    /* Highlight boxes for PDF text (single box per chunk) */
-    .highlight-box {
-      position: absolute;
-      background-color: rgba(255, 235, 59, 1.0);
-      border-radius: 2px;
-      pointer-events: none;
-      z-index: 1;
-      /* Fix blurry rendering caused by sub-pixel positioning */
-      transform: translateZ(0);
-      will-change: transform;
-      backface-visibility: hidden;
-      -webkit-font-smoothing: subpixel-antialiased;
-    }
-
-    /* Loading spinner animation */
-
-    .loading-spinner {
-      animation: spin 1s linear infinite;
-    }
-
-    /* Mobile Responsive */
-    @media (max-width: 768px) {
-      #audio-toolbar {
-        padding: 6px 12px;
-      }
-
-      .audio-toolbar-inner {
-        gap: 12px;
-      }
-
-      .toolbar-title {
-        min-width: 120px;
-        max-width: 150px;
-      }
-
-      .toolbar-title-main {
-        font-size: 12px;
-      }
-
-      .toolbar-title-sub {
-        font-size: 9px;
-      }
-
-      .toolbar-controls {
-        gap: 6px;
-      }
-
-      .control-btn {
-        width: 28px;
-        height: 28px;
-      }
-
-      .control-skip .material-icons {
-        font-size: 20px;
-      }
-
-      .control-prev .material-icons,
-      .control-next .material-icons {
-        font-size: 24px;
-      }
-
-      .control-play {
-        width: 36px;
-        height: 36px;
-      }
-
-      .control-play .material-icons {
-        font-size: 28px;
-      }
-
-      .progress-compact {
-        gap: 6px;
-        min-width: 100px;
-      }
-
-      .time-display {
-        font-size: 9px;
-        min-width: 26px;
-      }
-
-      .toolbar-actions {
-        gap: 4px;
-      }
-
-      .keyboard-hints {
-        right: 10px;
-        left: 10px;
-        min-width: auto;
-      }
-    }
-
-    @media (max-width: 480px) {
-      #audio-toolbar {
-        padding: 6px 8px;
-      }
-
-      .audio-toolbar-inner {
-        gap: 8px;
-      }
-
-      .toolbar-title {
-        min-width: 80px;
-        max-width: 120px;
-      }
-
-      .toolbar-title-main {
-        font-size: 11px;
-      }
-
-      .toolbar-title-sub {
-        display: none; /* Hide chunk counter on very small screens */
-      }
-
-      .toolbar-controls {
-        gap: 4px;
-      }
-
-      .control-btn {
-        width: 26px;
-        height: 26px;
-      }
-
-      .control-skip {
-        display: none; /* Hide skip buttons on small screens */
-      }
-
-      .control-prev .material-icons,
-      .control-next .material-icons {
-        font-size: 22px;
-      }
-
-      .control-play {
-        width: 34px;
-        height: 34px;
-      }
-
-      .control-play .material-icons {
-        font-size: 26px;
-      }
-
-      .progress-compact {
-        min-width: 80px;
-      }
-
-      .time-display {
-        font-size: 8px;
-        min-width: 24px;
-      }
-    }
-
-    #viewer-container {
-      width: 100%;
-      max-width: 1200px;
-      display: none;
-      position: relative;
-      margin-bottom: 96px; /* Ensure content doesn't overlap fixed toolbar */
-    }
-
-    #status {
-      margin: 20px 0;
-      font-size: 1.1em;
-      color: #555;
-      min-height: 25px;
-    }
-
-    #pdf-container {
-      border: 1px solid #ddd;
-      background-color: white;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      position: relative;
-      width: 100%;
-      margin-bottom: 96px;
-      /* --- ADD PADDING HERE --- */
-      padding: 20px; /* Adjust as needed, e.g., 20px, 30px */
-      /* --- Ensures padding is included in width calculation --- */
-      box-sizing: border-box;
-    }
-
-    /* ========================================
-       HTML ASSESSMENT RENDERING - MINIMAL & CALM
-       Optimized for dyslexia, ADHD, and reduced cognitive load
-       ======================================== */
-
-    .html-assessment-container {
-      /* You might REMOVE or REDUCE padding here if #pdf-container padding is enough */
-      padding: 30px 40px; /* Example: Reduced from 50px 60px */
-      /* Or keep original padding if you want combined padding */
-      /* padding: 50px 60px; */
-
-      max-width: 900px;
-      /* Remove margin: 0 auto; if #pdf-container handles centering */
-      margin: 0 auto 96px auto; /* Keep if #pdf-container is full width */
-      background: transparent; /* Make background transparent if #pdf-container provides white bg */
-      line-height: var(--line-height, 2.0);
-      font-family: 'Inter', sans-serif;
-      color: #4a4a4a;
-      font-size: clamp(16px, 2vw, 18px);
-      box-sizing: border-box;
-      overflow-x: hidden;
-    }
-
-    /* Generous spacing between all elements - white space is key */
-    .html-assessment-container > * + * {
-      margin-top: 2em;
-    }
-
-    /* Paragraphs - calm and spacious */
-    .html-assessment-container p {
-      margin: 1.5em 0;
-      line-height: var(--line-height, 2.0);
-      max-width: 65ch; /* Limit line length for readability */
-    }
-
-    /* Headings - size and space only, no color decoration */
-    .html-assessment-container h1 {
-      font-size: 1.8em;
-      margin: 2em 0 1em 0;
-      color: #4a4a4a;
-      font-weight: 600;
-      line-height: 1.4;
-    }
-
-    .html-assessment-container h2 {
-      font-size: 1.5em;
-      margin: 1.8em 0 0.8em 0;
-      color: #4a4a4a;
-      font-weight: 600;
-      line-height: 1.4;
-    }
-
-    .html-assessment-container h3 {
-      font-size: 1.25em;
-      margin: 1.6em 0 0.7em 0;
-      color: #4a4a4a;
-      font-weight: 600;
-      line-height: 1.4;
-    }
-
-    /* Images - simple and clean */
-    .html-assessment-container img {
-      max-width: 100%;
-      height: auto;
-      display: block;
-      margin: 2em auto;
-    }
-
-    /* Images in table cells */
-    .html-assessment-container td img,
-    .html-assessment-container th img {
-      margin: 1em auto;
-      max-width: 100%;
-    }
-
-    /* Lists - generous spacing */
-    .html-assessment-container ol,
-    .html-assessment-container ul {
-      padding-left: 2.5em;
-      margin: 2em 0;
-    }
-
-    .html-assessment-container li {
-      margin: 1em 0;
-      line-height: var(--line-height, 2.0);
-    }
-
-    /* Emphasis - subtle, no backgrounds */
-    .html-assessment-container strong,
-    .html-assessment-container b {
-      font-weight: 700;
-      color: #2a2a2a;
-    }
-
-    .html-assessment-container em,
-    .html-assessment-container i {
-      font-style: italic;
-      color: #6a6a6a;
-    }
-
-    /* ========================================
-       MINIMAL TABLE STYLING - WHITE SPACE ONLY
-       ======================================== */
-
-    .html-assessment-container table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 20px; /* Large spacing creates natural separation */
-      margin: 2.5em 0;
-    }
-
-    .html-assessment-container td,
-    .html-assessment-container th {
-      padding: 0; /* No padding, just natural spacing */
-      vertical-align: top;
-      line-height: var(--line-height, 2.0);
-      font-size: 1em;
-    }
-
-    .html-assessment-container th {
-      font-weight: 600;
-    }
-
-    /* No borders, backgrounds, or hover effects - just clean text */
-
-    /* Ensure tables don't have cramped content */
-    .html-assessment-container table p {
-      margin: 0.8em 0;
-    }
-
-    .html-assessment-container table p:first-child {
+    /* --- ASSESSMENT SELECTION --- */
+    .selection-header h2 {
       margin-top: 0;
-    }
-
-    .html-assessment-container table p:last-child {
-      margin-bottom: 0;
-    }
-
-    /* ========================================
-       PATTERN-DETECTED ELEMENTS - NO VISUAL STYLING
-       Used for highlighting logic only, not decoration
-       ======================================== */
-
-    /* Questions - extra space only, no decoration */
-    .html-assessment-container .detected-question {
-      margin-top: 3em;
-      margin-bottom: 1.5em;
-    }
-
-    /* Answer choices - just spacing */
-    .html-assessment-container .detected-answer-choice {
-      margin: 1em 0;
-    }
-
-    /* Passages - just spacing */
-    .html-assessment-container .detected-passage {
-      margin: 2.5em 0;
-      line-height: var(--line-height, 2.0);
-    }
-
-    /* ========================================
-       HIGHLIGHTING SYSTEM - SUBTLE & CALM
-       ======================================== */
-
-    /* Focus mode - very subtle dimming */
-    body.focus-mode .html-assessment-container > *:not(.highlighted-element):not(.has-highlight) {
-      opacity: 0.3;
-      transition: opacity 0.3s ease;
-    }
-
-    /* Keep highlighted elements and their parents fully visible */
-    body.focus-mode .html-assessment-container .highlighted-element,
-    body.focus-mode .html-assessment-container .has-highlight {
-      opacity: 1 !important;
-    }
-
-    /* ========================================
-       MOBILE RESPONSIVE - MINIMAL & SPACIOUS
-       ======================================== */
-
-    @media (max-width: 768px) {
-      .html-assessment-container {
-        padding: 30px 20px;
-        font-size: 16px; /* Keep readable size */
-      }
-
-      /* Force tables to single-column layout - clean stacking */
-      .html-assessment-container table,
-      .html-assessment-container tbody,
-      .html-assessment-container tr {
-        display: block;
-        width: 100%;
-      }
-
-      .html-assessment-container td,
-      .html-assessment-container th {
-        display: block;
-        width: 100%;
-        margin-bottom: 1.5em; /* Generous spacing between items */
-      }
-
-      /* Maintain generous spacing on mobile */
-      .html-assessment-container .detected-question {
-        margin-top: 2.5em;
-      }
-
-      .html-assessment-container h1 {
-        font-size: 1.6em;
-      }
-
-      .html-assessment-container h2 {
-        font-size: 1.4em;
-      }
-
-      .html-assessment-container h3 {
-        font-size: 1.2em;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .html-assessment-container {
-        padding: 20px 16px;
-        font-size: 16px; /* Maintain readable size even on small screens */
-      }
-    }
-
-    /* ========================================
-       ACCESSIBILITY ENHANCEMENTS
-       ======================================== */
-
-    /* High contrast mode support - user preference */
-    @media (prefers-contrast: high) {
-      .html-assessment-container {
-        color: #000;
-        background: #fff;
-      }
-    }
-
-    /* Reduced motion support - respect user preference */
-    @media (prefers-reduced-motion: reduce) {
-      .html-assessment-container * {
-        transition: none !important;
-        animation: none !important;
-      }
-    }
-
-    /* Print styles - clean output */
-    @media print {
-      .html-assessment-container {
-        max-width: 100%;
-        padding: 0;
-        background: white;
-        color: black;
-      }
-
-      .html-assessment-container table {
-        border-spacing: 10px;
-      }
-    }
-
-    /* ========================================
-       ASSESSMENT SELECTION UI
-       ======================================== */
-
-    #assessment-selection-container {
-      background-color: white;
-      padding: 30px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      width: 100%;
-      max-width: 600px;
-    }
-
-    #assessment-selection-container h2 {
-      margin-top: 0;
-      margin-bottom: 20px;
-      color: #1a73e8;
+      margin-bottom: 8px;
+      color: var(--primary-blue);
       text-align: center;
     }
-
+    
     .selection-subtitle {
       text-align: center;
-      color: #5f6368;
-      margin-bottom: 24px;
+      color: var(--gray-500);
+      margin-bottom: 32px;
       font-size: 14px;
     }
 
     .assessment-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 20px;
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     }
 
+    /* --- COMPONENT: ASSESSMENT CARD --- */
     .assessment-card {
-      background: #f8f9fa;
-      border: 2px solid #e8eaed;
-      border-radius: 8px;
-      padding: 16px;
+      background: var(--bg-surface);
+      border: 1px solid rgba(0,0,0,0.03);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-card);
+      position: relative;
       cursor: pointer;
-      transition: all 0.2s ease;
-      text-align: left;
+      transition: all 0.2s var(--ease);
     }
 
     .assessment-card:hover {
-      background: #f1f3f4;
-      border-color: #1a73e8;
-      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.15);
-      transform: translateY(-1px);
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-hover);
     }
 
-    .assessment-card:active {
-      transform: translateY(0);
-    }
-
-    .assessment-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #202124;
-      margin: 0 0 8px 0;
-      word-break: break-word;
-    }
-
-    .assessment-meta {
+    .card-icon-wrapper {
+      width: 48px; height: 48px;
+      background: var(--primary-lighter);
+      border-radius: 12px;
       display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .assessment-meta-item {
-      font-size: 14px;
-      color: #5f6368;
-      margin: 0;
-    }
-
-    .assessment-meta-label {
-      font-weight: 500;
-      color: #3c4043;
-    }
-
-    .assessment-status-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-      background: #e6f4ea;
-      color: #137333;
-      margin-top: 4px;
-    }
-
-    .back-to-login-btn {
-      width: 100%;
-      background-color: #f8f9fa;
-      color: #3c4043;
-      border: 1px solid #dadce0;
-      margin-top: 12px;
-    }
-
-    .back-to-login-btn:hover {
-      background-color: #f1f3f4;
-      border-color: #dadce0;
-    }
-
-    /* Loading overlay for assessment cards */
-    .assessment-card-loading-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 8px;
-      display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 16px;
-      padding: 20px;
-      z-index: 10;
+      color: var(--primary-blue);
+      margin-bottom: 16px;
     }
 
-    .assessment-card {
-      position: relative;
-    }
-
-    /* Loading spinner */
-    .skeleton-loader {
-      width: 40px;
-      height: 40px;
-      border: 4px solid #e8eaed;
-      border-top-color: #1a73e8;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* Progress meter container */
-    .progress-meter-container {
-      width: 100%;
-      max-width: 250px;
-      height: 8px;
-      background: #e8eaed;
-      border-radius: 4px;
-      overflow: hidden;
-      position: relative;
-    }
-
-    /* Progress meter fill */
-    .progress-meter-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #1a73e8 0%, #4285f4 100%);
-      border-radius: 4px;
-      transition: width 0.3s ease;
-      width: 0%;
-    }
-
-    /* Begin Assessment button */
-    .begin-assessment-btn {
-      padding: 12px 32px;
-      font-size: 15px;
+    .card-title {
+      font-size: 16px;
       font-weight: 600;
-      background: #1a73e8;
-      color: white;
+      color: var(--gray-900);
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+
+    .card-meta-row {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--gray-500);
+      margin-bottom: 8px;
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 16px;
+      margin-top: 8px;
+      border-top: 1px solid var(--gray-100);
+    }
+
+    .status-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      background: var(--success-bg);
+      color: var(--success-green);
+      border-radius: 99px;
+    }
+
+    .start-btn {
+      color: var(--primary-blue);
+      font-weight: 600;
+      font-size: 13px;
+      background: transparent;
       border: none;
-      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
       cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     }
 
-    .begin-assessment-btn:hover {
-      background: #1557b0;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-      transform: translateY(-1px);
+    /* --- COMPONENT: VIEWER --- */
+    #viewer-container {
+      background: white;
+      padding: 40px 60px;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      min-height: 60vh;
     }
 
-    .begin-assessment-btn:active {
-      transform: translateY(0);
+    .html-assessment-container {
+      font-family: var(--font-main);
+      line-height: 2.0;
+      color: var(--gray-900);
+      font-size: 18px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    .html-assessment-container h1 { 
+      font-size: 2em; 
+      color: var(--primary-dark); 
+      margin: 0 0 0.8em; 
+      font-weight: 700; 
+    }
+    
+    .html-assessment-container p { margin-bottom: 1.5em; }
+    
+    /* Highlighting - Modern Look */
+    .highlighted-element {
+      background-color: #fef08a; /* Yellow-200 */
+      color: black;
+      border-radius: 4px;
+      box-shadow: 0 0 0 4px #fef08a;
+      transition: background-color 0.2s;
+    }
+    
+    /* Focus Mode - Dimming */
+    body.focus-mode .html-assessment-container > *:not(.highlighted-element):not(.has-highlight) {
+      opacity: 0.25;
+      transition: opacity 0.4s ease;
+    }
+    
+    body.focus-mode .highlighted-element {
+      opacity: 1 !important;
+      box-shadow: 0 0 0 4px #fef08a, 0 4px 12px rgba(0,0,0,0.1);
     }
 
-    @media (max-width: 600px) {
-      #assessment-selection-container {
-        padding: 20px;
-      }
-
-      .assessment-title {
-        font-size: 15px;
-      }
-
-      .assessment-meta-item {
-        font-size: 13px;
-      }
-
-      .progress-meter-container {
-        max-width: 200px;
-      }
-
-      .skeleton-loader {
-        width: 32px;
-        height: 32px;
-      }
+    .clickable-chunk {
+      cursor: pointer;
     }
+    
+    .clickable-chunk:hover {
+      background-color: rgba(254, 240, 138, 0.3); /* Subtle yellow hover */
+      border-radius: 4px;
+    }
+
+    /* --- AUDIO TOOLBAR --- */
+    .audio-toolbar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--toolbar-height);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(0,0,0,0.05);
+      box-shadow: var(--shadow-up);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 24px;
+      z-index: 1000;
+    }
+
+    .toolbar-inner {
+      width: 100%;
+      max-width: 1000px;
+      display: grid;
+      grid-template-columns: 220px 1fr 220px;
+      gap: 24px;
+      align-items: center;
+    }
+
+    /* Info */
+    .toolbar-info { display: flex; align-items: center; gap: 12px; }
+    .toolbar-artwork {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, var(--primary-light), var(--primary-blue));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; color: white;
+      box-shadow: 0 2px 4px rgba(45, 63, 137, 0.2);
+    }
+    .toolbar-text { display: flex; flex-direction: column; overflow: hidden; }
+    .track-title { font-weight: 600; font-size: 14px; color: var(--gray-900); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .track-subtitle { font-size: 11px; color: var(--primary-blue); font-weight: 500; background: var(--primary-lighter); padding: 2px 6px; border-radius: 4px; display: inline-block; width: fit-content; }
+
+    /* Controls */
+    .toolbar-controls { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .control-buttons { display: flex; align-items: center; gap: 18px; }
+    
+    .ctrl-btn {
+      background: transparent; border: none; color: var(--gray-500);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: color 0.2s; width: 32px; height: 32px; padding: 0;
+    }
+    .ctrl-btn:hover:not(:disabled) { color: var(--primary-blue); background: var(--primary-lighter); border-radius: 50%; }
+    .ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    
+    .play-btn {
+      width: 44px; height: 44px;
+      background: var(--primary-blue); color: white; border-radius: 50%; border: none;
+      box-shadow: 0 4px 12px rgba(45, 63, 137, 0.25);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform 0.1s;
+    }
+    .play-btn:hover { transform: scale(1.05); }
+    
+    /* Progress */
+    .progress-container {
+      width: 100%; display: flex; align-items: center; gap: 12px;
+      font-size: 11px; color: var(--gray-500); font-family: monospace;
+    }
+    
+    /* Styled Range Input to match mockup */
+    input[type=range].slider-track-input {
+      -webkit-appearance: none;
+      width: 100%;
+      background: transparent;
+      cursor: pointer;
+      height: 16px; /* Hit area */
+      margin: 0;
+    }
+    
+    input[type=range].slider-track-input:focus { outline: none; }
+
+    /* Webkit (Chrome/Safari) */
+    input[type=range].slider-track-input::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 4px;
+      background: var(--gray-300);
+      border-radius: 2px;
+    }
+    
+    input[type=range].slider-track-input::-webkit-slider-thumb {
+      height: 12px;
+      width: 12px;
+      border-radius: 50%;
+      background: var(--primary-blue);
+      border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      -webkit-appearance: none;
+      margin-top: -4px; /* Center on track */
+      transition: transform 0.1s;
+    }
+    
+    input[type=range].slider-track-input::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* Tools */
+    .toolbar-tools { display: flex; justify-content: flex-end; gap: 8px; }
+    .tool-btn {
+      width: 36px; height: 36px; border-radius: 8px; border: none; background: transparent;
+      color: var(--gray-500); display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .tool-btn:hover { background: var(--gray-100); }
+    .tool-btn.active { background: var(--primary-lighter); color: var(--primary-blue); }
+
+    /* Popups */
+    .popup-menu {
+        position: absolute;
+        bottom: 90px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: var(--shadow-up);
+        padding: 12px;
+        min-width: 180px;
+        z-index: 1001;
+        display: none;
+        border: 1px solid rgba(0,0,0,0.05);
+    }
+    .popup-menu.visible { display: block; }
+    .popup-header { font-size: 12px; font-weight: 600; color: var(--gray-500); margin-bottom: 8px; text-align: center; text-transform: uppercase; }
+    
+    /* Mobile Responsiveness */
+    @media (max-width: 768px) {
+        .toolbar-inner { grid-template-columns: 1fr; gap: 12px; justify-items: center; }
+        .toolbar-info { display: none; } /* Hide track info on mobile to save space */
+        .toolbar-tools { position: absolute; right: 16px; top: 16px; }
+        .app-header { padding: 0 16px; }
+        .main-container { padding: 0 16px; margin: 24px auto; }
+        #viewer-container { padding: 24px 20px; }
+    }
+    
+    /* Loading Animations */
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .animate-spin { animation: spin 1s linear infinite; }
+
+    /* Overlay for loading cards */
+    .assessment-card-loading-overlay {
+        position: absolute; top:0; left:0; right:0; bottom:0;
+        background: rgba(255,255,255,0.9);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        z-index: 10; border-radius: var(--radius-lg);
+    }
+    
+    .progress-meter-container { width: 60%; height: 4px; background: var(--gray-300); border-radius: 2px; overflow: hidden; margin-top: 12px; }
+    .progress-meter-fill { height: 100%; background: var(--primary-blue); width: 0%; transition: width 0.3s; }
+    
+    .error-message { color: var(--primary-red); background: var(--red-light); padding: 16px; border-radius: 8px; font-size: 14px; }
+
   </style>
 </head>
 <body>
-  <div id="assessment-selection-container" style="display: none;">
-    <h2>Select Your Assessment</h2>
-    <p class="selection-subtitle">Choose which assessment you'd like to take</p>
-    <div id="assessment-grid" class="assessment-grid">
-      <!-- Assessment cards will be inserted here dynamically -->
+
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="app-brand">
+      <div class="logo-container">
+        <span class="material-icons" style="font-size: 18px; color: white;">menu_book</span>
+        <div class="logo-badge">
+          <span class="material-icons" style="font-size: 10px; color: var(--primary-dark);">volume_up</span>
+        </div>
+      </div>
+      <span>Spartan Read Aloud</span>
     </div>
+    <div class="app-user">
+      <!-- Back Button (Hidden by default) -->
+      <button id="back-to-menu-btn" class="logout-btn" style="display:none;">
+        <span class="material-icons" style="font-size:14px">arrow_back</span> Back to Menu
+      </button>
+    </div>
+  </header>
+
+  <div class="main-container">
+    
+    <!-- ASSESSMENT SELECTION -->
+    <div id="assessment-selection-container" style="display: none;">
+      <div class="selection-header">
+        <h2>Select Your Assessment</h2>
+        <p class="selection-subtitle">Choose which assessment you'd like to take</p>
+      </div>
+      <div id="assessment-grid" class="assessment-grid">
+        <!-- Cards injected via JS -->
+      </div>
+    </div>
+
+    <!-- VIEWER CONTAINER -->
+    <div id="viewer-container" style="display: none;">
+      <div id="pdf-container">
+        <!-- HTML Content injected via JS -->
+      </div>
+    </div>
+
   </div>
 
-  <div id="viewer-container" style="display: none;">
-    <div id="pdf-container">
-      <!-- Canvases will be added here -->
-    </div>
-  </div>
-
-  <!-- Modern Audio Toolbar -->
-  <div id="audio-toolbar" class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-5px_20px_rgba(0,0,0,0.2)]" style="display: none;">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-24">
-
-        <!-- ZONE 1: LEFT (Context) -->
-        <div class="w-64 hidden md:block flex-shrink-0">
-          <div class="flex items-center space-x-3">
-            <!-- Back Button -->
-            <button id="back-to-menu-btn" title="Back to Menu" class="w-10 h-10 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors shadow-sm">
-               <span class="material-icons text-gray-600 dark:text-gray-300">arrow_back</span>
-            </button>
-            <div>
-              <div id="toolbar-title" class="text-sm font-semibold text-gray-900 dark:text-white truncate" title="Loading...">
-                Loading...
-              </div>
-              <div id="toolbar-subtitle" class="text-xs text-gray-500 dark:text-gray-400">Assessment</div>
-            </div>
-          </div>
+  <!-- AUDIO TOOLBAR -->
+  <div id="audio-toolbar" class="audio-toolbar" style="display: none;">
+    <div class="toolbar-inner">
+      
+      <!-- INFO ZONE -->
+      <div class="toolbar-info">
+        <div class="toolbar-artwork">
+          <span class="material-icons">audiotrack</span>
         </div>
-
-        <!-- ZONE 2: CENTER (Controls & Progress) -->
-        <div class="flex-1 min-w-0 px-4">
-          <div class="flex flex-col items-center gap-2">
-            <!-- Playback Controls -->
-            <div class="flex items-center justify-center gap-3 sm:gap-4">
-              <!-- Speed Control -->
-              <button id="speed-btn" title="Playback Speed (0.9x)" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <span class="material-icons text-xl">slow_motion_video</span>
-              </button>
-              <!-- Skip Back 10s -->
-              <button id="skip-back-btn" title="Skip Back 10s" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <span class="material-icons text-2xl">replay_10</span>
-              </button>
-              <!-- Previous Chunk -->
-              <button id="prev-btn" title="Previous Chunk" class="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <span class="material-icons text-3xl">skip_previous</span>
-              </button>
-              <!-- Play/Pause Button (Hero Button) -->
-              <button id="play-pause-btn" title="Play" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow-lg transition-transform transform hover:scale-105">
-                <span id="play-icon" class="material-icons text-4xl play-icon">play_arrow</span>
-                <span id="pause-icon" class="material-icons text-4xl pause-icon hidden">pause</span>
-                <span id="loading-spinner" class="material-icons text-4xl loading-spinner hidden animate-spin">refresh</span>
-              </button>
-              <!-- Next Chunk -->
-              <button id="next-btn" title="Next Chunk" class="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <span class="material-icons text-3xl">skip_next</span>
-              </button>
-              <!-- Skip Forward 10s -->
-              <button id="skip-forward-btn" title="Skip Forward 10s" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <span class="material-icons text-2xl">forward_10</span>
-              </button>
-              <!-- Focus Mode -->
-              <button id="focus-btn" title="Focus Mode" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <span class="material-icons text-xl">center_focus_strong</span>
-              </button>
-              <!-- Line Spacing Control -->
-              <button id="line-spacing-btn" title="Line Spacing (2.0)" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <span class="material-icons text-xl">format_line_spacing</span>
-              </button>
-            </div>
-
-            <!-- Progress Bar & Time -->
-            <div class="w-full flex items-center gap-2">
-              <span id="current-time" class="text-xs font-mono text-gray-500 dark:text-gray-400 w-10 text-right">0:00</span>
-              <div class="flex-1 relative">
-                <!-- Progress Bar Track -->
-                <input id="timeline-slider" type="range" min="0" max="100" value="0" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer">
-                <!-- Filled part -->
-                <div id="progress-fill" class="absolute top-1/2 left-0 h-1.5 bg-indigo-500 rounded-full -translate-y-1/2 pointer-events-none" style="width: 0%;"></div>
-
-                <!-- Chunk Markers -->
-                <div id="chunk-markers" class="absolute top-1/2 left-0 w-full h-1.5 -translate-y-1/2 pointer-events-none">
-                  <!-- Markers will be populated dynamically -->
-                </div>
-              </div>
-              <span id="total-time" class="text-xs font-mono text-gray-500 dark:text-gray-400 w-10 text-left">0:00</span>
-            </div>
-          </div>
+        <div class="toolbar-text">
+          <div id="toolbar-title" class="track-title">Loading...</div>
+          <div id="toolbar-subtitle" class="track-subtitle">Assessment</div>
         </div>
+      </div>
 
-        <!-- ZONE 3: RIGHT (Tools) -->
-        <div class="w-64 hidden md:flex items-center justify-end flex-shrink-0 space-x-4">
-          <!-- Chunk List -->
-          <button id="chunk-list-btn" title="Audio List" class="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <span class="material-icons">list</span>
+      <!-- CONTROLS ZONE -->
+      <div class="toolbar-controls">
+        <div class="control-buttons">
+          <button id="skip-back-btn" class="ctrl-btn" title="Back 10s"><span class="material-icons">replay_10</span></button>
+          <button id="prev-btn" class="ctrl-btn" title="Previous Chunk"><span class="material-icons" style="font-size:28px;">skip_previous</span></button>
+          
+          <button id="play-pause-btn" class="play-btn" title="Play/Pause">
+             <span class="material-icons play-icon">play_arrow</span>
+             <span class="material-icons pause-icon" style="display:none;">pause</span>
+             <span class="material-icons loading-spinner" style="display:none;">refresh</span>
           </button>
-          <!-- Volume Control -->
-          <div class="flex items-center gap-2">
-            <span id="volume-icon" class="material-icons text-lg text-gray-500 dark:text-gray-400">volume_up</span>
-            <input id="volume-slider" type="range" min="0" max="100" value="80" class="w-24 h-1 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer">
-          </div>
+          
+          <button id="next-btn" class="ctrl-btn" title="Next Chunk"><span class="material-icons" style="font-size:28px;">skip_next</span></button>
+          <button id="skip-forward-btn" class="ctrl-btn" title="Forward 10s"><span class="material-icons">forward_10</span></button>
         </div>
+        
+        <div class="progress-container">
+          <span id="current-time">0:00</span>
+          <!-- Re-using the input slider for logic compatibility, styled to match -->
+          <input id="timeline-slider" type="range" min="0" max="100" value="0" class="slider-track-input">
+          <span id="total-time">0:00</span>
+        </div>
+      </div>
 
+      <!-- TOOLS ZONE -->
+      <div class="toolbar-tools">
+        <button id="speed-btn" class="tool-btn" title="Playback Speed"><span class="material-icons" style="font-size:20px;">speed</span></button>
+        <button id="focus-btn" class="tool-btn" title="Focus Mode"><span class="material-icons" style="font-size:20px;">center_focus_strong</span></button>
+        <!-- Volume handled via simple click for now or system volume -->
       </div>
     </div>
   </div>
-  <!-- End of Toolbar -->
 
-  <!-- Speed Control Popup -->
-  <div id="speed-popup" class="hidden fixed bottom-0 left-0 mb-28 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 z-50">
-    <p class="text-sm font-medium text-center text-gray-700 dark:text-gray-200 mb-2">Playback Speed</p>
-    <div class="flex items-center justify-between mb-2">
-      <span id="speed-display" class="text-sm font-semibold text-gray-900 dark:text-white">0.9x</span>
+  <!-- POPUPS -->
+  <div id="speed-popup" class="popup-menu">
+    <div class="popup-header">Playback Speed</div>
+    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <span style="font-size:12px; color:var(--gray-500)">0.5x</span>
+        <span id="speed-display" style="font-size:12px; font-weight:bold; color:var(--primary-blue)">0.9x</span>
+        <span style="font-size:12px; color:var(--gray-500)">2.0x</span>
     </div>
-    <input type="range" id="speed-slider-popup" min="0.5" max="2.0" step="0.01" value="0.9" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer" aria-label="Fine-tune playback speed">
-    <!-- Popup tail -->
-    <div class="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-4 bg-white dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 transform rotate-45"></div>
+    <input type="range" id="speed-slider-popup" min="0.5" max="2.0" step="0.1" value="0.9" class="slider-track-input">
   </div>
 
-  <!-- Line Spacing Control Popup -->
-  <div id="line-spacing-popup" class="hidden fixed bottom-0 left-0 mb-28 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 z-50">
-    <p class="text-sm font-medium text-center text-gray-700 dark:text-gray-200 mb-2">Line Spacing</p>
-    <div class="flex items-center justify-between mb-2">
-      <span id="line-spacing-display" class="text-sm font-semibold text-gray-900 dark:text-white">2.0</span>
-    </div>
-    <input type="range" id="line-spacing-slider-popup" min="1.0" max="3.0" step="0.1" value="2.0" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer" aria-label="Adjust line spacing">
-    <!-- Popup tail -->
-    <div class="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-4 bg-white dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 transform rotate-45"></div>
-  </div>
-
-  <!-- Chunk List Popup -->
-  <div id="chunk-popup" class="hidden fixed bottom-0 right-0 mb-28 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 z-50">
-    <p class="text-sm font-medium text-center text-gray-700 dark:text-gray-200 mb-2">Audio List</p>
-    <div id="title-dropdown" class="max-h-64 overflow-y-auto space-y-1">
-      <!-- Items will be populated dynamically -->
-    </div>
-    <!-- Popup tail -->
-    <div class="absolute right-6 -bottom-2 w-4 h-4 bg-white dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 transform rotate-45"></div>
-  </div>
-
-  <!-- Hidden elements for compatibility -->
-  <div id="toolbar-secondary" style="display: none;"></div>
-  <button id="toggle-secondary-btn" style="display: none;"></button>
-  <button id="loop-btn" style="display: none;"></button>
-  <div id="keyboard-hints" style="display: none;"></div>
-</div>
 <script>
-// Global variables and functions that need to be accessible before DOMContentLoaded
-let pdfContainer, assessmentSelectionContainer, viewerContainer;
+// --- CORE LOGIC ---
 
+// Global variables
+let pdfContainer, assessmentSelectionContainer, viewerContainer;
 let globalAudioPlayer = new Audio();
 let currentlyPlayingChunk = null;
 let serverChunks = [];
@@ -1561,33 +569,28 @@ let currentChunkIndex = 0;
 let isLooping = false;
 let isFocusMode = false;
 let currentPlaybackRate = 0.9;
-let currentLineSpacing = 2.0; // Default line spacing
-let currentHighlight = null;
-let pageTextContent = []; // Store extracted text content for each page
-let isProgrammaticScroll = false; // Flag to ignore auto-scroll during highlighting
-let audioCache = new Map(); // Cache loaded audio chunks (key: fileId, value: base64 data)
-let isLoadingAudio = false; // Track loading state
-let sessionToken = null; // Secure session token for audio access
-let totalChunks = 0; // Total number of audio chunks
-let chunksLoaded = 0; // Number of chunks currently loaded/cached
+let currentLineSpacing = 2.0;
+let isProgrammaticScroll = false;
+let audioCache = new Map(); 
+let isLoadingAudio = false; 
+let sessionToken = null;
+let totalChunks = 0; 
+let chunksLoaded = 0; 
 
-// Audio playback delays
-const QUESTION_ANSWER_DELAY_MS = 1500; // 1.5 seconds
-const ANSWER_ANSWER_DELAY_MS = 1000;   // 1 second
-const DEFAULT_CHUNK_DELAY_MS = 500;    // 0.5 seconds
-
-// Session storage for multi-assessment flow
+// Session storage
 let storedEmail = null;
 let availableAssessments = [];
+let autoLoadAssessmentUrl = null; 
 
-// Loading state for assessment preloading
-let currentLoadingCard = null; // Reference to the card currently being loaded
-let currentLoadingOverlay = null; // Reference to the loading overlay element
-let pendingAssessmentData = null; // Stores assessment data while preloading audio
+// Loading state
+let currentLoadingCard = null;
+let currentLoadingOverlay = null;
+let pendingAssessmentData = null;
 
-function initializePasswordlessStudentView(user) {
+function initializePasswordlessStudentView(user, targetUrl) {
   console.log('initializePasswordlessStudentView called with:', user);
   storedEmail = user.email;
+  autoLoadAssessmentUrl = targetUrl;
 
   // Initialize DOM element references
   pdfContainer = document.getElementById('pdf-container');
@@ -1599,91 +602,49 @@ function initializePasswordlessStudentView(user) {
     return;
   }
 
-  google.script.run
-    .withSuccessHandler(onAssessmentsLoaded)
-    .withFailureHandler(onAssessmentLoadError)
-    .getStudentAssessmentsForEmail(storedEmail);
+  if (autoLoadAssessmentUrl) {
+    console.log('Auto-loading assessment:', autoLoadAssessmentUrl);
+    const loader = document.createElement('div');
+    loader.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:white;display:flex;justify-content:center;align-items:center;z-index:2000;flex-direction:column;gap:10px;"><span class="material-icons animate-spin" style="font-size:40px;color:var(--primary-blue)">refresh</span><div>Loading Preview...</div></div>';
+    document.body.appendChild(loader);
+    
+    google.script.run
+      .withSuccessHandler((result) => {
+        loader.remove();
+        onAssessmentLoadedForPreload(result);
+      })
+      .withFailureHandler((error) => {
+        loader.remove();
+        onPdfLoadError(error);
+      })
+      .getAssessmentPdf(storedEmail, "preview-bypass", autoLoadAssessmentUrl);
+      
+  } else {
+    google.script.run
+      .withSuccessHandler(onAssessmentsLoaded)
+      .withFailureHandler(onAssessmentLoadError)
+      .getStudentAssessmentsForEmail(storedEmail);
+  }
 }
 
 function onAssessmentsLoaded(result) {
-  console.log('onAssessmentsLoaded called with result:', result);
-
   if (result.error) {
     onAssessmentLoadError(result.error);
     return;
   }
-
   availableAssessments = result.assessments;
-  console.log(`Loaded ${availableAssessments.length} assessment(s)`);
-  console.log('Assessment data:', availableAssessments);
-
   if (availableAssessments.length > 0) {
-    console.log('Showing assessment selection screen...');
     showAssessmentSelection();
   } else {
     onAssessmentLoadError('No assessments found for your account.');
   }
 }
 
-/**
- * Creates and displays a loading overlay on an assessment card
- * @param {HTMLElement} cardElement - The assessment card to show loading on
- * @returns {Object} - Object containing overlay element and update function
- */
-function showLoadingOverlay(cardElement) {
-  // Create overlay container
-  const overlay = document.createElement('div');
-  overlay.className = 'assessment-card-loading-overlay';
-
-  // Create spinner
-  const spinner = document.createElement('div');
-  spinner.className = 'skeleton-loader';
-
-  // Create progress meter container
-  const meterContainer = document.createElement('div');
-  meterContainer.className = 'progress-meter-container';
-
-  // Create progress meter fill
-  const meterFill = document.createElement('div');
-  meterFill.className = 'progress-meter-fill';
-  meterContainer.appendChild(meterFill);
-
-  // Append elements
-  overlay.appendChild(spinner);
-  overlay.appendChild(meterContainer);
-  cardElement.appendChild(overlay);
-
-  return {
-    overlay: overlay,
-    spinner: spinner,
-    meterFill: meterFill,
-    updateProgress: (percent) => {
-      meterFill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
-    },
-    showBeginButton: (onClickCallback) => {
-      // Remove spinner and meter
-      spinner.remove();
-      meterContainer.remove();
-
-      // Create Begin Assessment button
-      const beginBtn = document.createElement('button');
-      beginBtn.className = 'begin-assessment-btn';
-      beginBtn.textContent = 'Begin Assessment';
-      beginBtn.onclick = (e) => {
-        e.stopPropagation(); // Prevent card click event
-        onClickCallback();
-      };
-
-      overlay.appendChild(beginBtn);
-    },
-    remove: () => {
-      overlay.remove();
-    }
-  };
-}
-
 function showAssessmentSelection() {
   assessmentSelectionContainer.style.display = 'block';
+  viewerContainer.style.display = 'none';
+  document.getElementById('audio-toolbar').style.display = 'none';
+  document.getElementById('back-to-menu-btn').style.display = 'none';
 
   const assessmentGrid = document.getElementById('assessment-grid');
   assessmentGrid.innerHTML = '';
@@ -1693,19 +654,21 @@ function showAssessmentSelection() {
     card.className = 'assessment-card';
     card.onclick = () => loadSpecificAssessment(assessment.assessmentUrl, card);
 
-    let metaHtml = '';
-    if (assessment.instructor) {
-      metaHtml += `<p class="assessment-meta-item"><span class="assessment-meta-label">Teacher:</span> ${escapeHtml(assessment.instructor)}</p>`;
-    }
-    if (assessment.className) {
-      metaHtml += `<p class="assessment-meta-item"><span class="assessment-meta-label">Class:</span> ${escapeHtml(assessment.className)}</p>`;
-    }
-
+    // New Card Design
     card.innerHTML = `
-      <h3 class="assessment-title">${escapeHtml(assessment.assessmentName)}</h3>
-      <div class="assessment-meta">
-        ${metaHtml}
-        <span class="assessment-status-badge">Ready</span>
+      <div class="card-icon-wrapper">
+        <span class="material-icons">library_books</span>
+      </div>
+      <div class="card-title">${escapeHtml(assessment.assessmentName)}</div>
+      <div class="card-meta-row">
+        ${assessment.instructor ? `<div class="meta-item"><span class="material-icons" style="font-size:14px">person</span> ${escapeHtml(assessment.instructor)}</div>` : ''}
+      </div>
+      <div class="card-meta-row">
+        ${assessment.className ? `<div class="meta-item"><span class="material-icons" style="font-size:14px">school</span> ${escapeHtml(assessment.className)}</div>` : ''}
+      </div>
+      <div class="card-footer">
+        <span class="status-badge">Ready</span>
+        <button class="start-btn">Start Reading <span class="material-icons" style="font-size:14px">arrow_forward</span></button>
       </div>
     `;
 
@@ -1714,154 +677,85 @@ function showAssessmentSelection() {
 }
 
 function loadSpecificAssessment(assessmentUrl, cardElement) {
-  console.log(`Requesting password for assessment: ${assessmentUrl}`);
-  
   const password = prompt('Please enter the password for this assessment:');
+  if (password === null) return; 
 
-  if (password === null) { // User clicked "Cancel"
-    return; 
-  }
-
-  // Store reference to card and show loading overlay
   currentLoadingCard = cardElement;
-  currentLoadingOverlay = showLoadingOverlay(cardElement);
+  // Disable interaction
+  cardElement.style.opacity = '0.7';
+  cardElement.style.pointerEvents = 'none';
+  
+  // Add loader overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'assessment-card-loading-overlay';
+  overlay.innerHTML = `
+    <span class="material-icons animate-spin" style="font-size:32px; color:var(--primary-blue)">refresh</span>
+    <div class="progress-meter-container"><div class="progress-meter-fill"></div></div>
+    <div style="font-size:12px; margin-top:8px; color:var(--gray-500)">Loading audio...</div>
+  `;
+  cardElement.appendChild(overlay);
+  
+  currentLoadingOverlay = {
+      element: overlay,
+      updateProgress: (pct) => {
+          overlay.querySelector('.progress-meter-fill').style.width = pct + '%';
+      },
+      remove: () => overlay.remove()
+  };
 
-  // Disable other cards while loading
-  const allCards = document.querySelectorAll('.assessment-card');
-  allCards.forEach(card => {
-    if (card !== cardElement) {
-      card.style.pointerEvents = 'none';
-      card.style.opacity = '0.5';
-    }
-  });
-
-  // Fetch assessment data but don't show viewer yet
   google.script.run
     .withSuccessHandler(onAssessmentLoadedForPreload)
     .withFailureHandler(onPdfLoadError)
     .getAssessmentPdf(storedEmail, password, assessmentUrl);
 }
 
-function onAssessmentLoadError(error) {
-    console.error('Assessment load error:', error);
-    // Show error inline in the viewer container (using textContent to prevent XSS)
-    viewerContainer.style.display = 'block';
-    assessmentSelectionContainer.style.display = 'none';
-    viewerContainer.innerHTML = '';
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'error-message';
-    errorDiv.style.color = 'red';
-    errorDiv.style.fontWeight = 'bold';
-    errorDiv.style.margin = '2em';
-    errorDiv.textContent = 'Error loading PDF: ' + String(error);
-    viewerContainer.appendChild(errorDiv);
-}
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-/**
- * Handles assessment load for preload flow - stores data and starts audio preloading
- * without displaying the viewer yet.
- */
 function onAssessmentLoadedForPreload(result) {
   if (result.error) {
     onPdfLoadError(result.error);
     return;
   }
 
-  console.log('PDF data received, starting audio preload...');
-
-  // Store data for later rendering
   pendingAssessmentData = result;
   serverChunks = result.audioChunks;
   totalChunks = serverChunks.length;
   sessionToken = result.sessionToken;
-  chunksLoaded = 0; // Reset counter
-  audioCache.clear(); // Clear any old cache
+  chunksLoaded = 0; 
+  audioCache.clear(); 
 
-  console.log(`Starting preload for ${totalChunks} audio chunks`);
-
-  // Start preloading with progress callback
   bulkPreloadAudioWithProgress((progress) => {
-    // Update progress meter
-    if (currentLoadingOverlay) {
-      currentLoadingOverlay.updateProgress(progress);
-    }
+    if (currentLoadingOverlay) currentLoadingOverlay.updateProgress(progress);
   }, () => {
-    // On complete: show Begin Assessment button
-    console.log('✓ All audio preloaded!');
-    if (currentLoadingOverlay) {
-      currentLoadingOverlay.showBeginButton(() => {
-        // When Begin Assessment is clicked
-        beginAssessment();
-      });
-    }
+    beginAssessment();
   });
 }
 
-/**
- * Called when user clicks "Begin Assessment" button after preloading completes
- */
 function beginAssessment() {
-  console.log('Beginning assessment with preloaded data...');
-
-  // Hide assessment selection, show viewer
+  if (currentLoadingOverlay) currentLoadingOverlay.remove();
   assessmentSelectionContainer.style.display = 'none';
   viewerContainer.style.display = 'block';
+  document.getElementById('back-to-menu-btn').style.display = 'flex';
 
-  // Remove loading overlay
-  if (currentLoadingOverlay) {
-    currentLoadingOverlay.remove();
-    currentLoadingOverlay = null;
-  }
-
-  // Now render the assessment using stored data
   if (pendingAssessmentData) {
     onAssessmentLoaded(pendingAssessmentData);
-    pendingAssessmentData = null; // Clear stored data
+    pendingAssessmentData = null;
   }
 }
 
 function onAssessmentLoaded(result) {
-  if (result.error) {
-    onPdfLoadError(result.error);
-    return;
-  }
-
   serverChunks = result.audioChunks;
   totalChunks = serverChunks.length;
-  sessionToken = result.sessionToken; // Store session token for audio fetching
-  console.log(`Loaded ${serverChunks.length} audio chunks`);
-  console.log(`Session token received: ${sessionToken ? 'Yes' : 'No'}`);
+  sessionToken = result.sessionToken; 
 
-  // All assessments are rendered as HTML (PDF, Docs, Word)
-  console.log('Rendering HTML assessment');
   renderHtmlAssessment(result.assessmentHtml);
   initializeAudioToolbar();
   setupEventListeners();
 
-  // Only preload audio if not already loaded
   if (chunksLoaded < totalChunks) {
-    console.log('Starting background audio preload...');
     bulkPreloadAudio();
-  } else {
-    console.log('✓ Audio already preloaded, ready to play!');
   }
 }
 
-/**
- * Renders an HTML-based assessment from any source (PDF, Google Docs, Word).
- * All assessments are converted to HTML on the backend for consistent rendering.
- * @param {string} htmlContent Sanitized and normalized HTML from backend
- */
 function renderHtmlAssessment(htmlContent) {
-  console.log("Rendering HTML assessment");
-
-  // Create container with CSS reset
   const htmlContainer = document.createElement('div');
   htmlContainer.className = 'html-assessment-container';
   htmlContainer.innerHTML = htmlContent;
@@ -1869,22 +763,10 @@ function renderHtmlAssessment(htmlContent) {
   pdfContainer.innerHTML = '';
   pdfContainer.appendChild(htmlContainer);
 
-  // Map chunks to elements using the robust ID system
   mapIdsToChunks(serverChunks);
-
-  // Initialize line spacing with default value
-  setLineSpacing(currentLineSpacing);
-
-  console.log("✓ HTML assessment rendered and mapped");
 }
 
-/**
- * Maps server audio chunks to their corresponding HTML elements using unique IDs.
- * This replaces the fragile fuzzy matching logic.
- * @param {Array<Object>} serverChunks - Array of audio chunk objects
- */
 function mapIdsToChunks(serverChunks) {
-  console.log('=== MAPPING CHUNKS VIA IDS ===');
   serverChunks.forEach((chunk, index) => {
     if (chunk.elementIds && chunk.elementIds.length > 0) {
       chunk.elementIds.forEach(id => {
@@ -1892,432 +774,75 @@ function mapIdsToChunks(serverChunks) {
         if (el) {
           el.setAttribute('data-chunk-index', index);
           el.classList.add('clickable-chunk'); 
-          // Add visual pointer to indicate interactivity
-          el.style.cursor = 'pointer';
-          
-          // Add click listener directly
           el.addEventListener('click', (e) => {
              e.stopPropagation();
-             jumpToChunk(index); // Use jumpToChunk to handle playback logic
+             jumpToChunk(index); 
           });
-        } else {
-           // Element might have been removed during sanitization or ID mismatch
-           // This is non-fatal, just means highlighting won't work for this specific element
         }
       });
     }
   });
-  console.log('✓ ID mapping complete');
-}
-
-
-
-
-function onPdfLoadError(error) {
-  console.error('PDF Load Error:', error);
-
-  // Clean up loading overlay if present
-  if (currentLoadingOverlay) {
-    currentLoadingOverlay.remove();
-    currentLoadingOverlay = null;
-  }
-
-  // Re-enable all cards
-  const allCards = document.querySelectorAll('.assessment-card');
-  allCards.forEach(card => {
-    card.style.pointerEvents = '';
-    card.style.opacity = '';
-  });
-
-  // Reset state
-  currentLoadingCard = null;
-  pendingAssessmentData = null;
-
-    // Instead of manipulating login DOM (not present in student view), trigger error UI
-  if (typeof onAssessmentLoadError === 'function') {
-    onAssessmentLoadError(error);
-  }
-}
-
-
-// Maximum number of words to use for search/display purposes
-const MAX_SEARCH_WORDS = 8;
-
-function getCleanedChunkText(text) {
-  const words = text.trim().split(/\s+/);
-  return words.slice(0, MAX_SEARCH_WORDS).join(' ') + (words.length > MAX_SEARCH_WORDS ? '...' : '');
-}
-
-/**
- * Generates a search/display string from text by taking first N words.
- * @param {string} text - The text to process
- * @returns {string} First N words with ellipsis if truncated
- */
-function generateSearchWords(text) {
-  if (!text) return '';
-  const words = text.trim().split(/\s+/);
-  return words.slice(0, MAX_SEARCH_WORDS).join(' ') + (words.length > MAX_SEARCH_WORDS ? '...' : '');
-}
-
-/**
- * Extracts or generates search words from a chunk for highlighting purposes.
- * @param {Object} chunk - The audio chunk object
- * @returns {string|null} Search words for highlighting, or null if chunk is invalid
- */
-function getSearchWords(chunk) {
-  if (!chunk) return null;
-  return chunk.searchWords || generateSearchWords(chunk.text);
-}
-
-/**
- * Extracts file ID from Google Drive URL.
- * @param {string} audioUrl Drive URL containing file ID
- * @returns {string|null} File ID or null if not found
- */
-function getFileIdFromAudioUrl(audioUrl) {
-  const fileIdMatch = audioUrl.match(/id=([a-zA-Z0-9_-]+)/);
-  return fileIdMatch ? fileIdMatch[1] : null;
-}
-
-/**
- * Enhanced bulk preload with progress tracking.
- * @param {Function} onProgressCallback - Called with progress percentage (0-100)
- * @param {Function} onCompleteCallback - Called when all audio is loaded
- */
-function bulkPreloadAudioWithProgress(onProgressCallback, onCompleteCallback) {
-  if (!sessionToken || serverChunks.length === 0) {
-    console.warn('Cannot preload audio: missing session token or chunks');
-    onCompleteCallback && onCompleteCallback();
-    return;
-  }
-
-  console.log('=== BULK AUDIO PRELOAD WITH PROGRESS ===');
-
-  // Get all file IDs
-  const allFileIds = serverChunks.map(c => getFileIdFromAudioUrl(c.audioUrl)).filter(id => id);
-
-  if (allFileIds.length === 0) {
-    console.warn('No valid file IDs found');
-    onCompleteCallback && onCompleteCallback();
-    return;
-  }
-
-  // Report initial progress
-  onProgressCallback && onProgressCallback(0);
-
-  // Load all chunks in batches of 5
-  loadInBatchesWithProgress(allFileIds, 5, onProgressCallback, onCompleteCallback);
-}
-
-/**
- * Loads file IDs in batches with progress reporting.
- * @param {Array<string>} fileIds - Array of file IDs
- * @param {number} batchSize - Number of files per batch
- * @param {Function} onProgressCallback - Progress callback
- * @param {Function} onCompleteCallback - Completion callback
- */
-function loadInBatchesWithProgress(fileIds, batchSize, onProgressCallback, onCompleteCallback) {
-  if (fileIds.length === 0) {
-    console.log('✓ All chunks loaded with progress tracking');
-    onProgressCallback && onProgressCallback(100);
-    onCompleteCallback && onCompleteCallback();
-    return;
-  }
-
-  const batch = fileIds.slice(0, batchSize);
-  const remaining = fileIds.slice(batchSize);
-
-  bulkFetchAndCache(batch)
-    .then(() => {
-      // Calculate and report progress
-      const progress = (chunksLoaded / totalChunks) * 100;
-      console.log(`→ Progress: ${chunksLoaded}/${totalChunks} (${Math.round(progress)}%)`);
-      onProgressCallback && onProgressCallback(progress);
-
-      // Continue with next batch
-      setTimeout(() => {
-        loadInBatchesWithProgress(remaining, batchSize, onProgressCallback, onCompleteCallback);
-      }, 200); // Small delay between batches
-    })
-    .catch(err => {
-      console.error('Batch loading failed:', err);
-      // Continue anyway
-      setTimeout(() => {
-        loadInBatchesWithProgress(remaining, batchSize, onProgressCallback, onCompleteCallback);
-      }, 500);
-    });
-}
-
-/**
- * Bulk preloads audio chunks in smart batches.
- * Strategy: Load first 5 immediately, then rest in background.
- */
-function bulkPreloadAudio() {
-  if (!sessionToken || serverChunks.length === 0) {
-    console.warn('Cannot preload audio: missing session token or chunks');
-    return;
-  }
-
-  console.log('=== BULK AUDIO PRELOAD START ===');
-  updateLoadingProgress(); // Show initial progress
-
-  // Phase 1: Load first 5 chunks immediately (priority for playback)
-  const priorityCount = Math.min(5, serverChunks.length);
-  const priorityChunks = serverChunks.slice(0, priorityCount);
-  const priorityFileIds = priorityChunks.map(c => getFileIdFromAudioUrl(c.audioUrl)).filter(id => id);
-
-  console.log(`→ Phase 1: Loading first ${priorityFileIds.length} priority chunks`);
-
-  bulkFetchAndCache(priorityFileIds)
-    .then(() => {
-      console.log(`✓ Phase 1 complete: ${chunksLoaded}/${totalChunks} chunks ready`);
-      updateLoadingProgress();
-
-      // Phase 2: Load remaining chunks in background (if any)
-      if (serverChunks.length > priorityCount) {
-        const remainingChunks = serverChunks.slice(priorityCount);
-        const remainingFileIds = remainingChunks.map(c => getFileIdFromAudioUrl(c.audioUrl)).filter(id => id);
-
-        console.log(`→ Phase 2: Background loading ${remainingFileIds.length} remaining chunks`);
-
-        // Load in batches of 5 to avoid timeouts
-        loadInBatches(remainingFileIds, 5);
-      }
-    })
-    .catch(err => {
-      console.error('Priority chunk loading failed:', err);
-    });
-}
-
-/**
- * Loads file IDs in batches to avoid timeouts.
- * @param {Array<string>} fileIds Array of file IDs
- * @param {number} batchSize Number of files per batch
- */
-function loadInBatches(fileIds, batchSize) {
-  if (fileIds.length === 0) {
-    console.log('✓ All chunks loaded');
-    updateLoadingProgress();
-    return;
-  }
-
-  const batch = fileIds.slice(0, batchSize);
-  const remaining = fileIds.slice(batchSize);
-
-  bulkFetchAndCache(batch)
-    .then(() => {
-      console.log(`→ Batch complete: ${chunksLoaded}/${totalChunks} chunks ready`);
-      updateLoadingProgress();
-
-      // Continue with next batch after short delay
-      setTimeout(() => loadInBatches(remaining, batchSize), 500);
-    })
-    .catch(err => {
-      console.error('Batch loading failed:', err);
-      // Continue anyway
-      setTimeout(() => loadInBatches(remaining, batchSize), 1000);
-    });
-}
-
-/**
- * Fetches multiple audio files via getBulkAudioData and caches results.
- * @param {Array<string>} fileIds Array of file IDs to fetch
- * @returns {Promise} Resolves when all files are cached
- */
-function bulkFetchAndCache(fileIds) {
-  if (!fileIds || fileIds.length === 0) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    google.script.run
-      .withSuccessHandler(result => {
-        if (!result.success) {
-          console.error('Bulk fetch failed:', result.error);
-          reject(result.error);
-          return;
-        }
-
-        // Cache all successful results
-        result.results.forEach(item => {
-          if (item.success && item.data) {
-            audioCache.set(item.fileId, item.data);
-            chunksLoaded++;
-          } else {
-            console.warn(`Failed to load audio: ${item.fileId}`, item.error);
-          }
-        });
-
-        console.log(`✓ Cached ${result.stats.success} files (${audioCache.size} total in cache)`);
-        resolve();
-      })
-      .withFailureHandler(err => {
-        console.error('Bulk fetch error:', err);
-        reject(err);
-      })
-      .getBulkAudioData(sessionToken, fileIds);
-  });
-}
-
-/**
- * Fetches and caches audio data for a single chunk (fallback).
- * Used when bulk loading is not available or fails.
- * @param {string} audioUrl The audio URL from the chunk
- * @returns {Promise<string>} Base64-encoded audio data
- */
-function fetchAndCacheAudio(audioUrl) {
-  const fileId = getFileIdFromAudioUrl(audioUrl);
-  if (!fileId) {
-    return Promise.reject('Could not parse audio file ID from URL');
-  }
-
-  // Check cache first
-  if (audioCache.has(fileId)) {
-    console.log('✓ Using cached audio for:', fileId);
-    return Promise.resolve(audioCache.get(fileId));
-  }
-
-  console.log('→ Fetching single audio from server:', fileId);
-
-  // Fallback to single fetch if not in cache
-  return new Promise((resolve, reject) => {
-    google.script.run
-      .withSuccessHandler(base64Data => {
-        if (!base64Data) {
-          reject('Failed to load audio data from server.');
-          return;
-        }
-
-        // Cache the audio data
-        audioCache.set(fileId, base64Data);
-        chunksLoaded++;
-        console.log(`✓ Cached audio (${chunksLoaded}/${totalChunks})`);
-        resolve(base64Data);
-      })
-      .withFailureHandler(err => {
-        reject(err);
-      })
-          .getAudioDataAsBase64(sessionToken, fileId);
-  });
-}
-
-/**
- * Updates the loading progress indicator in the UI.
- * Shows how many chunks are ready to play.
- */
-function updateLoadingProgress() {
-  const chunkCounter = document.getElementById('chunk-counter');
-  if (!chunkCounter) return;
-
-  if (chunksLoaded < totalChunks) {
-    chunkCounter.textContent = `Loading audio: ${chunksLoaded}/${totalChunks} ready`;
-    chunkCounter.style.color = '#f59e0b'; // Orange while loading
-  } else {
-    chunkCounter.textContent = `Chunk ${currentChunkIndex + 1} of ${totalChunks}`;
-    chunkCounter.style.color = '#1a73e8'; // Blue when complete
-  }
-}
-
-function normalizeText(text) {
-  // Normalize text to handle variations from different source formats
-  return text.trim().toLowerCase()
-    .replace(/\s+/g, ' ')  // Normalize whitespace
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '');  // Remove punctuation
 }
 
 function initializeAudioToolbar() {
   document.getElementById('audio-toolbar').style.display = 'flex';
-  populateTitleDropdown();
-  createChunkMarkers();
-  updateToolbarDisplay();
-
-  // Initialize with first chunk ready to play
   if (serverChunks.length > 0) {
     currentChunkIndex = 0;
     updateToolbarDisplay();
-
-    // Highlight the first chunk so students can see what will be read
     highlightChunkInHTML(0);
   }
 }
 
-function createChunkMarkers() {
-  const markersContainer = document.getElementById('chunk-markers');
-  if (!markersContainer || serverChunks.length <= 1) return;
-
-  markersContainer.innerHTML = ''; // Clear existing markers
-
-  // Create markers between chunks
-  for (let i = 1; i < serverChunks.length; i++) {
-    const marker = document.createElement('div');
-    marker.className = 'absolute w-0.5 h-1.5 bg-white dark:bg-gray-800';
-    // Position evenly across the progress bar
-    marker.style.left = `${(i / serverChunks.length) * 100}%`;
-    marker.title = `Audio ${i + 1}: ${getCleanedChunkText(serverChunks[i].text)}`;
-    markersContainer.appendChild(marker);
-  }
-}
-
-function populateTitleDropdown() {
-  const dropdown = document.getElementById('title-dropdown');
-  dropdown.innerHTML = '';
-
-  serverChunks.forEach((chunk, index) => {
-    const item = document.createElement('button');
-    item.className = 'chunk-item w-full text-left text-sm text-gray-700 dark:text-gray-200 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 truncate';
-    item.textContent = `${getCleanedChunkText(chunk.text)}`;
-
-    // Highlight current chunk
-    if (index === currentChunkIndex) {
-      item.classList.add('bg-indigo-50', 'dark:bg-indigo-900/50', 'text-indigo-700', 'dark:text-indigo-300', 'font-medium');
-    }
-
-    item.onclick = () => jumpToChunk(index);
-    dropdown.appendChild(item);
-  });
-}
-
 function updateToolbarDisplay() {
   if (serverChunks.length === 0) return;
-
   const currentChunk = serverChunks[currentChunkIndex];
   if (currentChunk) {
-    const toolbarTitle = document.getElementById('toolbar-title');
-    if (toolbarTitle) {
-      const chunkText = getCleanedChunkText(currentChunk.text);
-      toolbarTitle.textContent = `${chunkText}`;
-      toolbarTitle.title = chunkText;
+    const chunkText = getCleanedChunkText(currentChunk.text);
+    document.getElementById('toolbar-title').textContent = chunkText;
+    document.getElementById('toolbar-subtitle').textContent = `Chunk ${currentChunkIndex + 1} of ${totalChunks}`;
+  }
+  
+  // Update nav buttons
+  document.getElementById('prev-btn').disabled = currentChunkIndex === 0;
+  document.getElementById('next-btn').disabled = currentChunkIndex === serverChunks.length - 1;
+}
+
+function getCleanedChunkText(text) {
+  const words = text.trim().split(/\s+/);
+  return words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
+}
+
+function highlightChunkInHTML(chunkIndex) {
+  document.querySelectorAll('.highlighted-element').forEach(el => el.classList.remove('highlighted-element'));
+  document.querySelectorAll('.has-highlight').forEach(el => el.classList.remove('has-highlight'));
+
+  const elements = document.querySelectorAll(`[data-chunk-index="${chunkIndex}"]`);
+  if (elements.length === 0) return;
+
+  elements.forEach(el => {
+    el.classList.add('highlighted-element');
+    let parent = el.parentElement;
+    while (parent && !parent.classList.contains('html-assessment-container')) {
+      parent.classList.add('has-highlight');
+      parent = parent.parentElement;
     }
-  }
-
-  // Update subtitle with assessment info
-  const toolbarSubtitle = document.getElementById('toolbar-subtitle');
-  if (toolbarSubtitle) {
-    toolbarSubtitle.textContent = `Audio ${currentChunkIndex + 1} of ${serverChunks.length}`;
-  }
-
-  // Update speed display in popup
-  const speedDisplay = document.getElementById('speed-display');
-  if (speedDisplay) {
-    speedDisplay.textContent = `${currentPlaybackRate.toFixed(2)}x`;
-  }
-
-  // Update speed button title
-  const speedBtn = document.getElementById('speed-btn');
-  if (speedBtn) {
-    speedBtn.title = `Playback Speed (${currentPlaybackRate}x)`;
-  }
-
-  // Update dropdown current item
-  document.querySelectorAll('.dropdown-item').forEach((item, index) => {
-    item.classList.toggle('current', index === currentChunkIndex);
   });
 
-  // Update navigation button states
-  const prevBtn = document.getElementById('prev-btn');
-  const nextBtn = document.getElementById('next-btn');
-  if (prevBtn) prevBtn.disabled = currentChunkIndex === 0;
-  if (nextBtn) nextBtn.disabled = currentChunkIndex === serverChunks.length - 1;
+  // Scroll the first element into view
+  if (elements.length > 0) {
+    elements[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+// --- AUDIO PLAYBACK LOGIC ---
+
+function jumpToChunk(index) {
+  if (index < 0 || index >= serverChunks.length) return;
+  playAudio(serverChunks[index], index);
+}
+
+function navigateChunk(direction) {
+  jumpToChunk(currentChunkIndex + direction);
 }
 
 function playAudio(chunk, index) {
@@ -2336,669 +861,244 @@ function playAudio(chunk, index) {
   currentlyPlayingChunk = chunk;
   currentChunkIndex = index;
 
-  // Show loading state
   isLoadingAudio = true;
-  updatePlayPauseButton(true);
-  setLoadingState(true);
-
+  updatePlayPauseButton(true); // Show loading/active state
   updateToolbarDisplay();
-
-  // Highlight the current chunk using the index
   highlightChunkInHTML(index);
 
-  // Check if audio is already cached (from bulk preload)
   const fileId = getFileIdFromAudioUrl(chunk.audioUrl);
-  if (!fileId) {
-    onPdfLoadError('Invalid audio URL format');
-    isLoadingAudio = false;
-    setLoadingState(false);
-    return;
-  }
-
-  let audioDataPromise;
+  
+  let audioPromise;
   if (audioCache.has(fileId)) {
-    console.log(`✓ Using preloaded audio for chunk ${index + 1}`);
-    audioDataPromise = Promise.resolve(audioCache.get(fileId));
+    audioPromise = Promise.resolve(audioCache.get(fileId));
   } else {
-    console.log(`→ Audio not preloaded, fetching chunk ${index + 1}`);
-    audioDataPromise = fetchAndCacheAudio(chunk.audioUrl);
+    audioPromise = fetchAndCacheAudio(chunk.audioUrl);
   }
 
-  // Play the audio
-  audioDataPromise
-    .then(base64Data => {
-      // Clear loading state
+  audioPromise.then(base64Data => {
       isLoadingAudio = false;
-      setLoadingState(false);
-
-      // Set audio source and play
       globalAudioPlayer.src = `data:audio/wav;base64,${base64Data}`;
       globalAudioPlayer.playbackRate = currentPlaybackRate;
-
       return globalAudioPlayer.play();
-    })
-    .then(() => {
-      // Audio started playing successfully
-      console.log('✓ Audio playing');
-      // Ensure play/pause button shows pause icon after loading completes
-      updatePlayPauseButton(true);
-    })
-    .catch(err => {
-      // Handle errors
-      console.error('Audio playback error:', err);
-      onPdfLoadError(err.toString());
-      currentlyPlayingChunk = null;
+  })
+  .then(() => updatePlayPauseButton(true))
+  .catch(err => {
+      console.error('Playback error:', err);
       isLoadingAudio = false;
-      setLoadingState(false);
       updatePlayPauseButton(false);
-    });
+  });
+}
+
+function togglePlayPause() {
+  if (!currentlyPlayingChunk) {
+    playAudio(serverChunks[currentChunkIndex], currentChunkIndex);
+  } else {
+    if (globalAudioPlayer.paused) {
+      globalAudioPlayer.play();
+      updatePlayPauseButton(true);
+    } else {
+      globalAudioPlayer.pause();
+      updatePlayPauseButton(false);
+    }
+  }
 }
 
 function updatePlayPauseButton(isPlaying) {
   const btn = document.getElementById('play-pause-btn');
   const playIcon = btn.querySelector('.play-icon');
   const pauseIcon = btn.querySelector('.pause-icon');
-  const loadingSpinner = btn.querySelector('.loading-spinner');
+  const spinner = btn.querySelector('.loading-spinner');
 
-  // Hide loading spinner when updating play/pause state
-  if (loadingSpinner) {
-    loadingSpinner.classList.add('hidden');
-  }
+  playIcon.style.display = 'none';
+  pauseIcon.style.display = 'none';
+  spinner.style.display = 'none';
 
-  if (isPlaying) {
-    if (playIcon) playIcon.classList.add('hidden');
-    if (pauseIcon) pauseIcon.classList.remove('hidden');
+  if (isLoadingAudio) {
+    spinner.style.display = 'block';
+    spinner.classList.add('animate-spin');
+  } else if (isPlaying) {
+    pauseIcon.style.display = 'block';
   } else {
-    if (playIcon) playIcon.classList.remove('hidden');
-    if (pauseIcon) pauseIcon.classList.add('hidden');
+    playIcon.style.display = 'block';
   }
 }
 
-/**
- * Updates UI to show loading state during audio fetch.
- * @param {boolean} loading True to show loading state, false to clear it
- */
-function setLoadingState(loading) {
-  const playPauseBtn = document.getElementById('play-pause-btn');
-  const playIcon = playPauseBtn.querySelector('.play-icon');
-  const pauseIcon = playPauseBtn.querySelector('.pause-icon');
-  const loadingSpinner = playPauseBtn.querySelector('.loading-spinner');
-
-  if (loading) {
-    // Hide play/pause icons, show spinner
-    if (playIcon) playIcon.classList.add('hidden');
-    if (pauseIcon) pauseIcon.classList.add('hidden');
-    if (loadingSpinner) loadingSpinner.classList.remove('hidden');
-
-    // Disable button while loading
-    playPauseBtn.disabled = true;
-    playPauseBtn.style.opacity = '0.8';
-  } else {
-    // Hide spinner, button state will be set by updatePlayPauseButton
-    if (loadingSpinner) loadingSpinner.classList.add('hidden');
-
-    // Re-enable controls
-    playPauseBtn.disabled = false;
-    playPauseBtn.style.opacity = '1';
-  }
+// --- HELPER ---
+function getFileIdFromAudioUrl(url) {
+  const match = url.match(/id=([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
 }
 
-function updateProgressBar() {
-  if (globalAudioPlayer.duration) {
-    const progress = (globalAudioPlayer.currentTime / globalAudioPlayer.duration) * 100;
-    const progressFill = document.getElementById('progress-fill');
-    if (progressFill) {
-      progressFill.style.width = progress + '%';
+function fetchAndCacheAudio(audioUrl) {
+  const fileId = getFileIdFromAudioUrl(audioUrl);
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(data => {
+        if (data) {
+          audioCache.set(fileId, data);
+          chunksLoaded++;
+          resolve(data);
+        } else reject('No data');
+      })
+      .withFailureHandler(reject)
+      .getAudioDataAsBase64(sessionToken, fileId);
+  });
+}
+
+function bulkPreloadAudioWithProgress(onProgress, onComplete) {
+  const batchSize = 5;
+  const chunksToLoad = serverChunks.filter(c => !audioCache.has(getFileIdFromAudioUrl(c.audioUrl)));
+  
+  if (chunksToLoad.length === 0) {
+    onComplete();
+    return;
+  }
+
+  let loadedCount = 0;
+  const totalToLoad = chunksToLoad.length;
+
+  // Helper to load a batch
+  const loadBatch = (startIndex) => {
+    if (startIndex >= chunksToLoad.length) {
+      onComplete();
+      return;
     }
-  }
+
+    const batch = chunksToLoad.slice(startIndex, startIndex + batchSize);
+    const fileIds = batch.map(c => getFileIdFromAudioUrl(c.audioUrl));
+
+    google.script.run
+      .withSuccessHandler(result => {
+        if (result.success) {
+          result.results.forEach(item => {
+            if (item.success) audioCache.set(item.fileId, item.data);
+          });
+          loadedCount += batch.length;
+          onProgress(Math.round((loadedCount / totalToLoad) * 100));
+          loadBatch(startIndex + batchSize); // Next batch
+        } else {
+          console.error('Batch failed'); // Continue anyway?
+          loadBatch(startIndex + batchSize);
+        }
+      })
+      .withFailureHandler(() => loadBatch(startIndex + batchSize))
+      .getBulkAudioData(sessionToken, fileIds);
+  };
+
+  loadBatch(0);
 }
 
-function setupEventListeners() {
-  // Back Button Logic
-  const backBtn = document.getElementById('back-to-menu-btn');
-  if (backBtn) {
-    backBtn.onclick = () => {
-      if (!globalAudioPlayer.paused) {
-        togglePlayPause();
-      }
-      viewerContainer.style.display = 'none';
-      document.getElementById('audio-toolbar').style.display = 'none';
-      assessmentSelectionContainer.style.display = 'block';
-      // Optional: Scroll to top
-      window.scrollTo(0, 0);
-    };
-  }
+function bulkPreloadAudio() {
+    // Background preload, no UI updates needed
+    bulkPreloadAudioWithProgress(() => {}, () => console.log('Background preload complete'));
+}
 
-  // Core controls
+// --- UI EVENT LISTENERS ---
+function setupEventListeners() {
+  // Back Button
+  document.getElementById('back-to-menu-btn').onclick = () => {
+    globalAudioPlayer.pause();
+    viewerContainer.style.display = 'none';
+    document.getElementById('audio-toolbar').style.display = 'none';
+    assessmentSelectionContainer.style.display = 'block';
+    document.getElementById('back-to-menu-btn').style.display = 'none';
+    if (autoLoadAssessmentUrl) window.close(); // Close tab if direct preview
+  };
+
+  // Audio Controls
+  document.getElementById('play-pause-btn').onclick = togglePlayPause;
   document.getElementById('prev-btn').onclick = () => navigateChunk(-1);
   document.getElementById('next-btn').onclick = () => navigateChunk(1);
-  document.getElementById('play-pause-btn').onclick = togglePlayPause;
-  document.getElementById('skip-back-btn').onclick = () => skipTime(-10);
-  document.getElementById('skip-forward-btn').onclick = () => skipTime(10);
+  document.getElementById('skip-back-btn').onclick = () => { globalAudioPlayer.currentTime -= 10; };
+  document.getElementById('skip-forward-btn').onclick = () => { globalAudioPlayer.currentTime += 10; };
 
-  // Timeline scrubbing
-  const timelineSlider = document.getElementById('timeline-slider');
-  if (timelineSlider) timelineSlider.oninput = scrubTimeline;
-
-  // Volume control
-  const volumeSlider = document.getElementById('volume-slider');
-  if (volumeSlider) {
-    volumeSlider.oninput = handleVolumeChange;
-    // Set initial volume
-    updateVolumeIcon(0.8); // Default 80%
-  }
-
-  // Speed preset buttons (removed, now using slider)
-
-  // Speed slider (new popup slider)
-  const speedSliderPopup = document.getElementById('speed-slider-popup');
-  if (speedSliderPopup) {
-    speedSliderPopup.oninput = (e) => {
-      setPlaybackSpeed(parseFloat(e.target.value));
-    };
-  }
-
-  // Speed button (new Tailwind UI)
-  const speedBtn = document.getElementById('speed-btn');
-  if (speedBtn) {
-    speedBtn.onclick = (e) => {
-      e.stopPropagation();
-      toggleSpeedMenu();
-    };
-  }
-
-  // Line spacing slider
-  const lineSpacingSlider = document.getElementById('line-spacing-slider-popup');
-  if (lineSpacingSlider) {
-    lineSpacingSlider.oninput = (e) => {
-      setLineSpacing(parseFloat(e.target.value));
-    };
-  }
-
-  // Line spacing button
-  const lineSpacingBtn = document.getElementById('line-spacing-btn');
-  if (lineSpacingBtn) {
-    lineSpacingBtn.onclick = (e) => {
-      e.stopPropagation();
-      toggleLineSpacingMenu();
-    };
-  }
-
-  // Chunk list button (new Tailwind UI)
-  const chunkListBtn = document.getElementById('chunk-list-btn');
-  if (chunkListBtn) {
-    chunkListBtn.onclick = (e) => {
-      e.stopPropagation();
-      toggleChunkMenu();
-    };
-  }
-
-  // Feature toggles
-  const focusBtn = document.getElementById('focus-btn');
-  if (focusBtn) focusBtn.onclick = toggleFocusMode;
-
-  const loopBtn = document.getElementById('loop-btn');
-  if (loopBtn) loopBtn.onclick = toggleLoop;
-
-  // Toggle secondary panel
-  const toggleSecBtn = document.getElementById('toggle-secondary-btn');
-  if (toggleSecBtn) toggleSecBtn.onclick = toggleSecondaryPanel;
-
-  // Keyboard shortcuts
-  document.addEventListener('keydown', handleKeyboard);
-
-  // Audio event listeners
-  globalAudioPlayer.ontimeupdate = () => {
-    updateTimeline();
-    updateProgressBar();
+  // Tools
+  document.getElementById('focus-btn').onclick = () => {
+    isFocusMode = !isFocusMode;
+    document.body.classList.toggle('focus-mode', isFocusMode);
+    document.getElementById('focus-btn').classList.toggle('active', isFocusMode);
   };
-  globalAudioPlayer.onended = handleAudioEnd;
-  globalAudioPlayer.onloadedmetadata = updateDuration;
 
-  // Close dropdowns when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#speed-btn') && !e.target.closest('#speed-popup')) {
-      const speedPopup = document.getElementById('speed-popup');
-      if (speedPopup) speedPopup.classList.add('hidden');
-    }
-    if (!e.target.closest('#line-spacing-btn') && !e.target.closest('#line-spacing-popup')) {
-      const lineSpacingPopup = document.getElementById('line-spacing-popup');
-      if (lineSpacingPopup) lineSpacingPopup.classList.add('hidden');
-    }
-    if (!e.target.closest('#chunk-list-btn') && !e.target.closest('#chunk-popup')) {
-      const chunkPopup = document.getElementById('chunk-popup');
-      if (chunkPopup) chunkPopup.classList.add('hidden');
-    }
-  });
-
-  // Add click listeners to text chunks for direct playback
-  const htmlAssessmentContainer = document.querySelector('.html-assessment-container');
-  if (htmlAssessmentContainer) {
-    htmlAssessmentContainer.addEventListener('click', (event) => {
-      let targetElement = event.target;
-      // Traverse up the DOM tree to find an element with data-chunk-index
-      while (targetElement && targetElement !== htmlAssessmentContainer) {
-        const chunkIndex = targetElement.getAttribute('data-chunk-index');
-        if (chunkIndex !== null) {
-          event.stopPropagation(); // Prevent other click handlers from firing
-          jumpToChunk(parseInt(chunkIndex, 10));
-          return;
-        }
-        targetElement = targetElement.parentElement;
-      }
-    });
-  }
-}
-
-let isSecondaryPanelExpanded = false;
-
-function toggleSecondaryPanel() {
-  const panel = document.getElementById('toolbar-secondary');
-  const toggleBtn = document.getElementById('toggle-secondary-btn');
-  const expandIcon = toggleBtn.querySelector('.expand-icon');
-  const collapseIcon = toggleBtn.querySelector('.collapse-icon');
-
-  isSecondaryPanelExpanded = !isSecondaryPanelExpanded;
-
-  if (isSecondaryPanelExpanded) {
-    panel.classList.add('expanded');
-    expandIcon.style.display = 'none';
-    collapseIcon.style.display = 'block';
-    toggleBtn.setAttribute('aria-expanded', 'true');
-    toggleBtn.title = 'Hide additional controls';
-  } else {
-    panel.classList.remove('expanded');
-    expandIcon.style.display = 'block';
-    collapseIcon.style.display = 'none';
-    toggleBtn.setAttribute('aria-expanded', 'false');
-    toggleBtn.title = 'Show more controls';
-  }
-}
-
-function setPlaybackSpeed(speed) {
-  currentPlaybackRate = Math.max(0.5, Math.min(2.0, speed));
-  globalAudioPlayer.playbackRate = currentPlaybackRate;
-  updateToolbarDisplay();
-
-  // Update speed display in popup
-  const speedDisplay = document.getElementById('speed-display');
-  if (speedDisplay) {
-    speedDisplay.textContent = `${currentPlaybackRate.toFixed(2)}x`;
-  }
-
-  // Update slider position
-  const speedSliderPopup = document.getElementById('speed-slider-popup');
-  if (speedSliderPopup) {
-    speedSliderPopup.value = currentPlaybackRate;
-  }
-}
-
-function toggleSpeedMenu() {
-  const popup = document.getElementById('speed-popup');
-  const chunkPopup = document.getElementById('chunk-popup');
-  const speedBtn = document.getElementById('speed-btn');
-
-  // Close chunk menu if open
-  if (chunkPopup) chunkPopup.classList.add('hidden');
-
-  // Toggle speed menu
-  if (popup) {
-    const isHidden = popup.classList.contains('hidden');
-    popup.classList.toggle('hidden');
-
-    // Position popup if showing
-    if (isHidden && speedBtn) {
-      positionPopup(speedBtn, popup);
-    }
-  }
-}
-
-function toggleLineSpacingMenu() {
-  const popup = document.getElementById('line-spacing-popup');
-  const speedPopup = document.getElementById('speed-popup');
-  const chunkPopup = document.getElementById('chunk-popup');
-  const lineSpacingBtn = document.getElementById('line-spacing-btn');
-
-  // Close other menus if open
-  if (speedPopup) speedPopup.classList.add('hidden');
-  if (chunkPopup) chunkPopup.classList.add('hidden');
-
-  // Toggle line spacing menu
-  if (popup) {
-    const isHidden = popup.classList.contains('hidden');
-    popup.classList.toggle('hidden');
-
-    // Position popup if showing
-    if (isHidden && lineSpacingBtn) {
-      positionPopup(lineSpacingBtn, popup);
-    }
-  }
-}
-
-function setLineSpacing(spacing) {
-  currentLineSpacing = Math.max(1.0, Math.min(3.0, spacing));
-
-  // Apply to HTML container
-  const container = document.querySelector('.html-assessment-container');
-  if (container) {
-    container.style.setProperty('--line-height', currentLineSpacing);
-  }
-
-  // Update display in popup
-  const display = document.getElementById('line-spacing-display');
-  if (display) {
-    display.textContent = currentLineSpacing.toFixed(1);
-  }
-
-  // Update slider position
-  const slider = document.getElementById('line-spacing-slider-popup');
-  if (slider) {
-    slider.value = currentLineSpacing;
-  }
-
-  // Update button title
-  const btn = document.getElementById('line-spacing-btn');
-  if (btn) {
-    btn.title = `Line Spacing (${currentLineSpacing.toFixed(1)})`;
-  }
-}
-
-function toggleChunkMenu() {
-  const popup = document.getElementById('chunk-popup');
-  const speedPopup = document.getElementById('speed-popup');
-  const chunkBtn = document.getElementById('chunk-list-btn');
-
-  // Close speed menu if open
-  if (speedPopup) speedPopup.classList.add('hidden');
-
-  // Toggle chunk menu
-  if (popup) {
-    const isHidden = popup.classList.contains('hidden');
-    popup.classList.toggle('hidden');
-
-    // Position popup if showing
-    if (isHidden && chunkBtn) {
-      positionPopup(chunkBtn, popup);
-    }
-  }
-}
-
-function navigateChunk(direction) {
-  const newIndex = currentChunkIndex + direction;
-  if (newIndex >= 0 && newIndex < serverChunks.length) {
-    jumpToChunk(newIndex);
-  }
-}
-
-function jumpToChunk(index) {
-  currentChunkIndex = index;
-  const chunk = serverChunks[index];
-  playAudio(chunk, index);
-
-  // Close all menus
-  const chunkPopup = document.getElementById('chunk-popup');
-  if (chunkPopup) chunkPopup.classList.add('hidden');
-
-  const speedPopup = document.getElementById('speed-popup');
-  if (speedPopup) speedPopup.classList.add('hidden');
-}
-
-function togglePlayPause() {
-  if (globalAudioPlayer.paused) {
-    if (!currentlyPlayingChunk) {
-      jumpToChunk(currentChunkIndex);
-    } else {
-      globalAudioPlayer.play();
-    }
-    updatePlayPauseButton(true);
-  } else {
-    globalAudioPlayer.pause();
-    updatePlayPauseButton(false);
-  }
-}
-
-function skipTime(seconds) {
-  // Only skip if audio is loaded and has duration
-  if (!globalAudioPlayer.duration) {
-    return;
-  }
-
-  // Calculate new time and clamp to valid range
-  const newTime = Math.max(0, Math.min(
-    globalAudioPlayer.currentTime + seconds,
-    globalAudioPlayer.duration
-  ));
-
-  // Update audio position
-  globalAudioPlayer.currentTime = newTime;
-
-  // Update UI immediately
-  updateTimeline();
-  updateProgressBar();
-}
-
-function scrubTimeline() {
-  const timeline = document.getElementById('timeline-slider');
-  if (timeline && globalAudioPlayer.duration) {
-    const seekTime = (timeline.value / 100) * globalAudioPlayer.duration;
-    globalAudioPlayer.currentTime = seekTime;
-  }
-}
-
-function updateTimeline() {
-  if (globalAudioPlayer.duration) {
-    const progress = (globalAudioPlayer.currentTime / globalAudioPlayer.duration) * 100;
-    const timeline = document.getElementById('timeline-slider');
-    if (timeline) timeline.value = progress;
-
-    const currentTimeEl = document.getElementById('current-time');
-    if (currentTimeEl) currentTimeEl.textContent = formatTime(globalAudioPlayer.currentTime);
-  }
-}
-
-function updateDuration() {
-  document.getElementById('total-time').textContent = formatTime(globalAudioPlayer.duration);
-}
-
-function formatTime(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-function handleAudioEnd() {
-  updatePlayPauseButton(false);
-
-  if (isLooping) {
-    globalAudioPlayer.currentTime = 0;
-    globalAudioPlayer.play();
-    updatePlayPauseButton(true);
-  } else {
-    // Audio finished - stop playback (do not auto-advance)
-    currentlyPlayingChunk = null;
-    console.log('Audio chunk finished. Press play to replay, or use next/previous to navigate.');
-  }
-}
-
-function toggleLoop() {
-  isLooping = !isLooping;
-  const loopBtn = document.getElementById('loop-btn');
-  loopBtn.classList.toggle('active', isLooping);
-  loopBtn.setAttribute('aria-pressed', isLooping.toString());
-}
-
-function toggleTitleDropdown() {
-  const dropdown = document.getElementById('title-dropdown');
-  dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-}
-
-/**
- * Highlights the HTML elements corresponding to the current audio chunk.
- * Uses data-chunk-index assigned by mapIdsToChunks.
- * @param {number} chunkIndex Index of the chunk to highlight
- */
-function highlightChunkInHTML(chunkIndex) {
-  // Remove previous highlights
-  document.querySelectorAll('.highlighted-element').forEach(el => {
-    el.classList.remove('highlighted-element');
-  });
-  document.querySelectorAll('.has-highlight').forEach(el => {
-    el.classList.remove('has-highlight');
-  });
-
-  console.log(`=== HTML HIGHLIGHTING Chunk ${chunkIndex} ===`);
-
-  // Find elements mapped to this chunk
-  const elements = document.querySelectorAll(`[data-chunk-index="${chunkIndex}"]`);
+  document.getElementById('speed-btn').onclick = (e) => {
+      e.stopPropagation();
+      const popup = document.getElementById('speed-popup');
+      popup.classList.toggle('visible');
+      // Position popup relative to button
+      const rect = e.currentTarget.getBoundingClientRect();
+      popup.style.left = (rect.left - 70) + 'px'; // Adjust as needed
+  };
   
-  if (elements.length === 0) {
-    console.log(`No elements found for chunk ${chunkIndex}`);
-    return;
-  }
+  // Speed Slider
+  document.getElementById('speed-slider-popup').oninput = (e) => {
+      currentPlaybackRate = parseFloat(e.target.value);
+      globalAudioPlayer.playbackRate = currentPlaybackRate;
+      document.getElementById('speed-display').textContent = currentPlaybackRate + 'x';
+  };
 
-  // Highlight elements
-  elements.forEach(el => {
-    el.classList.add('highlighted-element');
-    
-    // Add has-highlight to parents for Focus Mode
-    let parent = el.parentElement;
-    while (parent && !parent.classList.contains('html-assessment-container')) {
-      parent.classList.add('has-highlight');
-      parent = parent.parentElement;
-    }
+  // Hide popups on click outside
+  document.addEventListener('click', (e) => {
+      if (!e.target.closest('#speed-popup') && !e.target.closest('#speed-btn')) {
+          document.getElementById('speed-popup').classList.remove('visible');
+      }
   });
 
-  // Scroll to the first element
-  if (elements.length > 0 && !isProgrammaticScroll) {
-    isProgrammaticScroll = true;
-    const firstEl = elements[0];
-    const rect = firstEl.getBoundingClientRect();
-    const offset = window.innerHeight * 0.3; // 30% from top
-    
-    window.scrollTo({
-      top: window.scrollY + rect.top - offset,
-      behavior: 'smooth'
-    });
+  // Timeline Slider
+  const slider = document.getElementById('timeline-slider');
+  slider.oninput = () => {
+      const time = (slider.value / 100) * globalAudioPlayer.duration;
+      globalAudioPlayer.currentTime = time;
+  };
 
-    // Clear flag after scroll animation
-    setTimeout(() => {
-      isProgrammaticScroll = false;
-    }, 800);
-  }
+  // Audio Events
+  globalAudioPlayer.ontimeupdate = () => {
+      const pct = (globalAudioPlayer.currentTime / globalAudioPlayer.duration) * 100;
+      if (!isNaN(pct)) slider.value = pct;
+      
+      // Time Display
+      const format = (s) => {
+          const m = Math.floor(s / 60);
+          const sec = Math.floor(s % 60);
+          return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+      };
+      document.getElementById('current-time').textContent = format(globalAudioPlayer.currentTime);
+      if (globalAudioPlayer.duration) document.getElementById('total-time').textContent = format(globalAudioPlayer.duration);
+  };
+  
+  globalAudioPlayer.onended = () => navigateChunk(1);
 }
 
-
-/**
- * Handles volume slider changes.
- * @param {Event} e - Input event from volume slider
- */
-function handleVolumeChange(e) {
-  const volume = parseInt(e.target.value) / 100;
-  globalAudioPlayer.volume = volume;
-  updateVolumeIcon(volume);
+function onAssessmentLoadError(error) {
+    const msg = typeof error === 'string' ? error : 'An error occurred.';
+    alert(msg);
+    console.error(error);
 }
 
-/**
- * Updates the volume icon based on current volume level.
- * @param {number} volume - Volume level (0.0 to 1.0)
- */
-function updateVolumeIcon(volume) {
-  const icon = document.getElementById('volume-icon');
-  if (!icon) return;
-
-  if (volume === 0) {
-    icon.textContent = 'volume_off';
-  } else if (volume < 0.3) {
-    icon.textContent = 'volume_mute';
-  } else if (volume < 0.7) {
-    icon.textContent = 'volume_down';
-  } else {
-    icon.textContent = 'volume_up';
-  }
+function onPdfLoadError(error) {
+    if (currentLoadingOverlay) currentLoadingOverlay.remove();
+    if (currentLoadingCard) {
+        currentLoadingCard.style.opacity = '1';
+        currentLoadingCard.style.pointerEvents = 'auto';
+    }
+    alert('Failed to load assessment: ' + error);
 }
 
-/**
- * Positions a popup above a button, preventing off-screen overflow.
- * @param {HTMLElement} button - The button triggering the popup
- * @param {HTMLElement} popup - The popup element to position
- */
-function positionPopup(button, popup) {
-  const btnRect = button.getBoundingClientRect();
-  const popupRect = popup.getBoundingClientRect();
-
-  // Center the popup horizontally with the button
-  let left = btnRect.left + (btnRect.width / 2) - (popupRect.width / 2);
-
-  // Position popup above the button
-  const top = btnRect.top - popupRect.height - 10; // 10px spacing
-
-  // Prevent popup from going off-screen
-  if (left < 10) left = 10;
-  if (left + popupRect.width > window.innerWidth - 10) {
-    left = window.innerWidth - popupRect.width - 10;
-  }
-
-  popup.style.left = `${left}px`;
-  popup.style.top = `${top}px`;
-  popup.style.position = 'fixed';
-  popup.style.bottom = 'auto'; // Override Tailwind's 'bottom-0'
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
-function toggleFocusMode() {
-  isFocusMode = !isFocusMode;
-  document.body.classList.toggle('focus-mode', isFocusMode);
-
-  const focusBtn = document.getElementById('focus-btn');
-  if (focusBtn) {
-    focusBtn.classList.toggle('active', isFocusMode);
-    focusBtn.setAttribute('aria-pressed', isFocusMode.toString());
-  }
-}
-
-function handleKeyboard(event) {
-  // Don't interfere if user is typing in input fields
-  if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-    return;
-  }
-
-  // Prevent default only for our shortcuts
-  switch (event.key) {
-    case ' ': // Spacebar
-    case 'k':
-      event.preventDefault();
-      togglePlayPause();
-      break;
-    case 'ArrowLeft':
-      event.preventDefault();
-      navigateChunk(-1);
-      break;
-    case 'ArrowRight':
-      event.preventDefault();
-      navigateChunk(1);
-      break;
-    case 'f':
-      event.preventDefault();
-      toggleFocusMode();
-      break;
-    case 'l':
-      event.preventDefault();
-      toggleLoop();
-      break;
-    case '?':
-      event.preventDefault();
-      toggleKeyboardHints();
-      break;
-  }
-}
-
-function toggleKeyboardHints() {
-  const hints = document.getElementById('keyboard-hints');
-  hints.style.display = hints.style.display === 'none' ? 'block' : 'none';
-}
-
+// --- BOOTSTRAP ---
 document.addEventListener('DOMContentLoaded', function() {
   const user = <?!= JSON.stringify(user) ?>;
-  initializePasswordlessStudentView(user);
+  let targetUrl = null;
+  try {
+    targetUrl = '<?!= targetAssessmentUrl ?>';
+    if (targetUrl === 'null' || targetUrl === '') targetUrl = null;
+  } catch (e) {}
+  
+  initializePasswordlessStudentView(user, targetUrl);
 });
 </script>
 </body>

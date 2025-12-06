@@ -2000,7 +2000,8 @@ function sanitizeHtml(html) {
   // 12. Assign unique IDs to all block elements for precise TTS mapping
   // This enables the frontend to highlight exactly what is being read
   let blockCounter = 0;
-  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th', 'div', 'blockquote'];
+  // EXCLUDE div and blockquote to avoid nested tag parsing issues with simple regex
+  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th'];
   const blockRegex = new RegExp(`<(${blockTags.join('|')})([^>]*)>`, 'gi');
 
   sanitized = sanitized.replace(blockRegex, (match, tag, attrs) => {
@@ -2025,7 +2026,7 @@ function parseHtmlToChunks(html) {
   // Extract all blocks with their text and ID
   // Regex to find <tag ... id="sra-block-N" ...>content</tag>
   // We use a simplified regex assuming well-formed HTML from sanitizeHtml
-  const blockPattern = /<(p|h[1-6]|li|td|th|div|blockquote)[^>]*id="(sra-block-\d+)"[^>]*>([\s\S]*?)<\/\1>/gi;
+  const blockPattern = /<(p|h[1-6]|li|td|th)[^>]*id="(sra-block-\d+)"[^>]*>([\s\S]*?)<\/\1>/gi;
   
   let match;
   const blocks = [];
@@ -2173,7 +2174,8 @@ function extractTextFromFile(fileId) {
       Drive.Files.remove(tempDoc.id);
       const pdfChunks = text.split(CONSTANTS.CHUNK_SPLIT_REGEX)
                             .map(chunk => chunk.trim())
-                            .filter(chunk => chunk);
+                            .filter(chunk => chunk)
+                            .map(chunkText => ({ text: chunkText, ids: [] })); // Wrap in object
       Logger.log(`✓ Extracted ${pdfChunks.length} chunks from PDF via OCR`);
       return pdfChunks;
     }
@@ -2456,6 +2458,22 @@ function deleteAssessmentRow(sessionToken, rowIndex) {
     const actualRow = rowIndex + 1;
     if (actualRow < 2 || actualRow > sheet.getLastRow()) {
       return { error: 'Invalid row index.' };
+    }
+
+    // 1. Get File URL to trash the file (prevent re-discovery)
+    const pdfUrl = sheet.getRange(actualRow, CONSTANTS.COL.PDF_URL + 1).getValue();
+    
+    if (pdfUrl) {
+      try {
+        const fileId = getFileIdFromUrl(pdfUrl);
+        if (fileId) {
+          DriveApp.getFileById(fileId).setTrashed(true);
+          Logger.log(`Trashed source file for row ${rowIndex} (ID: ${fileId})`);
+        }
+      } catch (fileError) {
+        Logger.log(`Warning: Could not trash file for row ${rowIndex}: ${fileError.toString()}`);
+        // Continue with row deletion even if file trash fails
+      }
     }
 
     sheet.deleteRow(actualRow);
@@ -2843,6 +2861,8 @@ function doGet(e) {
        user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN)) {
     const template = HtmlService.createTemplateFromFile('student');
     template.user = user;
+    // Pass the specific assessment URL if provided (for direct preview from table)
+    template.targetAssessmentUrl = e.parameter.assessmentUrl || null;
     return template.evaluate().setTitle('Student Preview').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
   }
 
@@ -3350,7 +3370,10 @@ function getAssessmentPdf(email, password, assessmentUrl) {
           Logger.log(`Serving assessment: ${fileName} (${mimeType}) to ${email}`);
 
           // Generate session token for secure audio access
-          const sessionToken = generateSessionToken(cleanEmail, pdfUrl);
+          // If staff, use their role to bypass list validation. If student, use pdfUrl to bind token to assessment.
+          const sessionToken = isStaff ? 
+            generateSessionToken(cleanEmail, user.userType) : 
+            generateSessionToken(cleanEmail, pdfUrl);
 
           // Convert all files (PDF, Docs, Word) to HTML with embedded images
           Logger.log('→ Converting to HTML for native rendering');
