@@ -2016,16 +2016,15 @@ function sanitizeHtml(html) {
 
 /**
  * Parses HTML with 'sra-block-N' IDs into structured TTS chunks.
- * Groups questions with their answer choices, and isolates paragraphs.
+ * Uses improved logic to group questions with answers and merge flowing text.
  * @param {string} html The sanitized HTML with IDs
  * @returns {Array<{text: string, ids: string[]}>} Array of chunk objects
  */
 function parseHtmlToChunks(html) {
   const chunks = [];
   
-  // Extract all blocks with their text and ID
-  // Regex to find <tag ... id="sra-block-N" ...>content</tag>
-  // We use a simplified regex assuming well-formed HTML from sanitizeHtml
+  // Extract all blocks with their text and ID using regex
+  // Only target the specific tags we added IDs to in sanitizeHtml
   const blockPattern = /<(p|h[1-6]|li|td|th)[^>]*id="(sra-block-\d+)"[^>]*>([\s\S]*?)<\/\1>/gi;
   
   let match;
@@ -2044,7 +2043,7 @@ function parseHtmlToChunks(html) {
       .trim();
       
     if (plainText) {
-      blocks.push({ id, tag, text: plainText, raw: content });
+      blocks.push({ id, tag, text: plainText });
     }
   }
   
@@ -2066,70 +2065,67 @@ function parseHtmlToChunks(html) {
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
     
-    // LOGIC: when to break?
+    // --- Detection Logic ---
     
-    // 1. Detect if this block starts with a numbering pattern (Question)
-    // Matches: "1.", "1)", "Q1.", "(1)" etc.
+    // 1. Question Start: "1.", "1)", "Q1", "(1)"
     const isQuestionStart = /^(?:\d+|Q\d+)[.)\]]/.test(block.text);
     
-    // 2. Detect if this block starts with an answer letter pattern
-    // Matches: "a.", "A)", "(a)" etc.
+    // 2. Answer Option: "a.", "A)", "(a)"
     const isAnswerOption = /^(?:\(?[a-zA-Z][.)]|[a-zA-Z]\.)\s/.test(block.text);
     
-    // 3. Detect if this block is a Header
+    // 3. Header
     const isHeader = /^h[1-6]/.test(block.tag);
     
-    // DECISION MATRIX:
-    
-    if (isQuestionStart) {
-      // Always start a new chunk for a question
-      commitChunk();
+    // 4. Metadata/Directions (e.g., "Directions:", "Read the following...")
+    const isDirections = /^(directions|instructions|read|note):/i.test(block.text);
+
+    // --- Grouping Decision Matrix ---
+
+    if (currentChunk.text === '') {
+      // Start of new chunk
       currentChunk.text = block.text;
       currentChunk.ids.push(block.id);
     } 
-    else if (isAnswerOption) {
-      // If it's an answer, append to current chunk (assuming it belongs to prev question)
-      // BUT if current chunk is empty, just start it.
-      if (currentChunk.text) {
-         currentChunk.text += '\n' + block.text;
-         currentChunk.ids.push(block.id);
-      } else {
-         currentChunk.text = block.text;
-         currentChunk.ids.push(block.id);
-      }
-    }
-    else if (isHeader) {
-      // Headers usually stand alone or start a section
+    else if (isQuestionStart || isHeader) {
+      // Rule: Questions and Headers usually start a NEW thought/context
+      // Priority 1: Force break before a new question or header
       commitChunk();
       currentChunk.text = block.text;
       currentChunk.ids.push(block.id);
-      commitChunk(); // Isolate header
+    }
+    else if (isDirections) {
+      // Rule: Directions usually precede content. 
+      commitChunk();
+      currentChunk.text = block.text;
+      currentChunk.ids.push(block.id);
+    }
+    else if (isAnswerOption) {
+      // Rule: Merge answer options with the preceding chunk (likely the question)
+      // Only if it wasn't a new question (handled above)
+      currentChunk.text += '\n' + block.text;
+      currentChunk.ids.push(block.id);
     }
     else {
-      // Regular paragraph/text
-      // If the previous chunk was a question/answer group, we should probably break
-      // to separate the "Question Block" from the next "Passage Block"
+      // Rule: Standard Paragraph / Text Continuation
       
-      // Check if current chunk looks like a question/answer group
-      const currentIsQuestionGroup = /^(?:\d+|Q\d+)[.)\]]/.test(currentChunk.text);
+      // Check if previous chunk ended with a sentence terminator
+      const sentenceEndRegex = /[.!?]"?$/;
+      const previousEndedSentence = sentenceEndRegex.test(currentChunk.text.trim());
       
-      if (currentIsQuestionGroup) {
-        commitChunk();
-        currentChunk.text = block.text;
-        currentChunk.ids.push(block.id);
+      // Check length of previous chunk
+      const isPreviousShort = currentChunk.text.length < 150;
+      
+      // Check if current block is a continuation (sentence fragment flow)
+      // or if previous was just a short intro line
+      if (!previousEndedSentence || isPreviousShort) {
+         // Merge for flow
+         currentChunk.text += ' ' + block.text; // Use space for flowing text
+         currentChunk.ids.push(block.id);
       } else {
-        // It's likely a continuation of a passage
-        // We can group paragraphs together, but for TTS, smaller chunks (per paragraph) are often better
-        // unless they are very short.
-        // Let's Group them if the previous one was short (< 50 chars)
-        if (currentChunk.text.length > 0 && currentChunk.text.length < 50) {
-           currentChunk.text += '\n' + block.text;
-           currentChunk.ids.push(block.id);
-        } else {
-           commitChunk();
-           currentChunk.text = block.text;
-           currentChunk.ids.push(block.id);
-        }
+         // Previous was a complete thought and long enough -> Start new
+         commitChunk();
+         currentChunk.text = block.text;
+         currentChunk.ids.push(block.id);
       }
     }
   }

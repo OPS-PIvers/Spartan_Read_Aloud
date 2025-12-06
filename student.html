@@ -541,7 +541,7 @@
       <div class="toolbar-tools">
         <button id="speed-btn" class="tool-btn" title="Playback Speed"><span class="material-icons" style="font-size:20px;">speed</span></button>
         <button id="focus-btn" class="tool-btn" title="Focus Mode"><span class="material-icons" style="font-size:20px;">center_focus_strong</span></button>
-        <!-- Volume handled via simple click for now or system volume -->
+        <button id="line-spacing-btn" class="tool-btn" title="Line Spacing"><span class="material-icons" style="font-size:20px;">format_line_spacing</span></button>
       </div>
     </div>
   </div>
@@ -550,11 +550,21 @@
   <div id="speed-popup" class="popup-menu">
     <div class="popup-header">Playback Speed</div>
     <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-        <span style="font-size:12px; color:var(--gray-500)">0.5x</span>
-        <span id="speed-display" style="font-size:12px; font-weight:bold; color:var(--primary-blue)">0.9x</span>
-        <span style="font-size:12px; color:var(--gray-500)">2.0x</span>
+        <span style="font-size:12px; color:var(--gray-500)">50%</span>
+        <span id="speed-display" style="font-size:12px; font-weight:bold; color:var(--primary-blue)">90%</span>
+        <span style="font-size:12px; color:var(--gray-500)">200%</span>
     </div>
-    <input type="range" id="speed-slider-popup" min="0.5" max="2.0" step="0.1" value="0.9" class="slider-track-input">
+    <input type="range" id="speed-slider-popup" min="0.5" max="2.0" step="0.05" value="0.9" class="slider-track-input">
+  </div>
+
+  <div id="line-spacing-popup" class="popup-menu">
+    <div class="popup-header">Line Spacing</div>
+    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <span style="font-size:12px; color:var(--gray-500)">1.0</span>
+        <span id="line-spacing-display" style="font-size:12px; font-weight:bold; color:var(--primary-blue)">2.0</span>
+        <span style="font-size:12px; color:var(--gray-500)">3.0</span>
+    </div>
+    <input type="range" id="line-spacing-slider-popup" min="1.0" max="3.0" step="0.1" value="2.0" class="slider-track-input">
   </div>
 
 <script>
@@ -748,6 +758,7 @@ function onAssessmentLoaded(result) {
 
   renderHtmlAssessment(result.assessmentHtml);
   initializeAudioToolbar();
+  setLineSpacing(currentLineSpacing); // Apply default line spacing
   setupEventListeners();
 
   if (chunksLoaded < totalChunks) {
@@ -1019,26 +1030,58 @@ function setupEventListeners() {
     document.getElementById('focus-btn').classList.toggle('active', isFocusMode);
   };
 
+  // Speed button click handler
   document.getElementById('speed-btn').onclick = (e) => {
       e.stopPropagation();
       const popup = document.getElementById('speed-popup');
       popup.classList.toggle('visible');
-      // Position popup relative to button
-      const rect = e.currentTarget.getBoundingClientRect();
-      popup.style.left = (rect.left - 70) + 'px'; // Adjust as needed
+      // Ensure other popups are closed
+      document.getElementById('line-spacing-popup').classList.remove('visible');
+      // Position popup dynamically only if it's now visible
+      if (popup.classList.contains('visible')) {
+          positionPopup(e.currentTarget, popup);
+      }
   };
   
-  // Speed Slider
+  // Speed Slider input handler
   document.getElementById('speed-slider-popup').oninput = (e) => {
       currentPlaybackRate = parseFloat(e.target.value);
       globalAudioPlayer.playbackRate = currentPlaybackRate;
-      document.getElementById('speed-display').textContent = currentPlaybackRate + 'x';
+      document.getElementById('speed-display').textContent = Math.round(currentPlaybackRate * 100) + '%';
+  };
+
+  // Line Spacing button click handler
+  document.getElementById('line-spacing-btn').onclick = (e) => {
+      e.stopPropagation();
+      const popup = document.getElementById('line-spacing-popup');
+      popup.classList.toggle('visible');
+      // Ensure other popups are closed
+      document.getElementById('speed-popup').classList.remove('visible');
+      // Position popup dynamically only if it's now visible
+      if (popup.classList.contains('visible')) {
+          positionPopup(e.currentTarget, popup);
+      }
+  };
+
+  // Line Spacing Slider input handler
+  document.getElementById('line-spacing-slider-popup').oninput = (e) => {
+      currentLineSpacing = parseFloat(e.target.value);
+      setLineSpacing(currentLineSpacing);
+      document.getElementById('line-spacing-display').textContent = currentLineSpacing.toFixed(1);
   };
 
   // Hide popups on click outside
   document.addEventListener('click', (e) => {
-      if (!e.target.closest('#speed-popup') && !e.target.closest('#speed-btn')) {
-          document.getElementById('speed-popup').classList.remove('visible');
+      const speedBtn = document.getElementById('speed-btn');
+      const speedPopup = document.getElementById('speed-popup');
+      const lineSpacingBtn = document.getElementById('line-spacing-btn');
+      const lineSpacingPopup = document.getElementById('line-spacing-popup');
+
+      if (speedPopup && !e.target.closest('#speed-popup') && !e.target.closest('#speed-btn')) {
+          speedPopup.classList.remove('visible');
+      }
+      if (lineSpacingPopup && !e.target.closest('#line-spacing-popup') && !e.target.closest('#line-spacing-btn')) {
+          lineSpacingPopup.classList.remove('visible');
       }
   });
 
@@ -1067,39 +1110,40 @@ function setupEventListeners() {
   globalAudioPlayer.onended = () => navigateChunk(1);
 }
 
+/**
+ * Positions a popup menu relative to its trigger button.
+ * @param {HTMLElement} triggerBtn The button that triggers the popup.
+ * @param {HTMLElement} popup The popup element.
+ */
+function positionPopup(triggerBtn, popup) {
+    if (!triggerBtn || !popup) return;
+    const btnRect = triggerBtn.getBoundingClientRect();
+    popup.style.left = (btnRect.left + btnRect.width / 2 - popup.offsetWidth / 2) + 'px';
+    popup.style.bottom = (window.innerHeight - btnRect.top + 10) + 'px'; // 10px above button
+    
+    // Ensure popup is within viewport
+    if (parseFloat(popup.style.left) < 10) popup.style.left = '10px';
+    if (parseFloat(popup.style.left) + popup.offsetWidth > window.innerWidth - 10) {
+        popup.style.left = (window.innerWidth - popup.offsetWidth - 10) + 'px';
+    }
+}
+
+/**
+ * Sets the line spacing for the assessment content.
+ * @param {number} spacingValue The line height value (e.g., 1.5, 2.0).
+ */
+function setLineSpacing(spacingValue) {
+    const container = document.querySelector('.html-assessment-container');
+    if (container) {
+        container.style.setProperty('--line-height', spacingValue);
+    }
+}
+
 function onAssessmentLoadError(error) {
     const msg = typeof error === 'string' ? error : 'An error occurred.';
     alert(msg);
     console.error(error);
 }
-
-function onPdfLoadError(error) {
-    if (currentLoadingOverlay) currentLoadingOverlay.remove();
-    if (currentLoadingCard) {
-        currentLoadingCard.style.opacity = '1';
-        currentLoadingCard.style.pointerEvents = 'auto';
-    }
-    alert('Failed to load assessment: ' + error);
-}
-
-function escapeHtml(text) {
-  if (!text) return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-// --- BOOTSTRAP ---
-document.addEventListener('DOMContentLoaded', function() {
-  const user = <?!= JSON.stringify(user) ?>;
-  let targetUrl = null;
-  try {
-    targetUrl = '<?!= targetAssessmentUrl ?>';
-    if (targetUrl === 'null' || targetUrl === '') targetUrl = null;
-  } catch (e) {}
-  
-  initializePasswordlessStudentView(user, targetUrl);
-});
 </script>
 </body>
 </html>
