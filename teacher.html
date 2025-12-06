@@ -768,7 +768,6 @@
     let adminToken = null;
     let currentUserRole = 'student';
     let assessmentList = [];
-    let webAppBaseUrl = '<?= ScriptApp.getService().getUrl() ?>';
 
     // --- INIT ---
     document.addEventListener('DOMContentLoaded', () => {
@@ -883,7 +882,7 @@
             <td><input class="table-edit-input" data-field="studentEmails" value="${escapeHtml(item.studentEmails)}" placeholder="--"></td>
             <td>
               <div class="action-group">
-                <a href="${webAppBaseUrl}?preview=true&assessmentUrl=${encodeURIComponent(item.pdfUrl)}" target="_blank" class="action-btn" title="Preview as Student" style="text-decoration: none;">
+                <a href="<?= ScriptApp.getService().getUrl() ?>?preview=true" target="_blank" class="action-btn" title="Preview as Student" style="text-decoration: none;">
                   <span class="material-icons" style="font-size:18px;">visibility</span>
                 </a>
                 <button class="action-btn" onclick="saveRow(${item.rowIndex})" title="Save">

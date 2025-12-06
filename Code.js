@@ -2865,6 +2865,7 @@ function doGet(e) {
       (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || 
        user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || 
        user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN)) {
+    Logger.log(`doGet: Entering student preview mode. Preview: ${e.parameter.preview}, Assessment URL: ${e.parameter.assessmentUrl}`);
     const template = HtmlService.createTemplateFromFile('student');
     template.user = user;
     // Pass the specific assessment URL if provided (for direct preview from table)

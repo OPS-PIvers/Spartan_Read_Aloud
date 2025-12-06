@@ -601,6 +601,7 @@ function initializePasswordlessStudentView(user, targetUrl) {
   console.log('initializePasswordlessStudentView called with:', user);
   storedEmail = user.email;
   autoLoadAssessmentUrl = targetUrl;
+  console.log('initializePasswordlessStudentView: autoLoadAssessmentUrl is:', autoLoadAssessmentUrl);
 
   // Initialize DOM element references
   pdfContainer = document.getElementById('pdf-container');
