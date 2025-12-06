@@ -1,1139 +1,1050 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <base target="_top">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Dashboard | Spartan Read Aloud</title>
+  
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
+
   <style>
-    html, body {
-      min-height: 100vh;
-      position: relative;
-      overscroll-behavior: none; /* Prevent bounce/rubber-band scrolling */
+    /* --- DESIGN SYSTEM (Orono Tech Brand) --- */
+    :root {
+      /* Palette */
+      --primary-blue: #2d3f89;
+      --primary-dark: #1d2a5d; /* Used for Header */
+      --primary-light: #4356a0;
+      --primary-lighter: #eaecf5; /* Backgrounds */
+      
+      --primary-red: #ad2122;
+      --red-dark: #7a1718;
+      --red-light: #fce8e6;
+      
+      --gray-900: #1a1a1a;
+      --gray-700: #4a4a4a;
+      --gray-500: #737373;
+      --gray-300: #d4d4d4;
+      --gray-100: #f5f5f5;
+      
+      --bg-app: #f8f9fc; /* Very subtle cool gray/blue */
+      --bg-surface: #ffffff;
+      
+      --success-green: #0f9d58;
+      --success-bg: #e6f4ea;
+      --warning-orange: #f59e0b;
+      --warning-bg: #fef3c7;
+      --processing-blue: #3b82f6;
+      --processing-bg: #eff6ff;
+
+      /* UI Variables */
+      --font-main: 'Lexend', sans-serif;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      
+      --shadow-subtle: 0 1px 2px 0 rgba(0,0,0,0.05);
+      --shadow-card: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+      --shadow-hover: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+      
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    /* --- GLOBAL STYLES --- */
+    * { box-sizing: border-box; outline: none; }
+    
     body {
-      font-family: 'Inter', sans-serif;
-      background-color: #f0f2f5;
+      font-family: var(--font-main);
+      background-color: var(--bg-app);
+      color: var(--gray-900);
+      margin: 0;
+      padding: 0; /* Reset for full-width header */
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* --- NAVIGATION BAR --- */
+    .app-header {
+      background-color: var(--primary-dark);
+      color: white;
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .app-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 600;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .app-brand .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative; /* Required for badge positioning */
+    }
+
+    /* Logo Icon Badge Style */
+    .logo-badge {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 14px;
+      height: 14px;
+      background: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    .app-user {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 14px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.9);
+    }
+
+    .logout-btn {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s var(--ease);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .logout-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    /* --- LAYOUT --- */
+    .main-content {
+      max-width: 1200px;
+      margin: 32px auto;
+      padding: 0 24px;
+      display: grid;
+      gap: 24px;
+      animation: fadeIn 0.5s var(--ease);
+    }
+
+    /* --- STATS GRID --- */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 24px;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-subtle);
+      border: 1px solid var(--gray-100);
       display: flex;
       flex-direction: column;
-      align-items: center;
-      margin: 0;
-      padding: 20px;
-      overscroll-behavior-y: none; /* Specifically prevent vertical bounce */
-      -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+      justify-content: center;
+      gap: 4px;
+      transition: transform 0.2s var(--ease);
+      position: relative;
+      overflow: hidden;
+      min-height: 120px;
     }
 
-    h1 {
-      color: #333;
-    }
-    
-    * {
-      box-sizing: border-box;
-    }
-    .dashboard-container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 20px;
+    .stat-card:hover { transform: translateY(-2px); }
+
+    .stat-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-500);
+      font-weight: 600;
+      position: relative;
+      z-index: 2;
     }
 
-    .dashboard-header {
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--primary-dark);
+      position: relative;
+      z-index: 2;
+    }
+
+    .stat-icon {
+      position: absolute;
+      right: -12px;
+      bottom: -16px;
+      font-size: 96px;
+      color: var(--primary-blue);
+      opacity: 0.1;
+      transform: rotate(-15deg);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* --- MAIN CARDS --- */
+    .card {
+      background: var(--bg-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      border: 1px solid rgba(0,0,0,0.03);
+      overflow: hidden;
+      transition: box-shadow 0.3s var(--ease);
+    }
+
+    .card:hover { box-shadow: var(--shadow-hover); }
+
+    .card-header {
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--gray-100);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 30px;
-    }
-
-    .dashboard-title {
-      margin: 0;
-      color: #1a73e8;
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-    }
-
-    .welcome-message {
-      color: #5f6368;
-      font-size: 14px;
-    }
-
-    #add-assessment-section.assessment-card {
-      background: white;
-      border-radius: 8px;
-      padding: 24px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      margin-bottom: 24px;
-      cursor: default;
-      transition: none;
-    }
-
-    #add-assessment-section.assessment-card:hover {
-      background: white;
-      border-color: transparent;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      transform: none;
-    }
-
-    #add-assessment-section.assessment-card:active {
-      transform: none;
-    }
-
-    .assessment-card {
-      background: white;
-      border-radius: 8px;
-      padding: 24px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      margin-bottom: 24px;
+      background: linear-gradient(to bottom, #ffffff, #fafafa);
     }
 
     .card-title {
-      margin-top: 0;
-      margin-bottom: 20px;
-      color: #202124;
-    }
-
-    .tab-toggle {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--primary-dark);
+      margin: 0;
       display: flex;
-      gap: 8px;
-      margin-bottom: 20px;
-      border-bottom: 2px solid #e8eaed;
+      align-items: center;
+      gap: 10px;
     }
 
-    .tab-button {
-      width: auto;
-      padding: 12px 20px;
+    .card-body {
+      padding: 32px;
+    }
+
+    /* --- MODERN TABS (Segmented Control) --- */
+    .segmented-control {
+      background: var(--gray-100);
+      padding: 4px;
+      border-radius: var(--radius-md);
+      display: inline-flex;
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .segment-btn {
+      padding: 8px 24px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--gray-500);
       background: transparent;
       border: none;
-      border-bottom: 3px solid transparent;
-      color: #5f6368;
-      font-weight: 500;
-      margin-bottom: -2px;
+      border-radius: var(--radius-sm);
       cursor: pointer;
+      position: relative;
+      z-index: 2;
+      transition: color 0.2s var(--ease);
     }
 
-    .tab-button.active {
-      border-bottom-color: #1a73e8;
-      color: #1a73e8;
+    .segment-btn.active {
+      color: var(--primary-blue);
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       font-weight: 600;
     }
 
     .tab-content {
       display: none;
+      animation: slideUp 0.3s var(--ease);
     }
+    .tab-content.active { display: block; }
 
-    .tab-content.active {
-      display: block;
-    }
-
-    .file-drop-zone {
-      border: 2px dashed #ccc;
-      border-radius: 8px;
+    /* --- UPLOAD ZONE --- */
+    .drop-zone {
+      border: 2px dashed var(--gray-300);
+      border-radius: var(--radius-md);
+      background: var(--bg-app);
       padding: 40px;
       text-align: center;
+      transition: all 0.2s var(--ease);
+      cursor: pointer;
     }
 
-    .file-drop-zone.dragover {
-      background-color: #f8f9fa;
-      border-color: #1a73e8;
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--primary-blue);
+      background: var(--primary-lighter);
     }
 
-    .file-drop-zone-icon {
-      margin-bottom: 16px;
-      color: #1a73e8;
+    .drop-icon {
+      font-size: 40px;
+      color: var(--primary-blue);
+      margin-bottom: 12px;
+      opacity: 0.8;
     }
 
-    .file-drop-zone-text {
-      font-size: 18px;
-      font-weight: 600;
-      color: #202124;
-      margin: 0 0 8px 0;
-    }
+    .drop-text-main { font-size: 16px; font-weight: 600; color: var(--gray-900); }
+    .drop-text-sub { font-size: 13px; color: var(--gray-500); margin-top: 4px; }
 
-    .file-drop-zone-subtext {
-      color: #5f6368;
-      margin: 0 0 16px 0;
-    }
-
-    .file-upload-input {
-      display: none;
-    }
-
-    .file-drop-zone-info {
-      font-size: 12px;
-      color: #5f6368;
-      margin-top: 16px;
-    }
-
-    .file-upload-status {
-      margin-top: 16px;
-      padding: 12px 16px;
-      font-size: 14px;
-      font-weight: 600;
-      color: #137333;
-      background-color: #e6f4ea;
-      border-radius: 4px;
-      border-left: 4px solid #34a853;
-    }
-
-    .form-group {
-      margin-bottom: 16px;
-    }
-
-    .form-label {
-      display: block;
-      margin-bottom: 8px;
-      color: #5f6368;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    .form-input, .form-textarea {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-
-    .form-textarea {
-      min-height: 60px;
-      resize: vertical;
-      font-family: inherit;
-    }
-
-    .form-hint {
-      margin-top: 8px;
-      font-size: 12px;
-      color: #5f6368;
-    }
-
-    .metadata-form {
-      margin-top: 24px;
-    }
-
+    /* --- FORM ELEMENTS --- */
     .form-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-
-    /* Mobile Responsive */
-    @media (max-width: 768px) {
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .dashboard-container {
-        padding: 12px;
-      }
-
-      .assessment-card,
-      .assessment-table-card {
-        padding: 16px;
-      }
-    }
-
-    .form-actions {
-      display: flex;
-      gap: 12px;
-      align-items: center;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
       margin-top: 24px;
     }
 
-    .upload-message {
-      color: #5f6368;
+    .input-group { margin-bottom: 16px; }
+
+    .input-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--gray-700);
+      margin-bottom: 6px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 10px 12px;
+      font-family: var(--font-main);
       font-size: 14px;
-    }
-
-    .upload-message.success {
-      color: #137333;
-    }
-
-    .upload-message.error {
-      color: #d93025;
-    }
-
-    .assessment-table-card {
+      color: var(--gray-900);
       background: white;
-      border-radius: 8px;
-      padding: 24px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 1px solid var(--gray-300);
+      border-radius: var(--radius-sm);
+      transition: all 0.2s var(--ease);
     }
 
-    .table-container {
+    .form-control:focus {
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 3px rgba(45, 63, 137, 0.15);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 24px;
+      border-radius: var(--radius-sm);
+      font-weight: 500;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s var(--ease);
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--primary-blue);
+      color: white;
+      box-shadow: 0 2px 4px rgba(45, 63, 137, 0.2);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px rgba(45, 63, 137, 0.25);
+    }
+
+    /* --- TABLE --- */
+    .table-responsive {
       overflow-x: auto;
     }
 
-    .assessment-table {
+    .table {
       width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
+      border-collapse: separate;
+      border-spacing: 0;
     }
 
-    .assessment-table th, .assessment-table td {
-      padding: 12px 8px;
+    .table th {
+      background: var(--gray-100);
+      color: var(--gray-500);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 16px 24px;
       text-align: left;
-      border-bottom: 1px solid #e8eaed;
+      border-bottom: 1px solid var(--gray-300);
     }
 
-    .assessment-table th {
-      background: #f8f9fa;
-      color: #5f6368;
-      font-weight: 600;
+    .table td {
+      padding: 16px 24px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--gray-100);
+      color: var(--gray-700);
+      transition: background 0.1s;
     }
 
-    .no-assessments-message {
-      display: none;
-      text-align: center;
-      padding: 40px;
-      color: #5f6368;
-    }
+    .table tr:last-child td { border-bottom: none; }
+    .table tbody tr:hover td { background: var(--bg-app); }
 
-    .status-badge {
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .status-ready {
-      background: #e6f4ea;
-      color: #137333;
-    }
-
-    .status-processing {
-      background: #fef7e0;
-      color: #ea8600;
-    }
-
-    .status-queued {
-      background: #e8f0fe;
-      color: #1967d2;
-    }
-
-    .table-input, .table-textarea {
-      width: 100%;
-      padding: 4px 6px;
-      border: 1px solid #dadce0;
-      border-radius: 4px;
-      font-size: 13px;
-    }
-
-    .table-textarea {
-      resize: vertical;
-      min-height: 32px;
-    }
-
-    .actions-cell {
-      text-align: center;
-    }
-
-    .action-button {
-      width: auto;
+    /* Editable inputs in table */
+    .table-edit-input {
+      background: transparent;
+      border: 1px solid transparent;
       padding: 6px 10px;
-      font-size: 16px;
-      margin-right: 4px;
-      border: none;
       border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .action-button.save {
-      background: #34a853;
-      color: white;
-    }
-
-    .action-button.delete {
-      background: #d93025;
-      color: white;
-    }
-
-    .action-button.reprocess {
-      background: #f8f9fa;
-      color: #3c4043;
-      border: 1px solid #dadce0;
-    }
-
-    .button {
-      padding: 12px 24px;
-      font-size: 15px;
-      font-weight: 600;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-    }
-
-    .button-primary {
-      background-color: #1a73e8;
-      color: white;
-      border: none;
-    }
-
-    .button-primary:hover {
-      background-color: #155ab6;
-    }
-
-    .button-secondary {
-      background-color: #f8f9fa;
-      color: #3c4043;
-      border: 1px solid #dadce0;
-    }
-
-    .button-secondary:hover {
-      background-color: #f1f3f4;
-    }
-
-    .th-status {
-      width: 100px;
-    }
-
-    .th-actions {
-      width: 200px;
-    }
-
-    /* Save feedback styles */
-    .save-feedback {
-      display: inline-block;
-      margin-left: 8px;
-      font-size: 12px;
-      font-weight: 500;
-      vertical-align: middle;
-    }
-
-    .save-feedback.saving {
-      color: #1967d2;
-    }
-
-    .save-feedback.success {
-      color: #137333;
-      animation: fadeOut 2s forwards;
-    }
-
-    .save-feedback.error {
-      color: #d93025;
-    }
-
-    @keyframes fadeOut {
-      0% { opacity: 1; }
-      70% { opacity: 1; }
-      100% { opacity: 0; }
-    }
-
-    /* Spinner for save button */
-    .action-button.save.saving {
-      position: relative;
-      color: transparent;
-      pointer-events: none;
-    }
-
-    .action-button.save.saving::after {
-      content: "";
-      position: absolute;
-      width: 14px;
-      height: 14px;
-      top: 50%;
-      left: 50%;
-      margin-left: -7px;
-      margin-top: -7px;
-      border: 2px solid #ffffff;
-      border-radius: 50%;
-      border-top-color: transparent;
-      animation: spinner 0.6s linear infinite;
-    }
-
-    @keyframes spinner {
-      to { transform: rotate(360deg); }
-    }
-
-    /* Alert banner styles */
-    .alert-banner {
-      margin-top: 12px;
-      padding: 12px 16px;
-      border-radius: 4px;
+      width: 100%;
+      font-family: inherit;
       font-size: 13px;
-      font-weight: 500;
-      line-height: 1.5;
+      color: var(--gray-900);
     }
 
-    .alert-banner.alert-danger {
-      background-color: #fce8e6;
-      color: #c5221f;
-      border-left: 4px solid #d93025;
+    .table-edit-input:hover { border-color: var(--gray-300); background: white; }
+    .table-edit-input:focus { border-color: var(--primary-blue); background: white; box-shadow: 0 0 0 2px rgba(45, 63, 137, 0.1); }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
     }
 
-    .alert-banner strong {
-      font-weight: 700;
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+    .badge-ready { background: var(--success-bg); color: var(--success-green); }
+    .badge-ready .badge-dot { background: var(--success-green); }
+
+    .badge-processing { background: var(--processing-bg); color: var(--processing-blue); }
+    .badge-processing .badge-dot { background: var(--processing-blue); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); animation: pulse 2s infinite; }
+
+    .badge-queued { background: var(--warning-bg); color: var(--warning-orange); }
+    .badge-queued .badge-dot { background: var(--warning-orange); }
+
+    /* Actions */
+    .action-group {
+      display: flex;
+      justify-content: flex-end;
+      gap: 4px;
+      opacity: 0.6;
+      transition: opacity 0.2s;
     }
-  </style>
-  <style>
-    .loader {
-      border: 8px solid #f3f3f3; /* Light grey */
-      border-top: 8px solid #1a73e8; /* Blue */
+    .table tr:hover .action-group { opacity: 1; }
+
+    .action-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--gray-500);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .action-btn:hover { background: var(--gray-100); color: var(--primary-blue); }
+    .action-btn.delete:hover { background: var(--red-light); color: var(--red-dark); }
+
+    /* --- OVERLAYS & LOADERS --- */
+    .loader-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.8);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .loader-card {
+      background: white;
+      padding: 32px;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-hover);
+      text-align: center;
+      max-width: 320px;
+      width: 100%;
+    }
+
+    .spinner-ring {
+      width: 48px; height: 48px;
+      border: 4px solid var(--primary-lighter);
+      border-top-color: var(--primary-blue);
       border-radius: 50%;
-      width: 60px;
-      height: 60px;
+      margin: 0 auto 16px;
       animation: spin 1s linear infinite;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      margin-top: -30px;
-      margin-left: -30px;
     }
 
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    .skeleton-line { height: 16px; background: var(--gray-100); border-radius: 4px; margin-bottom: 8px; animation: pulse 1.5s infinite; }
+    
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* --- MOBILE RESPONSIVE --- */
+    @media (max-width: 768px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .app-header { padding: 0 16px; }
+      .main-content { padding: 0 16px; margin: 24px auto; }
+      .card-body { padding: 20px; }
+      .table th, .table td { padding: 12px 16px; }
     }
   </style>
 </head>
 <body>
-  <div id="loader" class="loader"></div>
-  <div id="admin-dashboard-container" class="dashboard-container" style="display: none;">
-    <div class="dashboard-header">
-      <h2 class="dashboard-title">Admin Dashboard</h2>
-      <div class="header-actions">
-        <span id="admin-name-display" class="welcome-message"></span>
-        <button onclick="logoutAdmin()" class="button button-secondary">Logout</button>
+
+  <!-- LOADING OVERLAY (Full Page) -->
+  <div id="page-loader" class="loader-overlay">
+    <div class="loader-card">
+      <div class="spinner-ring"></div>
+      <h3 style="font-size:16px; font-weight:600; color:var(--primary-dark); margin:0;">Loading Dashboard</h3>
+    </div>
+  </div>
+
+  <!-- UPLOAD/CONVERSION OVERLAY (Hidden) -->
+  <div id="conversion-overlay" class="loader-overlay" style="display:none;">
+    <div class="loader-card">
+      <div class="spinner-ring"></div>
+      <h3 id="conversion-title" style="font-size:16px; font-weight:600; color:var(--primary-dark); margin:0 0 8px 0;">Processing File</h3>
+      <p id="conversion-text" style="font-size:13px; color:var(--gray-500); margin:0;">Optimizing for playback...</p>
+    </div>
+  </div>
+
+  <!-- APP HEADER -->
+  <header class="app-header">
+    <div class="app-brand">
+      <div class="logo-icon">
+        <span class="material-icons" style="font-size: 18px; color: white;">menu_book</span>
+        <div class="logo-badge">
+          <span class="material-icons" style="font-size: 10px; color: var(--primary-dark);">volume_up</span>
+        </div>
+      </div>
+      <span>Spartan Read Aloud</span>
+    </div>
+    <div class="app-user">
+      <a href="<?= ScriptApp.getService().getUrl() ?>?preview=true" target="_blank" class="logout-btn" style="text-decoration: none; margin-right: 8px;">
+        <span class="material-icons" style="font-size: 14px;">visibility</span>
+        Preview
+      </a>
+      <span id="admin-name-display">Welcome</span>
+      <button onclick="logoutAdmin()" class="logout-btn">
+        <span class="material-icons" style="font-size: 14px;">logout</span>
+        Logout
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT GRID -->
+  <div id="main-content" class="main-content" style="display:none;">
+    
+    <!-- 1. QUICK STATS -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Total Assessments</span>
+        <span class="stat-value" id="stat-total">-</span>
+        <span class="material-icons stat-icon">library_books</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label" style="color: var(--warning-orange);">Processing</span>
+        <span class="stat-value" id="stat-processing">-</span>
+        <span class="material-icons stat-icon" style="color: var(--warning-orange);">hourglass_top</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label" style="color: var(--success-green);">Ready</span>
+        <span class="stat-value" id="stat-ready">-</span>
+        <span class="material-icons stat-icon" style="color: var(--success-green);">check_circle</span>
       </div>
     </div>
 
-    <!-- Upload Section -->
-    <div id="add-assessment-section" class="assessment-card">
-      <h3 class="card-title">Add New Assessment</h3>
-
-      <!-- Tab Toggle -->
-      <div class="tab-toggle">
-        <button id="upload-tab-file" onclick="showUploadTab('file')" class="tab-button active">Upload PDF/Word</button>
-        <button id="upload-tab-gdoc" onclick="showUploadTab('gdoc')" class="tab-button">Add Google Doc</button>
+    <!-- 2. ADD NEW ASSESSMENT -->
+    <section id="add-assessment-section" class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <span class="material-icons" style="color: var(--primary-blue);">cloud_upload</span>
+          New Assessment
+        </h2>
       </div>
-
-      <!-- File Upload Tab -->
-      <div id="upload-section-file" class="tab-content active">
-        <div id="file-drop-zone" class="file-drop-zone">
-          <div class="file-drop-zone-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="48" height="48" role="img" aria-label="Upload file">
-              <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
-            </svg>
-          </div>
-          <p class="file-drop-zone-text">Drag & Drop your file here</p>
-          <p class="file-drop-zone-subtext">or</p>
-          <label for="file-upload-input" class="button button-secondary">Browse Files</label>
-          <input type="file" id="file-upload-input" accept=".pdf,.docx,.doc" class="file-upload-input">
-          <p class="file-drop-zone-info">PDF, DOCX, DOC up to 45MB</p>
+      
+      <div class="card-body">
+        <!-- Tabs -->
+        <div class="segmented-control">
+          <button id="tab-file" class="segment-btn active" onclick="switchTab('file')">Upload File</button>
+          <button id="tab-gdoc" class="segment-btn" onclick="switchTab('gdoc')">Google Doc URL</button>
         </div>
-        <div id="file-upload-status" class="file-upload-status"></div>
-      </div>
 
-      <!-- Google Doc URL Tab -->
-      <div id="upload-section-gdoc" class="tab-content">
-        <div class="form-group">
-          <label for="gdoc-url-input" class="form-label">Google Doc URL</label>
-          <input type="url" id="gdoc-url-input" placeholder="https://docs.google.com/document/d/..." class="form-input">
-          <p class="form-hint">Note: If you only have view access, a shortcut will be created. Ensure you maintain access to the document.</p>
-          <div class="alert-banner alert-danger">
-            <strong>Important:</strong> Before adding your Google Doc assessment, you must share (viewer access) the assessment with <strong>notifications@orono.k12.mn.us</strong>. After your assessment successfully processes, you can remove the sharing rights.
+        <!-- File Tab -->
+        <div id="content-file" class="tab-content active">
+          <div class="drop-zone" id="file-drop-zone" onclick="document.getElementById('file-input').click()">
+            <input type="file" id="file-input" accept=".pdf,.docx,.doc" style="display:none">
+            <span class="material-icons drop-icon">folder_open</span>
+            <div class="drop-text-main">Click to upload or drag and drop</div>
+            <div class="drop-text-sub">PDF, DOCX, DOC (Max 45MB)</div>
+            <div id="file-name-display" style="margin-top:12px; font-weight:600; color:var(--primary-blue);"></div>
           </div>
         </div>
-      </div>
 
-      <!-- Metadata Fields -->
-      <div class="metadata-form">
+        <!-- GDoc Tab -->
+        <div id="content-gdoc" class="tab-content">
+          <div class="input-group">
+            <label class="input-label">Google Doc URL</label>
+            <input type="url" id="gdoc-input" class="form-control" placeholder="https://docs.google.com/document/d/...">
+          </div>
+          <div style="font-size:13px; color:var(--red-dark); background:var(--red-light); padding:10px; border-radius:6px; display:flex; gap:8px;">
+            <span class="material-icons" style="font-size:16px;">info</span>
+            <span>Must share Viewer access with: <strong>notifications@orono.k12.mn.us</strong></span>
+          </div>
+        </div>
+
+        <!-- Metadata Inputs -->
         <div class="form-grid">
-          <div class="form-group">
-            <label for="new-class-name" class="form-label">Class Name</label>
-            <input type="text" id="new-class-name" placeholder="e.g., Grade 4 Math" class="form-input">
+          <div class="input-group">
+            <label class="input-label">Class Name</label>
+            <input type="text" id="meta-class" class="form-control" placeholder="e.g. Grade 4 Math">
           </div>
-          <div class="form-group">
-            <label for="new-instructor" class="form-label">Instructor Last Name</label>
-            <input type="text" id="new-instructor" placeholder="e.g., Smith" class="form-input">
+          <div class="input-group">
+            <label class="input-label">Instructor Last Name</label>
+            <input type="text" id="meta-instructor" class="form-control" placeholder="e.g. Smith">
           </div>
-        </div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="new-password" class="form-label">Password</label>
-            <input type="text" id="new-password" placeholder="Student password" autocomplete="new-password" class="form-input">
+          <div class="input-group">
+            <label class="input-label">Student Password</label>
+            <input type="text" id="meta-password" class="form-control" placeholder="Required for access">
           </div>
-          <div class="form-group">
-            <label for="new-student-emails" class="form-label">Student Emails</label>
-            <textarea id="new-student-emails" placeholder="student1@school.com, student2@school.com&#10;Or paste from Google Sheets" class="form-textarea"></textarea>
+          <div class="input-group">
+            <label class="input-label">Student Emails (Comma separated)</label>
+            <input type="text" id="meta-emails" class="form-control" placeholder="student1@school.com, student2@school.com">
           </div>
         </div>
-      </div>
 
-      <div class="form-actions">
-        <button id="add-assessment-btn" onclick="addNewAssessment()" class="button button-primary">Add Assessment & Process</button>
-        <div id="upload-message" class="upload-message"></div>
+        <div style="margin-top:24px; display:flex; justify-content:flex-end;">
+          <button class="btn btn-primary" onclick="submitAssessment()">
+            <span class="material-icons" style="font-size:18px;">auto_awesome</span>
+            Process Assessment
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Assessment Table -->
-    <div class="assessment-table-card">
-      <h3 class="card-title">All Assessments</h3>
-      <div class="table-container">
-        <table id="admin-assessment-table" class="assessment-table">
+    <!-- 3. ASSESSMENT TABLE -->
+    <section class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <span class="material-icons" style="color: var(--primary-blue);">dns</span>
+          Assessments Database
+        </h2>
+        <button class="action-btn" onclick="refreshData()" title="Refresh Data">
+          <span class="material-icons">refresh</span>
+        </button>
+      </div>
+      
+      <div class="table-responsive">
+        <table class="table">
           <thead>
             <tr>
-              <th>File Name</th>
-              <th class="th-status">Status</th>
-              <th>Class</th>
-              <th>Instructor Last Name</th>
-              <th>Password</th>
-              <th>Students</th>
-              <th class="th-actions">Actions</th>
+              <th style="width: 25%;">File Name</th>
+              <th style="width: 15%;">Status</th>
+              <th style="width: 15%;">Class</th>
+              <th style="width: 15%;">Instructor</th>
+              <th style="width: 10%;">Password</th>
+              <th style="width: 10%;">Students</th>
+              <th style="width: 10%; text-align:right;">Actions</th>
             </tr>
           </thead>
-          <tbody id="admin-assessment-tbody">
+          <tbody id="table-body">
+            <!-- Data populated by JS -->
           </tbody>
         </table>
       </div>
-      <div id="no-assessments-message" class="no-assessments-message">
-        No assessments found. Add your first assessment above.
+      
+      <!-- Empty State -->
+      <div id="empty-state" style="display:none; padding:60px; text-align:center; color:var(--gray-500);">
+        <span class="material-icons" style="font-size:48px; opacity:0.3; margin-bottom:16px;">inbox</span>
+        <p>No assessments found.</p>
       </div>
-    </div>
+    </section>
+
   </div>
-<script>
-let adminSessionToken = null;
-let adminName = null;
-let userRole = 'student'; // Default, will be updated on successful login
-let allAssessments = [];
 
-/**
- * Escapes HTML special characters to prevent XSS attacks
- * @param {string} text - Text to escape
- * @returns {string} - HTML-safe text
- */
-function escapeHtml(text) {
-  if (text === null || text === undefined) {
-    return '';
-  }
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-function parseEmailList(input) {
-  if (!input || typeof input !== 'string') {
-    return '';
-  }
-
-  // Email regex pattern (basic but robust)
-  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-
-  // Extract all email addresses from the input
-  const emailMatches = input.match(emailRegex);
-
-  if (!emailMatches || emailMatches.length === 0) {
-    return '';
-  }
-
-  // Normalize: lowercase, trim, deduplicate
-  const uniqueEmails = [...new Set(
-    emailMatches.map(email => email.toLowerCase().trim())
-  )];
-
-  // Return as comma-separated string
-  return uniqueEmails.join(', ');
-}
-
-// Check for stored session
-function initializeAdminView(token, name, role) {
-  adminSessionToken = token;
-  adminName = name;
-  userRole = role;
-  showAdminDashboard();
-}
-
-function showAdminDashboard() {
-  // Show admin dashboard
-  const adminDashboard = document.getElementById('admin-dashboard-container');
-  adminDashboard.style.display = 'block';
-
-  // Set admin name
-  document.getElementById('admin-name-display').textContent = `Welcome, ${adminName}`;
-
-  // Initialize drag-and-drop functionality
-  initializeDragDrop();
-
-  // Load all assessments
-  loadAllAssessments();
-}
-
-function logoutAdmin() {
-  // In a passwordless setup, logging out means reloading the page.
-  // The server will re-authenticate the user.
-  // For a true 'logout', the user would need to sign out of their Google account.
-  window.location.reload();
-}
-
-function showUploadTab(tab) {
-  const fileTab = document.getElementById('upload-tab-file');
-  const gdocTab = document.getElementById('upload-tab-gdoc');
-  const fileSection = document.getElementById('upload-section-file');
-  const gdocSection = document.getElementById('upload-section-gdoc');
-
-  fileTab.classList.toggle('active', tab === 'file');
-  gdocTab.classList.toggle('active', tab === 'gdoc');
-  fileSection.classList.toggle('active', tab === 'file');
-  gdocSection.classList.toggle('active', tab === 'gdoc');
-}
-
-function loadAllAssessments() {
-  console.log('Loading all assessments for admin...');
-  google.script.run
-    .withSuccessHandler(onAllAssessmentsLoaded)
-    .withFailureHandler((error) => {
-      console.error('Error loading assessments:', error);
-      document.getElementById('loader').style.display = 'none';
-      const container = document.getElementById('admin-dashboard-container');
-      container.style.display = 'block';
-      container.innerHTML = '<h1>Error</h1><p>Could not load assessments. Please try refreshing the page.</p>';
-    })
-    .getAllAssessments(adminSessionToken);
-}
-
-function onAllAssessmentsLoaded(result) {
-  console.log('Staff assessments loaded:', result);
-
-  if (result.error) {
-    console.error('Error loading assessments:', result.error);
-    alert('Error: ' + result.error);
-    return;
-  }
-
-  // Update userRole if backend returned it
-  if (result.userRole) {
-    userRole = result.userRole;
-    console.log(`User role: ${userRole}`);
-  }
-
-  console.log(`Successfully loaded ${result.assessments.length} assessments for ${userRole}`);
-  allAssessments = result.assessments;
-  renderAssessmentTable();
-
-  // Hide loader and show dashboard
-  document.getElementById('loader').style.display = 'none';
-  document.getElementById('admin-dashboard-container').style.display = 'block';
-}
-
-function renderAssessmentTable() {
-  const tbody = document.getElementById('admin-assessment-tbody');
-  const noAssessmentsMsg = document.getElementById('no-assessments-message');
-  const addAssessmentSection = document.getElementById('add-assessment-section');
-
-  // Show/hide assessment upload section based on role
-  if (addAssessmentSection) {
-    if (userRole === 'super_admin' || userRole === 'admin' || userRole === 'teacher') {
-      addAssessmentSection.style.display = 'block';
-    } else {
-      addAssessmentSection.style.display = 'none';
-    }
-  }
-
-  if (allAssessments.length === 0) {
-    tbody.innerHTML = '';
-    noAssessmentsMsg.style.display = 'block';
-    return;
-  }
-
-  noAssessmentsMsg.style.display = 'none';
-
-  tbody.innerHTML = allAssessments.map((assessment, index) => {
-    // Determine status badge based on assessment state
-    let statusBadge;
-    if (assessment.isComplete === true) {
-      // Processing complete and ready for students
-      statusBadge = '<span class="status-badge status-ready">✓ Ready</span>';
-    } else if (assessment.chunkCount > 0) {
-      // Processing in progress (text extracted, generating audio)
-      statusBadge = '<span class="status-badge status-processing">⏳ Processing</span>';
-    } else {
-      // Newly uploaded, waiting for processing to start
-      statusBadge = '<span class="status-badge status-queued">📋 Queued</span>';
+  <script>
+    // --- Mock GAS Environment for Local Testing ---
+    // If google is undefined (local browser or preview tool), mock it to avoid ReferenceError.
+    if (typeof google === 'undefined') {
+      console.warn('Google Apps Script environment not detected. Enabling mock mode.');
+      window.google = {
+        script: {
+          run: {
+            withSuccessHandler: function(success) {
+              this._success = success;
+              return this;
+            },
+            withFailureHandler: function(failure) {
+              this._failure = failure;
+              return this;
+            },
+            getAllAssessments: function(token) {
+              console.log('Mock: getAllAssessments called');
+              setTimeout(() => {
+                if (this._success) this._success({
+                  assessments: [
+                    {
+                      rowIndex: 1,
+                      fileName: "Mock Assessment 1.pdf",
+                      className: "Math 101",
+                      instructor: "Smith",
+                      password: "pass",
+                      studentEmails: "student@test.com",
+                      isComplete: true,
+                      chunkCount: 5
+                    }
+                  ],
+                  userRole: 'super_admin'
+                });
+              }, 800);
+            },
+            uploadAssessmentFile: function(token, name, data, type) {
+                console.log('Mock: uploadAssessmentFile called', name);
+                setTimeout(() => {
+                    if (this._success) this._success({ fileUrl: 'http://mock.url/file.pdf' });
+                }, 1000);
+            },
+            handleGoogleDocUrl: function(token, url) {
+                console.log('Mock: handleGoogleDocUrl called', url);
+                setTimeout(() => {
+                    if (this._success) this._success({ fileUrl: 'http://mock.url/doc.pdf' });
+                }, 1000);
+            },
+            addNewAssessment: function(token, url, meta) {
+                console.log('Mock: addNewAssessment called', meta);
+                setTimeout(() => {
+                    if (this._success) this._success({ success: true });
+                }, 800);
+            },
+            updateAssessmentRow: function(token, row, data) {
+                console.log('Mock: updateAssessmentRow called', row);
+                setTimeout(() => {
+                    if (this._success) this._success({ success: true });
+                }, 500);
+            },
+            deleteAssessmentRow: function(token, row) {
+                console.log('Mock: deleteAssessmentRow called', row);
+                setTimeout(() => {
+                    if (this._success) this._success({ success: true });
+                }, 500);
+            },
+            reprocessAssessment: function(token, row) {
+                console.log('Mock: reprocessAssessment called', row);
+                setTimeout(() => {
+                    if (this._success) this._success({ success: true });
+                }, 500);
+            }
+          }
+        }
+      };
     }
 
-    return `
-      <tr data-row-index="${assessment.rowIndex}">
-        <td>${escapeHtml(assessment.fileName)}</td>
-        <td>${statusBadge}</td>
-        <td>
-          <input type="text" value="${escapeHtml(assessment.className)}" data-field="className" class="table-input">
-        </td>
-        <td>
-          <input type="text" value="${escapeHtml(assessment.instructor)}" data-field="instructor" class="table-input">
-        </td>
-        <td>
-          <input type="text" value="${escapeHtml(assessment.password)}" data-field="password" class="table-input">
-        </td>
-        <td>
-          <textarea data-field="studentEmails" class="table-textarea">${escapeHtml(assessment.studentEmails)}</textarea>
-        </td>
-        <td class="actions-cell">
-          <button onclick="saveAssessmentRow(${assessment.rowIndex})" class="action-button save" id="save-btn-${assessment.rowIndex}" title="Save">✓</button>
-          <span class="save-feedback" id="save-feedback-${assessment.rowIndex}"></span>
-          ${userRole === 'super_admin' ? `
-            <button onclick="deleteAssessmentRow(${assessment.rowIndex})" class="action-button delete" title="Delete">✕</button>
-            <button onclick="reprocessAssessmentRow(${assessment.rowIndex})" class="action-button reprocess" title="Re-run analysis and audio generation">⟳</button>
-          ` : ''}
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
+    /* --- APPLICATION LOGIC --- */
+    let adminToken = null;
+    let currentUserRole = 'student';
+    let assessmentList = [];
 
-function addNewAssessment() {
-  const addButton = document.getElementById('add-assessment-btn');
-  const uploadMessage = document.getElementById('upload-message');
-  const fileInput = document.getElementById('file-upload-input');
-  const gdocInput = document.getElementById('gdoc-url-input');
-  const className = document.getElementById('new-class-name').value.trim();
-  const instructor = document.getElementById('new-instructor').value.trim();
-  const password = document.getElementById('new-password').value.trim();
-  const studentEmailsRaw = document.getElementById('new-student-emails').value;
-  const studentEmails = parseEmailList(studentEmailsRaw);
+    // --- INIT ---
+    document.addEventListener('DOMContentLoaded', () => {
+      // Safe parsing of server data
+      let userData = { name: 'Admin', role: 'teacher' };
+      try {
+        const rawUser = '<?!= JSON.stringify(user) ?>';
+        // Only parse if the template tag was actually replaced (not raw string)
+        if (rawUser && rawUser.trim().startsWith('{')) userData = JSON.parse(rawUser);
+      } catch (e) { console.warn('User parse error', e); }
 
-  // Determine which tab is active
-  const isFileTab = document.getElementById('upload-section-file').classList.contains('active');
+      adminToken = '<?!= sessionToken ?>';
+      
+      // Init UI
+      const nameDisplay = document.getElementById('admin-name-display');
+      if (nameDisplay) nameDisplay.textContent = userData.name;
+      currentUserRole = userData.role;
+      
+      // Setup Drag & Drop
+      initDragDrop();
+      
+      // Load Data
+      refreshData();
+    });
 
-  uploadMessage.textContent = '';
-  uploadMessage.classList.remove('success', 'error');
-
-  // Validate inputs
-  if (isFileTab) {
-    if (!fileInput.files || fileInput.files.length === 0) {
-      uploadMessage.textContent = 'Please select a file to upload.';
-      uploadMessage.classList.add('error');
-      return;
+    function logoutAdmin() {
+      window.location.reload();
     }
-  } else {
-    if (!gdocInput.value.trim()) {
-      uploadMessage.textContent = 'Please enter a Google Doc URL.';
-      uploadMessage.classList.add('error');
-      return;
-    }
-  }
 
-  addButton.disabled = true;
-  addButton.textContent = 'Processing...';
-  uploadMessage.textContent = 'Uploading file...';
-
-  if (isFileTab) {
-    // Handle file upload
-    const file = fileInput.files[0];
-    const reader = new FileReader();
-
-    reader.onload = function(e) {
-      const base64Data = e.target.result.split(',')[1]; // Remove data URL prefix
-      const mimeType = file.type;
-
-      // Show appropriate message based on file type
-      if (mimeType.includes('word') || mimeType.includes('msword') ||
-          file.name.match(/\.(docx|doc)$/i)) {
-        uploadMessage.textContent = 'Converting Word document to PDF...';
-      } else {
-        uploadMessage.textContent = 'Uploading to Drive...';
-      }
+    // --- DATA HANDLING ---
+    function refreshData() {
+      const tbody = document.getElementById('table-body');
+      
+      // Show Skeleton Rows
+      const skeletonRow = `
+        <tr>
+          <td><div class="skeleton-line" style="width:80%"></div></td>
+          <td><div class="skeleton-line" style="width:60px"></div></td>
+          <td><div class="skeleton-line"></div></td>
+          <td><div class="skeleton-line"></div></td>
+          <td><div class="skeleton-line"></div></td>
+          <td><div class="skeleton-line"></div></td>
+          <td><div class="skeleton-line" style="width:40px; margin-left:auto;"></div></td>
+        </tr>`;
+      tbody.innerHTML = skeletonRow.repeat(3);
 
       google.script.run
-        .withSuccessHandler((result) => {
-          if (result.error) {
-            uploadMessage.textContent = 'Error: ' + result.error;
-            uploadMessage.classList.add('error');
-            addButton.disabled = false;
-            addButton.textContent = 'Add Assessment & Process';
-            return;
-          }
+        .withSuccessHandler(onDataLoaded)
+        .withFailureHandler(err => alert('Failed to load data: ' + err))
+        .getAllAssessments(adminToken);
+    }
 
-          // Show conversion success message if provided
-          if (result.message) {
-            uploadMessage.textContent = result.message + ' Adding to database...';
-          } else {
-            uploadMessage.textContent = 'File uploaded. Adding to database...';
-          }
+    function onDataLoaded(response) {
+      document.getElementById('page-loader').style.display = 'none';
+      document.getElementById('main-content').style.display = 'grid';
 
-          // Add to spreadsheet
-          addAssessmentToDatabase(result.fileUrl, className, instructor, password, studentEmails);
-        })
-        .withFailureHandler((error) => {
-          uploadMessage.textContent = 'Upload failed: ' + error.message;
-          uploadMessage.classList.add('error');
-          addButton.disabled = false;
-          addButton.textContent = 'Add Assessment & Process';
-        })
-        .uploadAssessmentFile(adminSessionToken, file.name, base64Data, mimeType);
-    };
+      if (response.error) {
+        alert(response.error);
+        return;
+      }
 
-    reader.onerror = function() {
-      uploadMessage.textContent = 'Failed to read file.';
-      uploadMessage.classList.add('error');
-      addButton.disabled = false;
-      addButton.textContent = 'Add Assessment & Process';
-    };
+      assessmentList = response.assessments || [];
+      currentUserRole = response.userRole || currentUserRole;
+      
+      updateStats();
+      renderTable();
+    }
 
-    reader.readAsDataURL(file);
+    function updateStats() {
+      const total = assessmentList.length;
+      const ready = assessmentList.filter(a => a.isComplete).length;
+      const processing = assessmentList.filter(a => a.chunkCount > 0 && !a.isComplete).length;
 
-  } else {
-    // Handle Google Doc URL
-    const docUrl = gdocInput.value.trim();
-    uploadMessage.textContent = 'Processing Google Doc...';
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-ready').textContent = ready;
+      document.getElementById('stat-processing').textContent = processing;
+    }
 
-    google.script.run
-      .withSuccessHandler((result) => {
-        if (result.error) {
-          uploadMessage.textContent = 'Error: ' + result.error;
-          uploadMessage.classList.add('error');
-          addButton.disabled = false;
-          addButton.textContent = 'Add Assessment & Process';
-          return;
+    function renderTable() {
+      const tbody = document.getElementById('table-body');
+      const emptyState = document.getElementById('empty-state');
+      const addSection = document.getElementById('add-assessment-section');
+
+      // Visibility based on role
+      addSection.style.display = ['super_admin', 'admin', 'teacher'].includes(currentUserRole) ? 'block' : 'none';
+
+      if (assessmentList.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      
+      tbody.innerHTML = assessmentList.map(item => {
+        let statusBadge = '';
+        if (item.isComplete) {
+          statusBadge = `<span class="badge badge-ready"><span class="badge-dot"></span>Ready</span>`;
+        } else if (item.chunkCount > 0) {
+          statusBadge = `<span class="badge badge-processing"><span class="badge-dot"></span>Processing</span>`;
+        } else {
+          statusBadge = `<span class="badge badge-queued"><span class="badge-dot"></span>Queued</span>`;
         }
 
-        if (result.message) {
-          uploadMessage.textContent = result.message;
+        return `
+          <tr data-id="${item.rowIndex}">
+            <td><div style="font-weight:500; color:var(--primary-dark);">${escapeHtml(item.fileName)}</div></td>
+            <td>${statusBadge}</td>
+            <td><input class="table-edit-input" data-field="className" value="${escapeHtml(item.className)}" placeholder="--"></td>
+            <td><input class="table-edit-input" data-field="instructor" value="${escapeHtml(item.instructor)}" placeholder="--"></td>
+            <td><input class="table-edit-input" data-field="password" value="${escapeHtml(item.password)}" placeholder="--"></td>
+            <td><input class="table-edit-input" data-field="studentEmails" value="${escapeHtml(item.studentEmails)}" placeholder="--"></td>
+            <td>
+              <div class="action-group">
+                <a href="<?= ScriptApp.getService().getUrl() ?>?preview=true" target="_blank" class="action-btn" title="Preview as Student" style="text-decoration: none;">
+                  <span class="material-icons" style="font-size:18px;">visibility</span>
+                </a>
+                <button class="action-btn" onclick="saveRow(${item.rowIndex})" title="Save">
+                  <span class="material-icons" style="font-size:18px;">save</span>
+                </button>
+                ${currentUserRole === 'super_admin' ? `
+                <button class="action-btn" onclick="reprocessRow(${item.rowIndex})" title="Reprocess">
+                  <span class="material-icons" style="font-size:18px;">autorenew</span>
+                </button>
+                <button class="action-btn delete" onclick="deleteRow(${item.rowIndex})" title="Delete">
+                  <span class="material-icons" style="font-size:18px;">delete</span>
+                </button>` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // --- ACTIONS ---
+    function switchTab(tabName) {
+      document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+      document.getElementById(`content-${tabName}`).classList.add('active');
+    }
+
+    function initDragDrop() {
+      const zone = document.getElementById('file-drop-zone');
+      const input = document.getElementById('file-input');
+      
+      zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('dragover'); };
+      zone.ondragleave = () => zone.classList.remove('dragover');
+      zone.ondrop = (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        if(e.dataTransfer.files.length) {
+          input.files = e.dataTransfer.files;
+          updateFileName(input.files[0]);
         }
-
-        // Add to spreadsheet
-        addAssessmentToDatabase(result.fileUrl, className, instructor, password, studentEmails);
-      })
-      .withFailureHandler((error) => {
-        uploadMessage.textContent = 'Failed: ' + error.message;
-        uploadMessage.classList.add('error');
-        addButton.disabled = false;
-        addButton.textContent = 'Add Assessment & Process';
-      })
-      .handleGoogleDocUrl(adminSessionToken, docUrl);
-  }
-}
-
-function addAssessmentToDatabase(fileUrl, className, instructor, password, studentEmails) {
-  const addButton = document.getElementById('add-assessment-btn');
-  const uploadMessage = document.getElementById('upload-message');
-
-  google.script.run
-    .withSuccessHandler((result) => {
-      if (result.error) {
-        uploadMessage.textContent = 'Error: ' + result.error;
-        uploadMessage.classList.add('error');
-        addButton.disabled = false;
-        addButton.textContent = 'Add Assessment & Process';
-        return;
-      }
-
-      uploadMessage.textContent = result.message || 'Assessment added successfully!';
-      uploadMessage.classList.add('success');
-
-      // Reset form
-      document.getElementById('file-upload-input').value = '';
-      document.getElementById('gdoc-url-input').value = '';
-      document.getElementById('new-class-name').value = '';
-      document.getElementById('new-instructor').value = '';
-      document.getElementById('new-password').value = '';
-      document.getElementById('new-student-emails').value = '';
-
-      addButton.disabled = false;
-      addButton.textContent = 'Add Assessment & Process';
-
-      // Reload assessments
-      setTimeout(() => {
-        uploadMessage.textContent = '';
-        uploadMessage.classList.remove('success', 'error');
-        loadAllAssessments();
-      }, 2000);
-    })
-    .withFailureHandler((error) => {
-      uploadMessage.textContent = 'Failed to add: ' + error.message;
-      uploadMessage.classList.add('error');
-      addButton.disabled = false;
-      addButton.textContent = 'Add Assessment & Process';
-    })
-    .addNewAssessment(adminSessionToken, fileUrl, {
-      className: className,
-      instructor: instructor,
-      password: password,
-      studentEmails: studentEmails
-    });
-}
-
-function saveAssessmentRow(rowIndex) {
-  const row = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
-  if (!row) return;
-
-  const saveButton = document.getElementById(`save-btn-${rowIndex}`);
-  const feedbackElement = document.getElementById(`save-feedback-${rowIndex}`);
-
-  const className = row.querySelector('[data-field="className"]').value.trim();
-  const instructor = row.querySelector('[data-field="instructor"]').value.trim();
-  const password = row.querySelector('[data-field="password"]').value.trim();
-  const studentEmailsRaw = row.querySelector('[data-field="studentEmails"]').value;
-  const studentEmails = parseEmailList(studentEmailsRaw);
-
-  console.log('Saving assessment row', rowIndex);
-
-  // Show loading state
-  saveButton.classList.add('saving');
-  saveButton.disabled = true;
-  feedbackElement.textContent = 'Saving...';
-  feedbackElement.className = 'save-feedback saving';
-
-  google.script.run
-    .withSuccessHandler((result) => {
-      // Remove loading state
-      saveButton.classList.remove('saving');
-      saveButton.disabled = false;
-
-      if (result.error) {
-        feedbackElement.textContent = 'Error: ' + result.error;
-        feedbackElement.className = 'save-feedback error';
-        setTimeout(() => {
-          feedbackElement.textContent = '';
-        }, 3000);
-        return;
-      }
-
-      // Show success message
-      feedbackElement.textContent = 'Saved!';
-      feedbackElement.className = 'save-feedback success';
-
-      // Clear message after animation
-      setTimeout(() => {
-        feedbackElement.textContent = '';
-        feedbackElement.className = 'save-feedback';
-      }, 2000);
-
-      // Reload assessments to reflect changes
-      loadAllAssessments();
-    })
-    .withFailureHandler((error) => {
-      // Remove loading state
-      saveButton.classList.remove('saving');
-      saveButton.disabled = false;
-
-      feedbackElement.textContent = 'Failed to update';
-      feedbackElement.className = 'save-feedback error';
-      setTimeout(() => {
-        feedbackElement.textContent = '';
-      }, 3000);
-    })
-    .updateAssessmentRow(adminSessionToken, rowIndex, {
-      className: className,
-      instructor: instructor,
-      password: password,
-      studentEmails: studentEmails
-    });
-}
-
-function deleteAssessmentRow(rowIndex) {
-  if (!confirm('Are you sure you want to delete this assessment? This cannot be undone.')) {
-    return;
-  }
-
-  console.log('Deleting assessment row', rowIndex);
-
-  google.script.run
-    .withSuccessHandler((result) => {
-      if (result.error) {
-        alert('Error: ' + result.error);
-        return;
-      }
-      alert('Assessment deleted successfully!');
-      loadAllAssessments();
-    })
-    .withFailureHandler((error) => {
-      alert('Failed to delete: ' + error.message);
-    })
-    .deleteAssessmentRow(adminSessionToken, rowIndex);
-}
-
-function reprocessAssessmentRow(rowIndex) {
-  if (!confirm('Re-process this assessment? This will clear existing audio data and regenerate it.')) {
-    return;
-  }
-
-  console.log('Reprocessing assessment row', rowIndex);
-
-  google.script.run
-    .withSuccessHandler((result) => {
-      if (result.error) {
-        alert('Error: ' + result.error);
-        return;
-      }
-      alert(result.message || 'Assessment reprocessing started!');
-      loadAllAssessments();
-    })
-    .withFailureHandler((error) => {
-      alert('Failed to reprocess: ' + error.message);
-    })
-    .reprocessAssessment(adminSessionToken, rowIndex);
-}
-
-function initializeDragDrop() {
-  const dropZone = document.getElementById('file-drop-zone');
-  const fileInput = document.getElementById('file-upload-input');
-  const fileStatus = document.getElementById('file-upload-status');
-  let dragCounter = 0;
-
-  if (!dropZone || !fileInput || !fileStatus) {
-    console.warn('Drag-drop elements not found');
-    return;
-  }
-
-  function handleFileSelect(file) {
-    if (file) {
-      fileStatus.textContent = `Selected file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
-    } else {
-      fileStatus.textContent = '';
+      };
+      
+      input.onchange = () => { if(input.files.length) updateFileName(input.files[0]); };
     }
-  }
 
-  dropZone.addEventListener('dragenter', (e) => {
-    e.preventDefault();
-    dragCounter++;
-    dropZone.classList.add('dragover');
-  });
-
-  dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault(); // Necessary to allow dropping
-  });
-
-  dropZone.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    dragCounter--;
-    if (dragCounter === 0) {
-      dropZone.classList.remove('dragover');
+    function updateFileName(file) {
+      document.getElementById('file-name-display').textContent = `${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
     }
-  });
 
-  dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dragCounter = 0;
-    dropZone.classList.remove('dragover');
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      // Use DataTransfer API to properly set files
-      const dataTransfer = new DataTransfer();
-      for (let i = 0; i < files.length; i++) {
-        dataTransfer.items.add(files[i]);
+    function submitAssessment() {
+      const isFile = document.getElementById('content-file').classList.contains('active');
+      const meta = {
+        className: document.getElementById('meta-class').value.trim(),
+        instructor: document.getElementById('meta-instructor').value.trim(),
+        password: document.getElementById('meta-password').value.trim(),
+        studentEmails: document.getElementById('meta-emails').value.trim() // Server handles parsing
+      };
+
+      const overlay = document.getElementById('conversion-overlay');
+      const statusTitle = document.getElementById('conversion-title');
+      
+      if(isFile) {
+        const fileInput = document.getElementById('file-input');
+        if(!fileInput.files.length) return alert('Please select a file.');
+        
+        const file = fileInput.files[0];
+        overlay.style.display = 'flex';
+        statusTitle.textContent = "Uploading File...";
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64 = e.target.result.split(',')[1];
+          google.script.run
+            .withSuccessHandler((res) => finalizeSubmission(res, meta))
+            .withFailureHandler(handleError)
+            .uploadAssessmentFile(adminToken, file.name, base64, file.type);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        const url = document.getElementById('gdoc-input').value.trim();
+        if(!url) return alert('Enter URL.');
+        
+        overlay.style.display = 'flex';
+        statusTitle.textContent = "Linking Google Doc...";
+        
+        google.script.run
+          .withSuccessHandler((res) => finalizeSubmission(res, meta))
+          .withFailureHandler(handleError)
+          .handleGoogleDocUrl(adminToken, url);
       }
-      fileInput.files = dataTransfer.files;
-      handleFileSelect(files[0]);
     }
-  });
 
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files.length > 0) {
-      handleFileSelect(fileInput.files[0]);
+    function finalizeSubmission(uploadRes, meta) {
+      if(uploadRes.error) return handleError(uploadRes.error);
+      
+      document.getElementById('conversion-title').textContent = "Saving to Database...";
+      
+      google.script.run
+        .withSuccessHandler((res) => {
+          document.getElementById('conversion-overlay').style.display = 'none';
+          if(res.error) return alert(res.error);
+          
+          // Clear form
+          document.getElementById('file-input').value = '';
+          document.getElementById('file-name-display').textContent = '';
+          document.getElementById('gdoc-input').value = '';
+          document.getElementById('meta-class').value = '';
+          
+          refreshData();
+        })
+        .withFailureHandler(handleError)
+        .addNewAssessment(adminToken, uploadRes.fileUrl, meta);
     }
-  });
-}
 
-// Initialize the view when the page loads
-document.addEventListener('DOMContentLoaded', function() {
-  const user = <?!= JSON.stringify(user) ?>;
-  const token = '<?!= sessionToken ?>';
-  initializeAdminView(token, user.name, user.role);
-});
-</script>
+    function handleError(err) {
+      document.getElementById('conversion-overlay').style.display = 'none';
+      alert('Error: ' + (err.message || err));
+    }
+
+    function saveRow(rowIndex) {
+      const row = document.querySelector(`tr[data-id="${rowIndex}"]`);
+      const btn = row.querySelector('.action-btn');
+      const originalIcon = btn.innerHTML;
+      
+      btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite; font-size:18px">refresh</span>';
+      
+      const data = {
+        className: row.querySelector('[data-field="className"]').value,
+        instructor: row.querySelector('[data-field="instructor"]').value,
+        password: row.querySelector('[data-field="password"]').value,
+        studentEmails: row.querySelector('[data-field="studentEmails"]').value
+      };
+
+      google.script.run
+        .withSuccessHandler(() => {
+          btn.innerHTML = '<span class="material-icons" style="color:var(--success-green)">check</span>';
+          setTimeout(() => btn.innerHTML = originalIcon, 1500);
+        })
+        .withFailureHandler(err => {
+          alert('Save failed: ' + err);
+          btn.innerHTML = originalIcon;
+        })
+        .updateAssessmentRow(adminToken, rowIndex, data);
+    }
+
+    function deleteRow(rowIndex) {
+      if(!confirm('Delete this assessment permanently?')) return;
+      google.script.run.withSuccessHandler(refreshData).deleteAssessmentRow(adminToken, rowIndex);
+    }
+
+    function reprocessRow(rowIndex) {
+      if(!confirm('Regenerate all audio for this assessment?')) return;
+      google.script.run
+        .withSuccessHandler(() => { alert('Processing started.'); refreshData(); })
+        .reprocessAssessment(adminToken, rowIndex);
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
 </body>
 </html>

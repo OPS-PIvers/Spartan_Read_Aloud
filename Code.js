@@ -287,12 +287,12 @@ function createBatchJobForFile(rowIndex, rowData) {
   }
 
   // Create JSONL content for batch processing
-  const batchRequests = textChunks.map((chunkText, index) => ({
+  const batchRequests = textChunks.map((chunkObj, index) => ({
     key: `${fileId}_chunk_${index}`,
     request: {
       contents: [{
         parts: [{
-          text: `Read the following text in a clear, neutral, and steady voice: ${chunkText}`
+          text: `Read the following text in a clear, neutral, and steady voice: ${chunkObj.text}`
         }]
       }],
       generationConfig: {
@@ -587,7 +587,10 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
 
       if (prediction?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
         const audioData = prediction.candidates[0].content.parts[0].inlineData.data;
-        const chunkText = textChunks[i];
+        const chunkObj = textChunks[i];
+        const chunkText = chunkObj.text;
+        const chunkIds = chunkObj.ids;
+        
         const audioFileName = generateSafeFilenameFromText(chunkText, i);
 
         // Convert base64 to WAV and save
@@ -602,6 +605,7 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
 
         audioFileObjects.push({
           text: chunkText,
+          elementIds: chunkIds, // NEW: Add IDs
           searchWords: searchWords,
           audioUrl: `https://drive.google.com/uc?id=${audioFile.getId()}&export=media`,
           audioFilename: audioFile.getName()
@@ -1113,7 +1117,10 @@ function step2_GenerateMissingAudioAndFinalize() {
       let allChunksProcessed = true;
 
       for (let j = 0; j < totalChunks; j++) {
-         const chunkText = textChunks[j];
+         const chunkObj = textChunks[j];
+         const chunkText = chunkObj.text;
+         const chunkIds = chunkObj.ids;
+         
          // --- NEW: Generate the descriptive filename ---
          const newChunkName = generateSafeFilenameFromText(chunkText, j);
 
@@ -1141,7 +1148,8 @@ function step2_GenerateMissingAudioAndFinalize() {
          }
 
          if (audioFile) {
-            audioFileObjects.push(audioFile);
+            // Store file plus the IDs for this chunk
+            audioFileObjects.push({ file: audioFile, ids: chunkIds });
          } else {
             Logger.log(`--> FAILED to process chunk ${j + 1}. Will retry on next run.`);
             allChunksProcessed = false;
@@ -1153,14 +1161,17 @@ function step2_GenerateMissingAudioAndFinalize() {
         Logger.log(`--> All ${totalChunks} audio chunks accounted for. Finalizing...`);
         const audioDataForSheet = [];
         for(let j = 0; j < totalChunks; j++) {
-           const chunkText = textChunks[j];
-           const audioFile = audioFileObjects[j];
+           const chunkText = textChunks[j].text;
+           const chunkData = audioFileObjects[j];
+           const audioFile = chunkData.file;
+           
            // Generate searchWords: first 8 words to match frontend display
            const words = chunkText.trim().split(/\s+/);
            const searchWords = words.slice(0, CONSTANTS.SEARCH_WORDS_COUNT).join(' ') + (words.length > CONSTANTS.SEARCH_WORDS_COUNT ? '...' : '');
 
            audioDataForSheet.push({
              text: chunkText,
+             elementIds: chunkData.ids, // NEW: Add IDs for frontend mapping
              searchWords: searchWords,
              audioUrl: `https://drive.google.com/uc?id=${audioFile.getId()}&export=media`,
              audioFilename: audioFile.getName()
@@ -1986,8 +1997,145 @@ function sanitizeHtml(html) {
   // 11. Trim leading/trailing whitespace
   sanitized = sanitized.trim();
 
-  Logger.log(`Sanitized & normalized HTML: ${html.length} chars → ${sanitized.length} chars`);
+  // 12. Assign unique IDs to all block elements for precise TTS mapping
+  // This enables the frontend to highlight exactly what is being read
+  let blockCounter = 0;
+  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th', 'div', 'blockquote'];
+  const blockRegex = new RegExp(`<(${blockTags.join('|')})([^>]*)>`, 'gi');
+
+  sanitized = sanitized.replace(blockRegex, (match, tag, attrs) => {
+    // Don't add ID if it already has one (though we stripped them earlier)
+    if (/id=["']/.test(attrs)) return match;
+    return `<${tag}${attrs} id="sra-block-${blockCounter++}">`;
+  });
+
+  Logger.log(`Sanitized & normalized HTML: ${html.length} chars → ${sanitized.length} chars (Added ${blockCounter} IDs)`);
   return sanitized;
+}
+
+/**
+ * Parses HTML with 'sra-block-N' IDs into structured TTS chunks.
+ * Groups questions with their answer choices, and isolates paragraphs.
+ * @param {string} html The sanitized HTML with IDs
+ * @returns {Array<{text: string, ids: string[]}>} Array of chunk objects
+ */
+function parseHtmlToChunks(html) {
+  const chunks = [];
+  
+  // Extract all blocks with their text and ID
+  // Regex to find <tag ... id="sra-block-N" ...>content</tag>
+  // We use a simplified regex assuming well-formed HTML from sanitizeHtml
+  const blockPattern = /<(p|h[1-6]|li|td|th|div|blockquote)[^>]*id="(sra-block-\d+)"[^>]*>([\s\S]*?)<\/\1>/gi;
+  
+  let match;
+  const blocks = [];
+  
+  while ((match = blockPattern.exec(html)) !== null) {
+    const tag = match[1].toLowerCase();
+    const id = match[2];
+    let content = match[3];
+    
+    // Strip tags from content to get plain text for analysis
+    const plainText = content
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+      
+    if (plainText) {
+      blocks.push({ id, tag, text: plainText, raw: content });
+    }
+  }
+  
+  Logger.log(`Found ${blocks.length} content blocks for chunking`);
+  
+  if (blocks.length === 0) return [];
+
+  let currentChunk = { text: '', ids: [] };
+  
+  // Helper to finish current chunk and start a new one
+  const commitChunk = () => {
+    if (currentChunk.text.trim()) {
+      currentChunk.text = currentChunk.text.trim();
+      chunks.push(currentChunk);
+    }
+    currentChunk = { text: '', ids: [] };
+  };
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    
+    // LOGIC: when to break?
+    
+    // 1. Detect if this block starts with a numbering pattern (Question)
+    // Matches: "1.", "1)", "Q1.", "(1)" etc.
+    const isQuestionStart = /^(?:\d+|Q\d+)[.)\]]/.test(block.text);
+    
+    // 2. Detect if this block starts with an answer letter pattern
+    // Matches: "a.", "A)", "(a)" etc.
+    const isAnswerOption = /^(?:\(?[a-zA-Z][.)]|[a-zA-Z]\.)\s/.test(block.text);
+    
+    // 3. Detect if this block is a Header
+    const isHeader = /^h[1-6]/.test(block.tag);
+    
+    // DECISION MATRIX:
+    
+    if (isQuestionStart) {
+      // Always start a new chunk for a question
+      commitChunk();
+      currentChunk.text = block.text;
+      currentChunk.ids.push(block.id);
+    } 
+    else if (isAnswerOption) {
+      // If it's an answer, append to current chunk (assuming it belongs to prev question)
+      // BUT if current chunk is empty, just start it.
+      if (currentChunk.text) {
+         currentChunk.text += '\n' + block.text;
+         currentChunk.ids.push(block.id);
+      } else {
+         currentChunk.text = block.text;
+         currentChunk.ids.push(block.id);
+      }
+    }
+    else if (isHeader) {
+      // Headers usually stand alone or start a section
+      commitChunk();
+      currentChunk.text = block.text;
+      currentChunk.ids.push(block.id);
+      commitChunk(); // Isolate header
+    }
+    else {
+      // Regular paragraph/text
+      // If the previous chunk was a question/answer group, we should probably break
+      // to separate the "Question Block" from the next "Passage Block"
+      
+      // Check if current chunk looks like a question/answer group
+      const currentIsQuestionGroup = /^(?:\d+|Q\d+)[.)\]]/.test(currentChunk.text);
+      
+      if (currentIsQuestionGroup) {
+        commitChunk();
+        currentChunk.text = block.text;
+        currentChunk.ids.push(block.id);
+      } else {
+        // It's likely a continuation of a passage
+        // We can group paragraphs together, but for TTS, smaller chunks (per paragraph) are often better
+        // unless they are very short.
+        // Let's Group them if the previous one was short (< 50 chars)
+        if (currentChunk.text.length > 0 && currentChunk.text.length < 50) {
+           currentChunk.text += '\n' + block.text;
+           currentChunk.ids.push(block.id);
+        } else {
+           commitChunk();
+           currentChunk.text = block.text;
+           currentChunk.ids.push(block.id);
+        }
+      }
+    }
+  }
+  
+  commitChunk(); // Final commit
+  
+  return chunks;
 }
 
 
@@ -2038,45 +2186,27 @@ function extractTextFromFile(fileId) {
       Logger.log(`✗ Failed to convert file: ${conversionResult.error}`);
       return null;
     }
-    let htmlContent = conversionResult.html;
-    Logger.log(`→ Raw HTML length: ${htmlContent.length} chars`);
+    
+    // NEW: Use sanitizeHtml to ensure we work with the exact same structure the student sees
+    // This adds the IDs and normalizes lists
+    const htmlContent = sanitizeHtml(conversionResult.html);
+    Logger.log(`→ Sanitized HTML length: ${htmlContent.length} chars`);
 
-    // STEP 2: Strip HTML tags and extract plain text
-    let plainText = htmlContent
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove style/script
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<br\s*\/?>|<\/(p|div|h[1-6]|li|tr|th|td)>/gi, '\n') // Convert block ends to newlines
-      .replace(/<[^>]+>/g, ' ') // Remove all remaining tags (including <img>)
-      .replace(/&nbsp;/g, ' ') // Decode entities
-      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-      .replace(/&[a-z]+;/gi, ' '); // Remove other entities
-
-    Logger.log(`→ Plain text BEFORE normalization (first 1500 chars): ${plainText.substring(0, 1500)}`);
-
-    // Normalize whitespace AFTER stripping tags
-    plainText = plainText
-      .replace(/[\r\n]+/g, '\n') // Normalize line breaks first
-      .replace(/\n\s*\n+/g, '\n\n') // Collapse multiple line breaks to max 2
-      .replace(/[ \t]+/g, ' ') // Collapse multiple spaces/tabs to single space
-      .trim();
-
-    Logger.log(`→ Plain text AFTER normalization (first 1500 chars): ${plainText.substring(0, 1500)}`);
-
-    // STEP 3: Split on numbered questions using original CHUNK_SPLIT_REGEX
-    // This regex only looks for digits at the start of a line after normalization.
-    const chunks = plainText.split(CONSTANTS.CHUNK_SPLIT_REGEX)
-      .map(chunk => chunk.trim()) // Trim each resulting chunk
-      .filter(chunk => chunk); // Remove empty chunks
-
-    Logger.log(`✓ Extracted ${chunks.length} chunks from HTML (using List Convert -> Strip -> Split method)`);
-    chunks.forEach((chunk, i) => {
-        const markerMatch = chunk.match(/^\s*(\d+[.)\]])/);
-        const logPrefix = markerMatch ? `Chunk ${markerMatch[1]}` : `Chunk ${i + 1}`;
-        Logger.log(`  ${logPrefix} (first 100 chars): ${chunk.substring(0, 100)}...`);
-    });
-
-    return chunks;
+    // NEW: Parse HTML into structured chunks (grouping questions with answers)
+    const structuredChunks = parseHtmlToChunks(htmlContent);
+    
+    Logger.log(`✓ Extracted ${structuredChunks.length} structured chunks from HTML`);
+    
+    // For now, we return just the text to match existing contract
+    // In Step 2, we will access the full object (text + IDs)
+    // We store the full structured data in a cache or property? 
+    // actually, extractTextFromFile is called in Step 2 again. 
+    // So we can just return the objects and let the caller handle it?
+    // Existing callers expect array of strings. Let's attach the metadata property to the string object
+    // or just return the array of objects and update the callers.
+    // Let's update the callers.
+    
+    return structuredChunks;
 
   } catch (e) {
     Logger.log(`Failed to extract text from file ID ${fileId}. Error: ${e.toString()}`);
@@ -2706,6 +2836,16 @@ function doGet(e) {
   // Determine the user's role and get their data.
   const user = getUserByEmail(userEmail);
 
+  // Check if staff user wants to preview student view
+  if (user && e.parameter.preview === 'true' && 
+      (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || 
+       user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || 
+       user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN)) {
+    const template = HtmlService.createTemplateFromFile('student');
+    template.user = user;
+    return template.evaluate().setTitle('Student Preview').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+  }
+
   if (user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN)) {
     // For teachers/admins, serve the teacher dashboard.
     const template = HtmlService.createTemplateFromFile('teacher');
@@ -3090,6 +3230,12 @@ function getStudentAssessmentsForEmail(email) {
     const cleanEmail = email.toLowerCase().trim();
     const matchingAssessments = [];
 
+    // Check if user is staff (for preview mode)
+    const user = getUserByEmail(cleanEmail);
+    const isStaff = user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN);
+    const isTeacher = user && user.userType === CONSTANTS.ROLE_TOKEN_TEACHER;
+    const staffName = user ? user.name : '';
+
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
       const pdfUrl = row[CONSTANTS.COL.PDF_URL];
@@ -3098,11 +3244,26 @@ function getStudentAssessmentsForEmail(email) {
       const className = row[CONSTANTS.COL.CLASS_NAME] ? row[CONSTANTS.COL.CLASS_NAME].toString().trim() : '';
       const instructor = row[CONSTANTS.COL.INSTRUCTOR] ? row[CONSTANTS.COL.INSTRUCTOR].toString().trim() : '';
 
-      if (!pdfUrl || isComplete !== true || !studentEmailsRaw) continue;
+      if (!pdfUrl || isComplete !== true) continue;
 
-      const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
+      // Determine if this assessment should be shown
+      let shouldShow = false;
 
-      if (studentEmails.includes(cleanEmail)) {
+      if (isStaff) {
+        // Staff see all, or teachers see only their own
+        if (isTeacher) {
+           // Simple containment check matching getAllAssessments
+           shouldShow = staffName.toLowerCase().includes(instructor.toLowerCase());
+        } else {
+           shouldShow = true; // Admins see all
+        }
+      } else if (studentEmailsRaw) {
+        // Students only see assigned
+        const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
+        shouldShow = studentEmails.includes(cleanEmail);
+      }
+
+      if (shouldShow) {
         try {
           const fileId = getFileIdFromUrl(pdfUrl);
           if (fileId) {
@@ -3123,7 +3284,7 @@ function getStudentAssessmentsForEmail(email) {
       }
     }
 
-    Logger.log(`Found ${matchingAssessments.length} assessment(s) for ${email}`);
+    Logger.log(`Found ${matchingAssessments.length} assessment(s) for ${email} (Staff: ${isStaff})`);
 
     return {
       success: true,
@@ -3161,10 +3322,14 @@ function getAssessmentPdf(email, password, assessmentUrl) {
         const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
         const sheetPassword = row[CONSTANTS.COL.PASSWORD].toString().trim();
 
-        // Verify this authenticated user's email is in the list for this assessment.
-        if (studentEmails.includes(cleanEmail)) {
-          // NEW: Validate the provided password against the one in the sheet.
-          if (password !== sheetPassword) {
+        // Check if user is staff
+        const user = getUserByEmail(cleanEmail);
+        const isStaff = user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN);
+
+        // Verify this authenticated user's email is in the list for this assessment (or is staff)
+        if (isStaff || studentEmails.includes(cleanEmail)) {
+          // NEW: Validate the provided password against the one in the sheet (skip for staff)
+          if (!isStaff && password !== sheetPassword) {
             return { error: 'Incorrect password for this assessment.' };
           }
 
