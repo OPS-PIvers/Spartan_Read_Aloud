@@ -2162,26 +2162,12 @@ function extractTextFromFile(fileId) {
     const mimeType = file.getMimeType();
     Logger.log(`Extracting text from: ${file.getName()} (${mimeType})`);
 
-    // --- PDF OCR Handling (Keep as is) ---
-    if (mimeType === CONSTANTS.SUPPORTED_MIME_TYPES.PDF) {
-      Logger.log('→ Using OCR extraction for PDF');
-      // ... (Your existing PDF OCR logic using CHUNK_SPLIT_REGEX) ...
-      const blob = file.getBlob();
-      const metadata = { name: blob.getName(), mimeType: MimeType.GOOGLE_DOCS };
-      const tempDoc = Drive.Files.create(metadata, blob, { ocrLanguage: 'en', fields: 'id' });
-      const doc = DocumentApp.openById(tempDoc.id);
-      const text = doc.getBody().getText();
-      Drive.Files.remove(tempDoc.id);
-      const pdfChunks = text.split(CONSTANTS.CHUNK_SPLIT_REGEX)
-                            .map(chunk => chunk.trim())
-                            .filter(chunk => chunk)
-                            .map(chunkText => ({ text: chunkText, ids: [] })); // Wrap in object
-      Logger.log(`✓ Extracted ${pdfChunks.length} chunks from PDF via OCR`);
-      return pdfChunks;
-    }
-    // --- End PDF Handling ---
+    // --- PDF Handling: Fall through to HTML conversion ---
+    // We previously had a separate OCR text-only path here. 
+    // We now route PDFs through convertFileToHtml -> parseHtmlToChunks 
+    // to ensure we generate the element IDs required for highlighting.
 
-    // --- Google Docs / Word Handling ---
+    // --- Google Docs / Word / PDF Handling ---
     Logger.log('→ Using HTML conversion for text extraction');
     const conversionResult = convertFileToHtml(fileId);
     if (conversionResult.error) {
@@ -2754,8 +2740,10 @@ function processNewAssessment(fileUrl) {
         SpreadsheetApp.flush();
         Logger.log(`Step 1 complete: ${textChunks.length} chunks`);
 
-        // Step 2 would normally run here but requires audio generation
-        // For now, mark as ready for manual step 2 trigger
+        // Step 2: Immediately generate audio
+        // This prevents the user from having to wait for the next time-based trigger
+        Logger.log('→ Triggering immediate audio generation (Step 2)...');
+        step2_GenerateMissingAudioAndFinalize();
       }
       break;
     }
@@ -2796,6 +2784,28 @@ function reprocessAssessment(sessionToken, rowIndex) {
     sheet.getRange(actualRow, CONSTANTS.COL.AUDIO_JSON + 1).setValue('');
     sheet.getRange(actualRow, CONSTANTS.COL.IS_COMPLETE + 1).setValue(false);
     SpreadsheetApp.flush();
+
+    // Force regeneration: Delete existing audio folder
+    try {
+      const fileId = getFileIdFromUrl(pdfUrl);
+      const file = DriveApp.getFileById(fileId);
+      const fileName = file.getName();
+      // Remove extension to get folder name
+      // Matches logic in step2_GenerateMissingAudioAndFinalize
+      const baseName = fileName.replace(/\.[^.]+$/i, '').trim(); 
+      
+      const mainAudioFolder = getOrCreateFolder(CONSTANTS.AUDIO_DRIVE_FOLDER_NAME);
+      if (mainAudioFolder) {
+        const subfolders = mainAudioFolder.getFoldersByName(baseName);
+        while (subfolders.hasNext()) {
+          const folder = subfolders.next();
+          folder.setTrashed(true);
+          Logger.log(`Trashed existing audio folder: ${baseName}`);
+        }
+      }
+    } catch (folderError) {
+      Logger.log(`Warning: Could not delete audio folder: ${folderError.toString()}`);
+    }
 
     // Trigger processing
     processNewAssessment(pdfUrl);
