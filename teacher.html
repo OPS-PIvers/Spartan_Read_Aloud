@@ -417,6 +417,69 @@
     .table-edit-input:hover { border-color: var(--gray-300); background: white; }
     .table-edit-input:focus { border-color: var(--primary-blue); background: white; box-shadow: 0 0 0 2px rgba(45, 63, 137, 0.1); }
 
+    /* Email chips container */
+    .email-chips-container {
+      background: white;
+      border: 1px solid var(--gray-300);
+      border-radius: 4px;
+      padding: 4px;
+      min-height: 36px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      cursor: text;
+      max-height: 150px;
+      overflow-y: auto;
+      resize: vertical;
+    }
+    .email-chips-container:hover { border-color: var(--gray-400); }
+    .email-chips-container:focus-within { border-color: var(--primary-blue); box-shadow: 0 0 0 2px rgba(45, 63, 137, 0.1); }
+
+    /* Individual email chip */
+    .email-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--primary-lighter);
+      color: var(--primary-blue);
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .email-chip-remove {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--primary-blue);
+      font-size: 14px;
+      line-height: 1;
+      transition: background 0.15s;
+    }
+    .email-chip-remove:hover {
+      background: var(--primary-blue);
+      color: white;
+    }
+
+    /* Hidden input for chip data */
+    .email-chips-input {
+      flex: 1;
+      min-width: 120px;
+      border: none;
+      outline: none;
+      padding: 4px;
+      font-size: 13px;
+    }
+
     /* Badges */
     .badge {
       display: inline-flex;
@@ -872,6 +935,15 @@
           statusBadge = `<span class="badge badge-queued"><span class="badge-dot"></span>Queued</span>`;
         }
 
+        // Build email chips HTML
+        const emails = item.studentEmails ? item.studentEmails.split(',').map(e => e.trim()).filter(e => e) : [];
+        const emailChipsHtml = emails.map(email => `
+          <div class="email-chip">
+            <span>${escapeHtml(email)}</span>
+            <span class="email-chip-remove" onclick="removeEmailChip(this, ${item.rowIndex})" title="Remove">×</span>
+          </div>
+        `).join('');
+
         return `
           <tr data-id="${item.rowIndex}">
             <td><div style="font-weight:500; color:var(--primary-dark);">${escapeHtml(item.fileName)}</div></td>
@@ -879,7 +951,14 @@
             <td><input class="table-edit-input" data-field="className" value="${escapeHtml(item.className)}" placeholder="--"></td>
             <td><input class="table-edit-input" data-field="instructor" value="${escapeHtml(item.instructor)}" placeholder="--"></td>
             <td><input class="table-edit-input" data-field="password" value="${escapeHtml(item.password)}" placeholder="--"></td>
-            <td><input class="table-edit-input" data-field="studentEmails" value="${escapeHtml(item.studentEmails)}" placeholder="--"></td>
+            <td>
+              <div class="email-chips-container" data-row="${item.rowIndex}" onclick="focusEmailInput(this)">
+                ${emailChipsHtml}
+                <input type="text" class="email-chips-input" placeholder="${emails.length ? 'Add email...' : 'student@school.com'}"
+                  onkeydown="handleEmailInput(event, ${item.rowIndex})"
+                  onblur="addEmailChip(this, ${item.rowIndex})">
+              </div>
+            </td>
             <td>
               <div class="action-group">
                 <a href="<?= ScriptApp.getService().getUrl() ?>?preview=true&assessmentUrl=${encodeURIComponent(item.pdfUrl)}" target="_blank" class="action-btn" title="Preview as Student" style="text-decoration: none;">
@@ -1010,11 +1089,16 @@
       
       btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite; font-size:18px">refresh</span>';
       
+      // Collect emails from chips
+      const emailContainer = row.querySelector('.email-chips-container');
+      const emails = Array.from(emailContainer.querySelectorAll('.email-chip span:first-child'))
+        .map(span => span.textContent.trim());
+
       const data = {
         className: row.querySelector('[data-field="className"]').value,
         instructor: row.querySelector('[data-field="instructor"]').value,
         password: row.querySelector('[data-field="password"]').value,
-        studentEmails: row.querySelector('[data-field="studentEmails"]').value
+        studentEmails: emails.join(', ')
       };
 
       google.script.run
@@ -1039,6 +1123,81 @@
       google.script.run
         .withSuccessHandler(() => { alert('Processing started.'); refreshData(); })
         .reprocessAssessment(adminToken, rowIndex);
+    }
+
+    // Email chip functions
+    function focusEmailInput(container) {
+      const input = container.querySelector('.email-chips-input');
+      if (input) input.focus();
+    }
+
+    function handleEmailInput(event, rowIndex) {
+      if (event.key === 'Enter' || event.key === ',' || event.key === ' ') {
+        event.preventDefault();
+        addEmailChip(event.target, rowIndex);
+      } else if (event.key === 'Backspace' && event.target.value === '') {
+        // Remove last chip on backspace when input is empty
+        const container = event.target.closest('.email-chips-container');
+        const chips = container.querySelectorAll('.email-chip');
+        if (chips.length > 0) {
+          chips[chips.length - 1].remove();
+          updateEmailsForRow(rowIndex);
+        }
+      }
+    }
+
+    function addEmailChip(input, rowIndex) {
+      const email = input.value.trim().replace(/[,\s]+$/, ''); // Remove trailing commas/spaces
+      if (!email) return;
+
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        alert('Please enter a valid email address');
+        input.value = '';
+        return;
+      }
+
+      const container = input.closest('.email-chips-container');
+
+      // Check for duplicates
+      const existingEmails = Array.from(container.querySelectorAll('.email-chip span:first-child'))
+        .map(span => span.textContent.trim());
+      if (existingEmails.includes(email)) {
+        input.value = '';
+        return;
+      }
+
+      // Create chip
+      const chip = document.createElement('div');
+      chip.className = 'email-chip';
+      chip.innerHTML = `
+        <span>${escapeHtml(email)}</span>
+        <span class="email-chip-remove" onclick="removeEmailChip(this, ${rowIndex})" title="Remove">×</span>
+      `;
+
+      // Insert before input
+      container.insertBefore(chip, input);
+      input.value = '';
+
+      updateEmailsForRow(rowIndex);
+    }
+
+    function removeEmailChip(removeBtn, rowIndex) {
+      removeBtn.closest('.email-chip').remove();
+      updateEmailsForRow(rowIndex);
+    }
+
+    function updateEmailsForRow(rowIndex) {
+      const container = document.querySelector(`.email-chips-container[data-row="${rowIndex}"]`);
+      const emails = Array.from(container.querySelectorAll('.email-chip span:first-child'))
+        .map(span => span.textContent.trim());
+
+      // Update the assessment data
+      const item = assessmentList.find(a => a.rowIndex === rowIndex);
+      if (item) {
+        item.studentEmails = emails.join(', ');
+      }
     }
 
     function escapeHtml(text) {
