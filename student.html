@@ -252,7 +252,7 @@
 
     .html-assessment-container {
       font-family: var(--font-main);
-      line-height: 2.0;
+      line-height: var(--line-height, 2.0);
       color: var(--gray-900);
       font-size: 18px;
       max-width: 800px;
@@ -412,8 +412,7 @@
 
     /* Popups */
     .popup-menu {
-        position: absolute;
-        bottom: 90px;
+        position: fixed;
         background: white;
         border-radius: 12px;
         box-shadow: var(--shadow-up);
@@ -1007,8 +1006,10 @@ function bulkPreloadAudio() {
 
 // --- UI EVENT LISTENERS ---
 function setupEventListeners() {
-  // Back Button
-  document.getElementById('back-to-menu-btn').onclick = () => {
+  console.log('[DEBUG] setupEventListeners called');
+  try {
+    // Back Button
+    document.getElementById('back-to-menu-btn').onclick = () => {
     globalAudioPlayer.pause();
     viewerContainer.style.display = 'none';
     document.getElementById('audio-toolbar').style.display = 'none';
@@ -1032,44 +1033,74 @@ function setupEventListeners() {
   };
 
   // Speed button click handler
-  document.getElementById('speed-btn').onclick = (e) => {
-      e.stopPropagation();
-      const popup = document.getElementById('speed-popup');
-      popup.classList.toggle('visible');
-      // Ensure other popups are closed
-      document.getElementById('line-spacing-popup').classList.remove('visible');
-      // Position popup dynamically only if it's now visible
-      if (popup.classList.contains('visible')) {
-          positionPopup(e.currentTarget, popup);
-      }
-  };
+  console.log('[DEBUG] Setting up speed-btn handler');
+  const speedBtn = document.getElementById('speed-btn');
+  if (speedBtn) {
+    speedBtn.onclick = (e) => {
+        console.log('[DEBUG] Speed button clicked');
+        e.stopPropagation();
+        const popup = document.getElementById('speed-popup');
+        popup.classList.toggle('visible');
+        // Ensure other popups are closed
+        document.getElementById('line-spacing-popup').classList.remove('visible');
+        // Position popup dynamically only if it's now visible
+        if (popup.classList.contains('visible')) {
+            positionPopup(e.currentTarget, popup);
+        }
+    };
+  } else {
+    console.error('[DEBUG] speed-btn element not found!');
+  }
   
   // Speed Slider input handler
-  document.getElementById('speed-slider-popup').oninput = (e) => {
-      currentPlaybackRate = parseFloat(e.target.value);
-      globalAudioPlayer.playbackRate = currentPlaybackRate;
-      document.getElementById('speed-display').textContent = Math.round(currentPlaybackRate * 100) + '%';
-  };
+  console.log('[DEBUG] Setting up speed slider handler');
+  const speedSlider = document.getElementById('speed-slider-popup');
+  if (speedSlider) {
+    speedSlider.oninput = (e) => {
+        console.log('[DEBUG] Speed slider input:', e.target.value);
+        currentPlaybackRate = parseFloat(e.target.value);
+        globalAudioPlayer.playbackRate = currentPlaybackRate;
+        document.getElementById('speed-display').textContent = Math.round(currentPlaybackRate * 100) + '%';
+        console.log('[DEBUG] Set playback rate to:', currentPlaybackRate);
+    };
+  } else {
+    console.error('[DEBUG] speed-slider-popup not found!');
+  }
 
   // Line Spacing button click handler
-  document.getElementById('line-spacing-btn').onclick = (e) => {
-      e.stopPropagation();
-      const popup = document.getElementById('line-spacing-popup');
-      popup.classList.toggle('visible');
-      // Ensure other popups are closed
-      document.getElementById('speed-popup').classList.remove('visible');
-      // Position popup dynamically only if it's now visible
-      if (popup.classList.contains('visible')) {
-          positionPopup(e.currentTarget, popup);
-      }
-  };
+  console.log('[DEBUG] Setting up line-spacing-btn handler');
+  const lineSpacingBtn = document.getElementById('line-spacing-btn');
+  if (lineSpacingBtn) {
+    lineSpacingBtn.onclick = (e) => {
+        console.log('[DEBUG] Line spacing button clicked');
+        e.stopPropagation();
+        const popup = document.getElementById('line-spacing-popup');
+        popup.classList.toggle('visible');
+        // Ensure other popups are closed
+        document.getElementById('speed-popup').classList.remove('visible');
+        // Position popup dynamically only if it's now visible
+        if (popup.classList.contains('visible')) {
+            positionPopup(e.currentTarget, popup);
+        }
+    };
+  } else {
+    console.error('[DEBUG] line-spacing-btn element not found!');
+  }
 
   // Line Spacing Slider input handler
-  document.getElementById('line-spacing-slider-popup').oninput = (e) => {
-      currentLineSpacing = parseFloat(e.target.value);
-      setLineSpacing(currentLineSpacing);
-      document.getElementById('line-spacing-display').textContent = currentLineSpacing.toFixed(1);
-  };
+  console.log('[DEBUG] Setting up line spacing slider handler');
+  const lineSpacingSlider = document.getElementById('line-spacing-slider-popup');
+  if (lineSpacingSlider) {
+    lineSpacingSlider.oninput = (e) => {
+        console.log('[DEBUG] Line spacing slider input:', e.target.value);
+        currentLineSpacing = parseFloat(e.target.value);
+        setLineSpacing(currentLineSpacing);
+        document.getElementById('line-spacing-display').textContent = currentLineSpacing.toFixed(1);
+        console.log('[DEBUG] Set line spacing to:', currentLineSpacing);
+    };
+  } else {
+    console.error('[DEBUG] line-spacing-slider-popup not found!');
+  }
 
   // Hide popups on click outside
   document.addEventListener('click', (e) => {
@@ -1109,6 +1140,11 @@ function setupEventListeners() {
   };
   
   globalAudioPlayer.onended = () => navigateChunk(1);
+
+  console.log('[DEBUG] setupEventListeners completed successfully');
+  } catch (error) {
+    console.error('[DEBUG] Error in setupEventListeners:', error);
+  }
 }
 
 /**
@@ -1118,15 +1154,27 @@ function setupEventListeners() {
  */
 function positionPopup(triggerBtn, popup) {
     if (!triggerBtn || !popup) return;
+
+    console.log('[DEBUG] Positioning popup');
     const btnRect = triggerBtn.getBoundingClientRect();
-    popup.style.left = (btnRect.left + btnRect.width / 2 - popup.offsetWidth / 2) + 'px';
-    popup.style.bottom = (window.innerHeight - btnRect.top + 10) + 'px'; // 10px above button
-    
-    // Ensure popup is within viewport
-    if (parseFloat(popup.style.left) < 10) popup.style.left = '10px';
-    if (parseFloat(popup.style.left) + popup.offsetWidth > window.innerWidth - 10) {
-        popup.style.left = (window.innerWidth - popup.offsetWidth - 10) + 'px';
+    console.log('[DEBUG] Button rect:', btnRect);
+
+    // Center horizontally above the button
+    let leftPos = btnRect.left + (btnRect.width / 2) - (popup.offsetWidth / 2);
+
+    // Position above the button (10px gap)
+    let bottomPos = window.innerHeight - btnRect.top + 10;
+
+    // Ensure popup stays within viewport horizontally
+    if (leftPos < 10) leftPos = 10;
+    if (leftPos + popup.offsetWidth > window.innerWidth - 10) {
+        leftPos = window.innerWidth - popup.offsetWidth - 10;
     }
+
+    popup.style.left = leftPos + 'px';
+    popup.style.bottom = bottomPos + 'px';
+
+    console.log('[DEBUG] Popup positioned at left:', leftPos, 'bottom:', bottomPos);
 }
 
 /**
@@ -1134,9 +1182,13 @@ function positionPopup(triggerBtn, popup) {
  * @param {number} spacingValue The line height value (e.g., 1.5, 2.0).
  */
 function setLineSpacing(spacingValue) {
+    console.log('[DEBUG] setLineSpacing called with:', spacingValue);
     const container = document.querySelector('.html-assessment-container');
     if (container) {
         container.style.setProperty('--line-height', spacingValue);
+        console.log('[DEBUG] Line spacing set on container');
+    } else {
+        console.error('[DEBUG] .html-assessment-container not found!');
     }
 }
 
