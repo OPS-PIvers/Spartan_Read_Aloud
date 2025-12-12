@@ -1146,6 +1146,36 @@ function onAssessmentLoadError(error) {
     console.error(error);
 }
 
+/**
+ * Error handler for PDF/assessment loading failures.
+ * @param {string|object} error The error message or object.
+ */
+function onPdfLoadError(error) {
+    const msg = typeof error === 'string' ? error : 'Failed to load assessment.';
+    alert(msg);
+    console.error(error);
+
+    // Clean up any loading overlays
+    if (currentLoadingOverlay) {
+        currentLoadingOverlay.remove();
+        currentLoadingOverlay = null;
+    }
+    if (currentLoadingCard) {
+        currentLoadingCard.classList.remove('loading');
+        currentLoadingCard = null;
+    }
+}
+
+/**
+ * Escapes HTML special characters to prevent XSS attacks.
+ * @param {string} text The text to escape.
+ * @returns {string} The escaped text.
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 // --- INITIALIZATION ---
 (function() {
   try {
