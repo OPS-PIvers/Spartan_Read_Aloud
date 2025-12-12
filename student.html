@@ -1145,6 +1145,28 @@ function onAssessmentLoadError(error) {
     alert(msg);
     console.error(error);
 }
+
+// --- INITIALIZATION ---
+(function() {
+  try {
+    // Inject server-side data
+    // The 'user' object is passed from Code.js: template.user = user;
+    const currentUser = <?!= JSON.stringify(user) ?>;
+
+    // The 'targetAssessmentUrl' might be passed if it's a preview or direct link
+    // We use a check to avoid ReferenceError if it's not defined
+    const targetUrl = <?!= JSON.stringify(typeof targetAssessmentUrl !== 'undefined' ? targetAssessmentUrl : null) ?>;
+
+    if (currentUser) {
+      // Call the main initialization function
+      initializePasswordlessStudentView(currentUser, targetUrl);
+    } else {
+      console.error('No user data found. Initialization aborted.');
+    }
+  } catch (e) {
+    console.error('Failed to initialize student view:', e);
+  }
+})();
 </script>
 </body>
 </html>
