@@ -32,7 +32,8 @@ const CONSTANTS = {
     PROCESSING_STATUS: 8,
     BATCH_JOB_ID: 9,
     LAST_PROCESSED_TIME: 10,
-    PROCESSING_MODE: 11
+    PROCESSING_MODE: 11,
+    READ_ALOUD_ENABLED: 12
   },
 
   // --- File Handling ---

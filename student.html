@@ -752,18 +752,24 @@ function beginAssessment() {
 }
 
 function onAssessmentLoaded(result) {
-  serverChunks = result.audioChunks;
+  serverChunks = result.audioChunks || [];
   totalChunks = serverChunks.length;
   sessionToken = result.sessionToken; 
 
   renderHtmlAssessment(result.assessmentHtml);
-  initializeAudioToolbar();
+
+  if (result.readAloudEnabled !== false) {
+    initializeAudioToolbar();
+    if (chunksLoaded < totalChunks) {
+      bulkPreloadAudio();
+    }
+  } else {
+    // Hide audio toolbar
+    document.getElementById('audio-toolbar').style.display = 'none';
+  }
+
   setLineSpacing(currentLineSpacing); // Apply default line spacing
   setupEventListeners();
-
-  if (chunksLoaded < totalChunks) {
-    bulkPreloadAudio();
-  }
 }
 
 function renderHtmlAssessment(htmlContent) {

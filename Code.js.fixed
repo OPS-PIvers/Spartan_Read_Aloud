@@ -590,7 +590,7 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
         const chunkObj = textChunks[i];
         const chunkText = chunkObj.text;
         const chunkIds = chunkObj.ids;
-        
+
         const audioFileName = generateSafeFilenameFromText(chunkText, i);
 
         // Convert base64 to WAV and save
@@ -1040,8 +1040,6 @@ function step1_AnalyzePdfsAndCountChunks() {
 
   for (let i = 1; i < data.length; i++) {
     const pdfUrl = data[i][CONSTANTS.COL.PDF_URL];
-    const chunkCount = data[i][CONSTANTS.COL.CHUNK_COUNT];
-
     if (pdfUrl && !chunkCount) {
       const readAloudEnabled = data[i][CONSTANTS.COL.READ_ALOUD_ENABLED] !== false;
       if (!readAloudEnabled) {
@@ -1052,6 +1050,8 @@ function step1_AnalyzePdfsAndCountChunks() {
         continue;
       }
 
+      const fileId = getFileIdFromUrl(pdfUrl);
+    if (pdfUrl && !chunkCount) {
       const fileId = getFileIdFromUrl(pdfUrl);
       if (!fileId) {
         Logger.log(`Invalid Drive URL in row ${i + 1}. Skipping.`);
@@ -1108,8 +1108,8 @@ function step2_GenerateMissingAudioAndFinalize() {
       if (!fileId) continue;
 
       const file = DriveApp.getFileById(fileId);
-      const fileName = file.getName(); 
-      
+      const fileName = file.getName();
+
       const baseName = fileName.replace(/\.pdf$/i, '').trim();
       const assessmentSubfolder = getOrCreateSubfolder(mainAudioFolder, baseName);
       if (!assessmentSubfolder) continue;
@@ -1121,7 +1121,7 @@ function step2_GenerateMissingAudioAndFinalize() {
           Logger.log(`--> ERROR: Mismatch in chunk count for '${fileName}'. Expected ${totalChunks}, found ${textChunks ? textChunks.length : 0}. Skipping.`);
           continue;
       }
-      
+
       const audioFileObjects = [];
       let allChunksProcessed = true;
 
@@ -1129,7 +1129,7 @@ function step2_GenerateMissingAudioAndFinalize() {
          const chunkObj = textChunks[j];
          const chunkText = chunkObj.text;
          const chunkIds = chunkObj.ids;
-         
+
          // --- NEW: Generate the descriptive filename ---
          const newChunkName = generateSafeFilenameFromText(chunkText, j);
 
@@ -1162,10 +1162,10 @@ function step2_GenerateMissingAudioAndFinalize() {
          } else {
             Logger.log(`--> FAILED to process chunk ${j + 1}. Will retry on next run.`);
             allChunksProcessed = false;
-            break; 
+            break;
          }
       }
-      
+
       if (allChunksProcessed && audioFileObjects.length === totalChunks) {
         Logger.log(`--> All ${totalChunks} audio chunks accounted for. Finalizing...`);
         const audioDataForSheet = [];
@@ -1173,7 +1173,7 @@ function step2_GenerateMissingAudioAndFinalize() {
            const chunkText = textChunks[j].text;
            const chunkData = audioFileObjects[j];
            const audioFile = chunkData.file;
-           
+
            // Generate searchWords: first 8 words to match frontend display
            const words = chunkText.trim().split(/\s+/);
            const searchWords = words.slice(0, CONSTANTS.SEARCH_WORDS_COUNT).join(' ') + (words.length > CONSTANTS.SEARCH_WORDS_COUNT ? '...' : '');
@@ -2031,37 +2031,37 @@ function sanitizeHtml(html) {
  */
 function parseHtmlToChunks(html) {
   const chunks = [];
-  
+
   // Extract all blocks with their text and ID using regex
   // Only target the specific tags we added IDs to in sanitizeHtml
   const blockPattern = /<(p|h[1-6]|li|td|th)[^>]*id="(sra-block-\d+)"[^>]*>([\s\S]*?)<\/\1>/gi;
-  
+
   let match;
   const blocks = [];
-  
+
   while ((match = blockPattern.exec(html)) !== null) {
     const tag = match[1].toLowerCase();
     const id = match[2];
     let content = match[3];
-    
+
     // Strip tags from content to get plain text for analysis
     const plainText = content
       .replace(/<[^>]+>/g, ' ')
       .replace(/&nbsp;/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-      
+
     if (plainText) {
       blocks.push({ id, tag, text: plainText });
     }
   }
-  
+
   Logger.log(`Found ${blocks.length} content blocks for chunking`);
-  
+
   if (blocks.length === 0) return [];
 
   let currentChunk = { text: '', ids: [] };
-  
+
   // Helper to finish current chunk and start a new one
   const commitChunk = () => {
     if (currentChunk.text.trim()) {
@@ -2073,18 +2073,18 @@ function parseHtmlToChunks(html) {
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
-    
+
     // --- Detection Logic ---
-    
+
     // 1. Question Start: "1.", "1)", "Q1", "(1)"
     const isQuestionStart = /^(?:\d+|Q\d+)[.)\]]/.test(block.text);
-    
+
     // 2. Answer Option: "a.", "A)", "(a)"
     const isAnswerOption = /^(?:\(?[a-zA-Z][.)]|[a-zA-Z]\.)\s/.test(block.text);
-    
+
     // 3. Header
     const isHeader = /^h[1-6]/.test(block.tag);
-    
+
     // 4. Metadata/Directions (e.g., "Directions:", "Read the following...")
     const isDirections = /^(directions|instructions|read|note):/i.test(block.text);
 
@@ -2094,7 +2094,7 @@ function parseHtmlToChunks(html) {
       // Start of new chunk
       currentChunk.text = block.text;
       currentChunk.ids.push(block.id);
-    } 
+    }
     else if (isQuestionStart || isHeader) {
       // Rule: Questions and Headers usually start a NEW thought/context
       // Priority 1: Force break before a new question or header
@@ -2103,7 +2103,7 @@ function parseHtmlToChunks(html) {
       currentChunk.ids.push(block.id);
     }
     else if (isDirections) {
-      // Rule: Directions usually precede content. 
+      // Rule: Directions usually precede content.
       commitChunk();
       currentChunk.text = block.text;
       currentChunk.ids.push(block.id);
@@ -2116,14 +2116,14 @@ function parseHtmlToChunks(html) {
     }
     else {
       // Rule: Standard Paragraph / Text Continuation
-      
+
       // Check if previous chunk ended with a sentence terminator
       const sentenceEndRegex = /[.!?]"?$/;
       const previousEndedSentence = sentenceEndRegex.test(currentChunk.text.trim());
-      
+
       // Check length of previous chunk
       const isPreviousShort = currentChunk.text.length < 150;
-      
+
       // Check if current block is a continuation (sentence fragment flow)
       // or if previous was just a short intro line
       if (!previousEndedSentence || isPreviousShort) {
@@ -2138,9 +2138,9 @@ function parseHtmlToChunks(html) {
       }
     }
   }
-  
+
   commitChunk(); // Final commit
-  
+
   return chunks;
 }
 
@@ -2168,8 +2168,8 @@ function extractTextFromFile(fileId) {
     Logger.log(`Extracting text from: ${file.getName()} (${mimeType})`);
 
     // --- PDF Handling: Fall through to HTML conversion ---
-    // We previously had a separate OCR text-only path here. 
-    // We now route PDFs through convertFileToHtml -> parseHtmlToChunks 
+    // We previously had a separate OCR text-only path here.
+    // We now route PDFs through convertFileToHtml -> parseHtmlToChunks
     // to ensure we generate the element IDs required for highlighting.
 
     // --- Google Docs / Word / PDF Handling ---
@@ -2179,7 +2179,7 @@ function extractTextFromFile(fileId) {
       Logger.log(`✗ Failed to convert file: ${conversionResult.error}`);
       return null;
     }
-    
+
     // NEW: Use sanitizeHtml to ensure we work with the exact same structure the student sees
     // This adds the IDs and normalizes lists
     const htmlContent = sanitizeHtml(conversionResult.html);
@@ -2187,18 +2187,18 @@ function extractTextFromFile(fileId) {
 
     // NEW: Parse HTML into structured chunks (grouping questions with answers)
     const structuredChunks = parseHtmlToChunks(htmlContent);
-    
+
     Logger.log(`✓ Extracted ${structuredChunks.length} structured chunks from HTML`);
-    
+
     // For now, we return just the text to match existing contract
     // In Step 2, we will access the full object (text + IDs)
-    // We store the full structured data in a cache or property? 
-    // actually, extractTextFromFile is called in Step 2 again. 
+    // We store the full structured data in a cache or property?
+    // actually, extractTextFromFile is called in Step 2 again.
     // So we can just return the objects and let the caller handle it?
     // Existing callers expect array of strings. Let's attach the metadata property to the string object
     // or just return the array of objects and update the callers.
     // Let's update the callers.
-    
+
     return structuredChunks;
 
   } catch (e) {
@@ -2328,21 +2328,16 @@ function getAllAssessments(sessionToken) {
         }
       } catch (e) {
         fileName = 'Unknown file';
-      }
+        password: row[CONSTANTS.COL.PASSWORD] || "",
+        studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || "",
+        readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false
+      });
 
       assessments.push({
         rowIndex: i,
         fileName: fileName,
         pdfUrl: pdfUrl,
         chunkCount: row[CONSTANTS.COL.CHUNK_COUNT] || 0,
-        audioJson: row[CONSTANTS.COL.AUDIO_JSON] || '',
-        isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
-        className: row[CONSTANTS.COL.CLASS_NAME] || '',
-        instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
-        password: row[CONSTANTS.COL.PASSWORD] || '',
-        studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || '',
-        readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false
-      });
         audioJson: row[CONSTANTS.COL.AUDIO_JSON] || '',
         isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
         className: row[CONSTANTS.COL.CLASS_NAME] || '',
@@ -2412,14 +2407,19 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
     if (data.className !== undefined) {
       sheet.getRange(actualRow, CONSTANTS.COL.CLASS_NAME + 1).setValue(data.className);
     }
-    if (data.password !== undefined) {
-      sheet.getRange(actualRow, CONSTANTS.COL.PASSWORD + 1).setValue(data.password);
-    }
     if (data.studentEmails !== undefined) {
       sheet.getRange(actualRow, CONSTANTS.COL.STUDENT_EMAILS + 1).setValue(parseStudentEmails(data.studentEmails));
     }
     if (data.readAloudEnabled !== undefined) {
       sheet.getRange(actualRow, CONSTANTS.COL.READ_ALOUD_ENABLED + 1).setValue(data.readAloudEnabled);
+    }
+
+    SpreadsheetApp.flush();
+    if (data.password !== undefined) {
+      sheet.getRange(actualRow, CONSTANTS.COL.PASSWORD + 1).setValue(data.password);
+    }
+    if (data.studentEmails !== undefined) {
+      sheet.getRange(actualRow, CONSTANTS.COL.STUDENT_EMAILS + 1).setValue(parseStudentEmails(data.studentEmails));
     }
 
     SpreadsheetApp.flush();
@@ -2460,7 +2460,7 @@ function deleteAssessmentRow(sessionToken, rowIndex) {
 
     // 1. Get File URL to trash the file (prevent re-discovery)
     const pdfUrl = sheet.getRange(actualRow, CONSTANTS.COL.PDF_URL + 1).getValue();
-    
+
     if (pdfUrl) {
       try {
         const fileId = getFileIdFromUrl(pdfUrl);
@@ -2681,26 +2681,26 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
 
     // Validate file URL
     const fileId = getFileIdFromUrl(fileUrl);
-    if (!fileId) {
-      return { error: 'Invalid file URL.' };
-    }
-
-    // Check if URL already exists
-    const data = sheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
+    // Add new row with file URL and metadata
+    const newRow = new Array(13).fill(""); // 13 columns
+    newRow[CONSTANTS.COL.PDF_URL] = fileUrl;
+    newRow[CONSTANTS.COL.CLASS_NAME] = metadata.className || "";
+    newRow[CONSTANTS.COL.INSTRUCTOR] = metadata.instructor || "";
+    newRow[CONSTANTS.COL.PASSWORD] = metadata.password || "";
+    newRow[CONSTANTS.COL.STUDENT_EMAILS] = parseStudentEmails(metadata.studentEmails || "");
+    newRow[CONSTANTS.COL.READ_ALOUD_ENABLED] = metadata.readAloudEnabled !== false;
       if (data[i][CONSTANTS.COL.PDF_URL] === fileUrl) {
         return { error: 'This file is already in the database.' };
       }
     }
 
     // Add new row with file URL and metadata
-    const newRow = new Array(13).fill(''); // 13 columns
+    const newRow = new Array(8).fill(''); // 8 columns
     newRow[CONSTANTS.COL.PDF_URL] = fileUrl;
     newRow[CONSTANTS.COL.CLASS_NAME] = metadata.className || '';
     newRow[CONSTANTS.COL.INSTRUCTOR] = metadata.instructor || '';
     newRow[CONSTANTS.COL.PASSWORD] = metadata.password || '';
     newRow[CONSTANTS.COL.STUDENT_EMAILS] = parseStudentEmails(metadata.studentEmails || '');
-    newRow[CONSTANTS.COL.READ_ALOUD_ENABLED] = metadata.readAloudEnabled !== false;
 
     sheet.appendRow(newRow);
     SpreadsheetApp.flush();
@@ -2718,26 +2718,6 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     return {
       success: true,
       rowIndex: rowIndex,
-      message: 'Assessment added successfully. Processing has been started.'
-    };
-
-  } catch (e) {
-    Logger.log(`Error in addNewAssessment: ${e.toString()}`);
-    return { error: 'Failed to add assessment: ' + e.toString() };
-  }
-}
-
-/**
- * Processes a specific assessment (runs steps 1 and 2).
- * Internal function called after adding new assessment.
- * @param {string} fileUrl File URL to process
- */
-function processNewAssessment(fileUrl) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
-  if (!sheet) return;
-
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
     if (data[i][CONSTANTS.COL.PDF_URL] === fileUrl && !data[i][CONSTANTS.COL.CHUNK_COUNT]) {
       // Found the new row - analyze it
       const fileId = getFileIdFromUrl(fileUrl);
@@ -2755,6 +2735,21 @@ function processNewAssessment(fileUrl) {
         Logger.log("Read Aloud disabled. Marked as complete.");
         break;
       }
+ * Internal function called after adding new assessment.
+ * @param {string} fileUrl File URL to process
+ */
+function processNewAssessment(fileUrl) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+  if (!sheet) return;
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][CONSTANTS.COL.PDF_URL] === fileUrl && !data[i][CONSTANTS.COL.CHUNK_COUNT]) {
+      // Found the new row - analyze it
+      const fileId = getFileIdFromUrl(fileUrl);
+      if (!fileId) continue;
+
+      Logger.log(`Processing new assessment: ${fileUrl}`);
 
       // Step 1: Extract text and count chunks
       const textChunks = extractTextFromFile(fileId);
@@ -2816,8 +2811,8 @@ function reprocessAssessment(sessionToken, rowIndex) {
       const fileName = file.getName();
       // Remove extension to get folder name
       // Matches logic in step2_GenerateMissingAudioAndFinalize
-      const baseName = fileName.replace(/\.[^.]+$/i, '').trim(); 
-      
+      const baseName = fileName.replace(/\.[^.]+$/i, '').trim();
+
       const mainAudioFolder = getOrCreateFolder(CONSTANTS.AUDIO_DRIVE_FOLDER_NAME);
       if (mainAudioFolder) {
         const subfolders = mainAudioFolder.getFoldersByName(baseName);
@@ -2889,9 +2884,9 @@ function doGet(e) {
   const user = getUserByEmail(userEmail);
 
   // Check if staff user wants to preview student view
-  if (user && e.parameter.preview === 'true' && 
-      (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || 
-       user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || 
+  if (user && e.parameter.preview === 'true' &&
+      (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER ||
+       user.userType === CONSTANTS.ROLE_TOKEN_ADMIN ||
        user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN)) {
     Logger.log(`doGet: Entering student preview mode. Preview: ${e.parameter.preview}, Assessment URL: ${e.parameter.assessmentUrl}`);
     const template = HtmlService.createTemplateFromFile('student');
@@ -2947,7 +2942,7 @@ function getUserByEmail(email) {
         } else if (teacherRole === CONSTANTS.ROLE_ADMIN) {
           userType = CONSTANTS.ROLE_TOKEN_ADMIN;
         }
-        
+
         return {
           userType: userType,
           role: teacherRole,
@@ -3360,34 +3355,6 @@ function getStudentAssessmentsForEmail(email) {
  * @param {string} assessmentUrl Optional - specific assessment URL to load (for multi-assessment selection)
  * @returns {Object} Assessment data with assessmentHtml and sessionToken for secure audio access
  */
-function getAssessmentPdf(email, password, assessmentUrl) {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
-    if (!sheet) return { error: 'Backend Error: "Assessment Database" sheet not found.' };
-    const data = sheet.getDataRange().getValues();
-    const cleanEmail = email.toLowerCase().trim();
-
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      const pdfUrl = row[CONSTANTS.COL.PDF_URL];
-
-      // Find the correct assessment row using the URL
-      if (pdfUrl === assessmentUrl) {
-        const studentEmailsRaw = row[CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
-        const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
-        const sheetPassword = row[CONSTANTS.COL.PASSWORD].toString().trim();
-
-        // Check if user is staff
-        const user = getUserByEmail(cleanEmail);
-        const isStaff = user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN);
-
-        // Verify this authenticated user's email is in the list for this assessment (or is staff)
-        if (isStaff || studentEmails.includes(cleanEmail)) {
-          // NEW: Validate the provided password against the one in the sheet (skip for staff)
-          if (!isStaff && password !== sheetPassword) {
-            return { error: 'Incorrect password for this assessment.' };
-          }
-
           // Password is correct, proceed...
           const audioDataJson = row[CONSTANTS.COL.AUDIO_JSON];
           const readAloudEnabled = row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false;
@@ -3403,15 +3370,47 @@ function getAssessmentPdf(email, password, assessmentUrl) {
           const mimeType = file.getMimeType();
           const fileName = file.getName();
           const audioChunks = audioDataJson ? JSON.parse(audioDataJson) : [];
+      // Find the correct assessment row using the URL
+      if (pdfUrl === assessmentUrl) {
+        const studentEmailsRaw = row[CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
+        const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
+        const sheetPassword = row[CONSTANTS.COL.PASSWORD].toString().trim();
+
+        // Check if user is staff
+        const user = getUserByEmail(cleanEmail);
+        const isStaff = user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN);
+
+        // Verify this authenticated user's email is in the list for this assessment (or is staff)
+        if (isStaff || studentEmails.includes(cleanEmail)) {
+          // NEW: Validate the provided password against the one in the sheet (skip for staff)
+          return {
+            fileType: "html",
+            assessmentHtml: sanitizeHtml(conversionResult.html),
+            fileName: fileName,
+            audioChunks: audioChunks,
+            sessionToken: sessionToken,
+            readAloudEnabled: readAloudEnabled
+          };
+            return { error: 'Audio for this assessment has not been generated yet. Please try again later.' };
+          }
+
+          const fileId = getFileIdFromUrl(pdfUrl);
+          if (!fileId) return { error: 'Invalid Google Drive URL in sheet.' };
+
+          const file = DriveApp.getFileById(fileId);
+          const mimeType = file.getMimeType();
+          const fileName = file.getName();
+          const audioChunks = JSON.parse(audioDataJson);
 
           Logger.log(`Serving assessment: ${fileName} (${mimeType}) to ${email}`);
 
           // Generate session token for secure audio access
-          const sessionToken = isStaff ? 
-            generateSessionToken(cleanEmail, user.userType) : 
+          // If staff, use their role to bypass list validation. If student, use pdfUrl to bind token to assessment.
+          const sessionToken = isStaff ?
+            generateSessionToken(cleanEmail, user.userType) :
             generateSessionToken(cleanEmail, pdfUrl);
 
-          // Convert all files to HTML
+          // Convert all files (PDF, Docs, Word) to HTML with embedded images
           Logger.log('→ Converting to HTML for native rendering');
           const conversionResult = convertFileToHtml(fileId);
           if (conversionResult.error) {
@@ -3420,12 +3419,11 @@ function getAssessmentPdf(email, password, assessmentUrl) {
           }
 
           return {
-            fileType: "html",
+            fileType: 'html',
             assessmentHtml: sanitizeHtml(conversionResult.html),
             fileName: fileName,
             audioChunks: audioChunks,
-            sessionToken: sessionToken,
-            readAloudEnabled: readAloudEnabled
+            sessionToken: sessionToken
           };
         } else {
           // User is trying to access an assessment they are not assigned to.
