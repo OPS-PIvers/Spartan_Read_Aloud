@@ -1045,10 +1045,7 @@ function step1_AnalyzePdfsAndCountChunks() {
     if (pdfUrl && !chunkCount) {
       const readAloudEnabled = data[i][CONSTANTS.COL.READ_ALOUD_ENABLED] !== false;
       if (!readAloudEnabled) {
-        // Just mark as complete with 0 chunks
-        sheet.getRange(i + 1, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(0);
-        sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
-        sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue("NO_AUDIO_REQUIRED");
+        markAssessmentAsNoAudioRequired(sheet, i + 1);
         continue;
       }
 
@@ -2328,6 +2325,7 @@ function getAllAssessments(sessionToken) {
         }
       } catch (e) {
         fileName = 'Unknown file';
+        Logger.log(`Could not fetch file name for row ${i}: ${e.toString()}`);
       }
 
       assessments.push({
@@ -2342,13 +2340,6 @@ function getAllAssessments(sessionToken) {
         password: row[CONSTANTS.COL.PASSWORD] || '',
         studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || '',
         readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false
-      });
-        audioJson: row[CONSTANTS.COL.AUDIO_JSON] || '',
-        isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
-        className: row[CONSTANTS.COL.CLASS_NAME] || '',
-        instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
-        password: row[CONSTANTS.COL.PASSWORD] || '',
-        studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || ''
       });
     }
 
@@ -2411,6 +2402,9 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
     // Update only the editable columns
     if (data.className !== undefined) {
       sheet.getRange(actualRow, CONSTANTS.COL.CLASS_NAME + 1).setValue(data.className);
+    }
+    if (data.instructor !== undefined) {
+      sheet.getRange(actualRow, CONSTANTS.COL.INSTRUCTOR + 1).setValue(data.instructor);
     }
     if (data.password !== undefined) {
       sheet.getRange(actualRow, CONSTANTS.COL.PASSWORD + 1).setValue(data.password);
@@ -2747,12 +2741,7 @@ function processNewAssessment(fileUrl) {
       Logger.log(`Processing new assessment: ${fileUrl} (Read Aloud: ${readAloudEnabled})`);
 
       if (!readAloudEnabled) {
-        // Skip audio generation, mark as complete immediately
-        sheet.getRange(i + 1, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(0);
-        sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
-        sheet.getRange(i + 1, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue("NO_AUDIO_REQUIRED");
-        SpreadsheetApp.flush();
-        Logger.log("Read Aloud disabled. Marked as complete.");
+        markAssessmentAsNoAudioRequired(sheet, i + 1);
         break;
       }
 
@@ -2773,6 +2762,19 @@ function processNewAssessment(fileUrl) {
     }
   }
 }
+/**
+ * Marks an assessment as complete when Read Aloud is disabled.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The assessment database sheet
+ * @param {number} rowIndex The 1-based row index in the sheet
+ */
+function markAssessmentAsNoAudioRequired(sheet, rowIndex) {
+  sheet.getRange(rowIndex, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(0);
+  sheet.getRange(rowIndex, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
+  sheet.getRange(rowIndex, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue("NO_AUDIO_REQUIRED");
+  SpreadsheetApp.flush();
+  Logger.log(`Row ${rowIndex}: Read Aloud disabled. Marked as complete.`);
+}
+
 
 /**
  * Manually re-processes an assessment (runs steps 1 and 2).
