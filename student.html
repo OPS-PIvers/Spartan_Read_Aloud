@@ -585,6 +585,7 @@ let isLoadingAudio = false;
 let sessionToken = null;
 let totalChunks = 0; 
 let chunksLoaded = 0; 
+let isReadAloudEnabled = true;
 
 // Session storage
 let storedEmail = null;
@@ -752,24 +753,29 @@ function beginAssessment() {
 }
 
 function onAssessmentLoaded(result) {
+  isReadAloudEnabled = result.readAloudEnabled !== false;
   serverChunks = result.audioChunks || [];
   totalChunks = serverChunks.length;
   sessionToken = result.sessionToken; 
 
   renderHtmlAssessment(result.assessmentHtml);
 
-  if (result.readAloudEnabled !== false) {
-    initializeAudioToolbar();
+  // Initialize UI components
+  initializeAudioToolbar();
+  setLineSpacing(currentLineSpacing);
+  setupEventListeners();
+
+  // Handle Read Aloud specific features
+  if (isReadAloudEnabled) {
     if (chunksLoaded < totalChunks) {
       bulkPreloadAudio();
     }
   } else {
-    // Hide audio toolbar
-    document.getElementById('audio-toolbar').style.display = 'none';
+    // Hide audio-specific controls but keep the toolbar for tools (Line Spacing, Focus)
+    const toolbar = document.getElementById('audio-toolbar');
+    toolbar.querySelector('.toolbar-info').style.display = 'none';
+    toolbar.querySelector('.toolbar-controls').style.display = 'none';
   }
-
-  setLineSpacing(currentLineSpacing); // Apply default line spacing
-  setupEventListeners();
 }
 
 function renderHtmlAssessment(htmlContent) {
@@ -793,6 +799,8 @@ function mapIdsToChunks(serverChunks) {
           el.classList.add('clickable-chunk'); 
           el.addEventListener('click', (e) => {
              e.stopPropagation();
+             // Check if readAloud is enabled before trying to play audio
+             // But we still want to jump (scroll) and highlight
              jumpToChunk(index); 
           });
         }
@@ -855,7 +863,14 @@ function highlightChunkInHTML(chunkIndex) {
 
 function jumpToChunk(index) {
   if (index < 0 || index >= serverChunks.length) return;
-  playAudio(serverChunks[index], index);
+  
+  if (isReadAloudEnabled) {
+    playAudio(serverChunks[index], index);
+  } else {
+    // Just highlight and scroll if read aloud is disabled
+    currentChunkIndex = index;
+    highlightChunkInHTML(index);
+  }
 }
 
 function navigateChunk(direction) {
