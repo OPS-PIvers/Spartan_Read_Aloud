@@ -1041,8 +1041,10 @@ function step1_AnalyzePdfsAndCountChunks() {
   for (let i = 1; i < data.length; i++) {
     const pdfUrl = data[i][CONSTANTS.COL.PDF_URL];
     const chunkCount = data[i][CONSTANTS.COL.CHUNK_COUNT];
+    const processingStatus = data[i][CONSTANTS.COL.PROCESSING_STATUS];
 
-    if (pdfUrl && !chunkCount) {
+    // Only analyze if chunkCount is unset and no processing has started
+    if (pdfUrl && chunkCount === '' && !processingStatus) {
       const readAloudEnabled = data[i][CONSTANTS.COL.READ_ALOUD_ENABLED] !== false;
       if (!readAloudEnabled) {
         markAssessmentAsNoAudioRequired(sheet, i + 1);
@@ -2732,7 +2734,10 @@ function processNewAssessment(fileUrl) {
 
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
-    if (data[i][CONSTANTS.COL.PDF_URL] === fileUrl && !data[i][CONSTANTS.COL.CHUNK_COUNT]) {
+    const chunkCount = data[i][CONSTANTS.COL.CHUNK_COUNT];
+    const processingStatus = data[i][CONSTANTS.COL.PROCESSING_STATUS];
+
+    if (data[i][CONSTANTS.COL.PDF_URL] === fileUrl && chunkCount === '' && !processingStatus) {
       // Found the new row - analyze it
       const fileId = getFileIdFromUrl(fileUrl);
       if (!fileId) continue;
