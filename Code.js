@@ -2341,7 +2341,8 @@ function getAllAssessments(sessionToken) {
         instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
         password: row[CONSTANTS.COL.PASSWORD] || '',
         studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || '',
-        readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false
+        readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
+        accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]).toISOString() : ''
       });
     }
 
@@ -2416,6 +2417,10 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
     }
     if (data.readAloudEnabled !== undefined) {
       sheet.getRange(actualRow, CONSTANTS.COL.READ_ALOUD_ENABLED + 1).setValue(data.readAloudEnabled);
+    }
+    if (data.accessExpires !== undefined) {
+      const expiryDate = data.accessExpires ? new Date(data.accessExpires) : '';
+      sheet.getRange(actualRow, CONSTANTS.COL.ACCESS_EXPIRES + 1).setValue(expiryDate);
     }
 
     SpreadsheetApp.flush();
@@ -2690,13 +2695,14 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     }
 
     // Add new row with file URL and metadata
-    const newRow = new Array(13).fill(''); // 13 columns
+    const newRow = new Array(14).fill(''); // 14 columns
     newRow[CONSTANTS.COL.PDF_URL] = fileUrl;
     newRow[CONSTANTS.COL.CLASS_NAME] = metadata.className || '';
     newRow[CONSTANTS.COL.INSTRUCTOR] = metadata.instructor || '';
     newRow[CONSTANTS.COL.PASSWORD] = metadata.password || '';
     newRow[CONSTANTS.COL.STUDENT_EMAILS] = parseStudentEmails(metadata.studentEmails || '');
     newRow[CONSTANTS.COL.READ_ALOUD_ENABLED] = metadata.readAloudEnabled !== false;
+    newRow[CONSTANTS.COL.ACCESS_EXPIRES] = metadata.accessExpires ? new Date(metadata.accessExpires) : '';
 
     sheet.appendRow(newRow);
     SpreadsheetApp.flush();
@@ -3398,6 +3404,14 @@ function getAssessmentPdf(email, password, assessmentUrl) {
           // Password is correct, proceed...
           const audioDataJson = row[CONSTANTS.COL.AUDIO_JSON];
           const readAloudEnabled = row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false;
+          const accessExpires = row[CONSTANTS.COL.ACCESS_EXPIRES];
+
+          // Check for expiration
+          if (accessExpires && accessExpires instanceof Date && !isNaN(accessExpires)) {
+            if (new Date() > accessExpires) {
+              return { error: 'Access to this assessment has expired. Please contact your instructor.' };
+            }
+          }
 
           if (readAloudEnabled && !audioDataJson) {
             return { error: "Audio for this assessment has not been generated yet. Please try again later." };

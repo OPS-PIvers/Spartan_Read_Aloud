@@ -720,6 +720,10 @@
             <label class="input-label">Student Emails (Comma separated)</label>
             <input type="text" id="meta-emails" class="form-control" placeholder="student1@school.com, student2@school.com">
           </div>
+          <div class="input-group">
+            <label class="input-label">Access Expires (Optional)</label>
+            <input type="datetime-local" id="meta-expires" class="form-control">
+          </div>
           <div class="input-group checkbox-group">
             <input type="checkbox" id="meta-readaloud" checked class="checkbox-control">
             <label for="meta-readaloud" class="input-label" style="margin-bottom: 0; cursor: pointer;">Enable Read Aloud</label>
@@ -751,13 +755,14 @@
         <table class="table">
           <thead>
             <tr>
-              <th style="width: 18%;">File Name</th>
-              <th style="width: 10%;">Status</th>
-              <th style="width: 12%;">Class</th>
-              <th style="width: 12%;">Instructor</th>
+              <th style="width: 15%;">File Name</th>
+              <th style="width: 8%;">Status</th>
+              <th style="width: 10%;">Class</th>
+              <th style="width: 10%;">Instructor</th>
               <th style="width: 10%;">Password</th>
-              <th style="width: 8%;">Read Aloud</th>
-              <th style="width: 20%;">Students</th>
+              <th style="width: 7%;">Read Aloud</th>
+              <th style="width: 12%;">Expires</th>
+              <th style="width: 18%;">Students</th>
               <th style="width: 10%; text-align:right;">Actions</th>
             </tr>
           </thead>
@@ -981,6 +986,10 @@
               <input type="checkbox" data-field="readAloudEnabled" ${item.readAloudEnabled !== false ? 'checked' : ''} class="table-checkbox">
             </td>
             <td>
+              <input type="datetime-local" class="table-edit-input" data-field="accessExpires" 
+                value="${item.accessExpires ? item.accessExpires.substring(0, 16) : ''}">
+            </td>
+            <td>
               <div class="email-chips-container" data-row="${item.rowIndex}" onclick="focusEmailInput(this)">
                 ${emailChipsHtml}
                 <input type="text" class="email-chips-input" placeholder="${emails.length ? 'Add email...' : 'student@school.com'}"
@@ -1048,7 +1057,8 @@
         instructor: document.getElementById('meta-instructor').value.trim(),
         password: document.getElementById('meta-password').value.trim(),
         studentEmails: document.getElementById('meta-emails').value.trim(), // Server handles parsing
-        readAloudEnabled: document.getElementById('meta-readaloud').checked
+        readAloudEnabled: document.getElementById('meta-readaloud').checked,
+        accessExpires: document.getElementById('meta-expires').value
       };
 
       const overlay = document.getElementById('conversion-overlay');
@@ -1129,7 +1139,8 @@
         instructor: row.querySelector('[data-field="instructor"]').value,
         password: row.querySelector('[data-field="password"]').value,
         studentEmails: emails.join(', '),
-        readAloudEnabled: row.querySelector('[data-field="readAloudEnabled"]').checked
+        readAloudEnabled: row.querySelector('[data-field="readAloudEnabled"]').checked,
+        accessExpires: row.querySelector('[data-field="accessExpires"]').value
       };
 
       google.script.run
