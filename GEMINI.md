@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a Google Apps Script project named "Spartan_Read_Aloud". It provides a "read aloud" functionality for assessments. The system is designed to take PDFs from a Google Sheet, process them to extract text, generate audio for the text chunks using the Gemini API, and then present the PDF and audio to students through a web interface.
+This is a Google Apps Script project named "Spartan Assessment Portal". It provides a "read aloud" functionality for assessments. The system is designed to take PDFs from a Google Sheet, process them to extract text, generate audio for the text chunks using the Gemini API, and then present the PDF and audio to students through a web interface.
 
 The main components are:
 

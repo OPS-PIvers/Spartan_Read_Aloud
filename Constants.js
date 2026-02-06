@@ -97,7 +97,7 @@ const CONSTANTS = {
   STAFF_ROLES: ['admin', 'super_admin', 'teacher'],
 
   // --- UI & Menu ---
-  MENU_NAME: 'Spartan Read Aloud',
+  MENU_NAME: 'Spartan Assessment Portal',
   MENU_ITEMS: {
     RUN_MANUAL: 'Run All Steps (Manual)',
     START_BATCH: 'Start Batch Processing',

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Spartan Read Aloud is a Google Apps Script-based web application that provides text-to-speech functionality for educational assessments. The system processes assessments in multiple formats (PDF, Google Docs, MS Word), generates audio using Google Cloud Text-to-Speech API, and presents both the document and synchronized audio through a web interface for students.
+Spartan Assessment Portal is a Google Apps Script-based web application that provides text-to-speech functionality for educational assessments. The system processes assessments in multiple formats (PDF, Google Docs, MS Word), generates audio using Google Cloud Text-to-Speech API, and presents both the document and synchronized audio through a web interface for students.
 
 ## Development Commands
 
