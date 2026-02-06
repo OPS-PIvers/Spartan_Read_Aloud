@@ -2018,6 +2018,11 @@ function sanitizeHtml(html) {
     return `<${tag}${attrs} id="sra-block-${blockCounter++}">`;
   });
 
+  // 13. Add question-start class for visual separation
+  // Matches: <p id="..." > 1.  or <p id="..." > 1) 
+  sanitized = sanitized.replace(/(<p[^>]*>)(?:\s|&nbsp;)*(\d+[.)\]]\s+)/gi, '$1<span class="question-marker">$2</span>');
+  sanitized = sanitized.replace(/<p([^>]*id="sra-block-[^"]*"[^>]*)>(?:\s|&nbsp;)*(?=<span class="question-marker">)/gi, '<p$1 class="question-start">');
+
   Logger.log(`Sanitized & normalized HTML: ${html.length} chars → ${sanitized.length} chars (Added ${blockCounter} IDs)`);
   return sanitized;
 }
