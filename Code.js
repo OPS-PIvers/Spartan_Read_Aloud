@@ -1047,7 +1047,7 @@ function step1_AnalyzePdfsAndCountChunks() {
     if (pdfUrl && chunkCount === '' && !processingStatus) {
       const readAloudEnabled = data[i][CONSTANTS.COL.READ_ALOUD_ENABLED] !== false;
       if (!readAloudEnabled) {
-        markAssessmentAsNoAudioRequired(sheet, i + 1);
+        markAssessmentAsNoAudioRequired(sheet, i + 1, pdfUrl);
         continue;
       }
 
@@ -2752,7 +2752,7 @@ function processNewAssessment(fileUrl) {
       Logger.log(`Processing new assessment: ${fileUrl} (Read Aloud: ${readAloudEnabled})`);
 
       if (!readAloudEnabled) {
-        markAssessmentAsNoAudioRequired(sheet, i + 1);
+        markAssessmentAsNoAudioRequired(sheet, i + 1, fileUrl);
         break;
       }
 
@@ -2778,12 +2778,33 @@ function processNewAssessment(fileUrl) {
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The assessment database sheet
  * @param {number} rowIndex The 1-based row index in the sheet
  */
-function markAssessmentAsNoAudioRequired(sheet, rowIndex) {
-  sheet.getRange(rowIndex, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(0);
+function markAssessmentAsNoAudioRequired(sheet, rowIndex, pdfUrl) {
+  let audioChunksJson = '[]';
+  let chunkCount = 0;
+
+  if (pdfUrl) {
+    const fileId = getFileIdFromUrl(pdfUrl);
+    if (fileId) {
+      const structuredChunks = extractTextFromFile(fileId);
+      if (structuredChunks && structuredChunks.length > 0) {
+        chunkCount = structuredChunks.length;
+        // Map to a format the student viewer expects, but without audio URLs
+        const simplifiedChunks = structuredChunks.map(chunk => ({
+          text: chunk.text,
+          elementIds: chunk.ids,
+          audioUrl: '' // No audio
+        }));
+        audioChunksJson = JSON.stringify(simplifiedChunks);
+      }
+    }
+  }
+
+  sheet.getRange(rowIndex, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(chunkCount);
+  sheet.getRange(rowIndex, CONSTANTS.COL.AUDIO_JSON + 1).setValue(audioChunksJson);
   sheet.getRange(rowIndex, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
   sheet.getRange(rowIndex, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue("NO_AUDIO_REQUIRED");
   SpreadsheetApp.flush();
-  Logger.log(`Row ${rowIndex}: Read Aloud disabled. Marked as complete.`);
+  Logger.log(`Row ${rowIndex}: Read Aloud disabled. Extracted ${chunkCount} chunks for highlighting. Marked as complete.`);
 }
 
 

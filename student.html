@@ -433,7 +433,6 @@
     @media (max-width: 768px) {
         .toolbar-inner { grid-template-columns: 1fr; gap: 12px; justify-items: center; }
         .toolbar-info { display: none; } /* Hide track info on mobile to save space */
-        .toolbar-tools { position: absolute; right: 16px; top: 16px; }
         .app-header { padding: 0 16px; }
         .main-container { padding: 0 16px; margin: 24px auto; }
         #viewer-container { padding: 24px 20px; }
@@ -775,8 +774,16 @@ function onAssessmentLoaded(result) {
   } else {
     // Hide audio-specific controls but keep the toolbar for tools (Line Spacing, Focus)
     const toolbar = document.getElementById('audio-toolbar');
+    const toolbarInner = toolbar.querySelector('.toolbar-inner');
+    
     toolbar.querySelector('.toolbar-info').style.display = 'none';
     toolbar.querySelector('.toolbar-controls').style.display = 'none';
+    document.getElementById('speed-btn').style.display = 'none';
+    
+    // Center the tools zone in the toolbar
+    toolbarInner.style.gridTemplateColumns = '1fr';
+    toolbarInner.style.justifyItems = 'center';
+    toolbar.querySelector('.toolbar-tools').style.justifyContent = 'center';
   }
 }
 

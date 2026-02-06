@@ -725,9 +725,14 @@
             <label class="input-label">Access Expires (Optional)</label>
             <input type="datetime-local" id="meta-expires" class="form-control">
           </div>
-          <div class="input-group checkbox-group">
-            <input type="checkbox" id="meta-readaloud" checked class="checkbox-control">
-            <label for="meta-readaloud" class="input-label" style="margin-bottom: 0; cursor: pointer;">Enable Read Aloud</label>
+          <div class="input-group checkbox-group" style="align-items: flex-start; flex-direction: column; gap: 4px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="meta-readaloud" checked class="checkbox-control" onchange="updateEstimate()">
+              <label for="meta-readaloud" class="input-label" style="margin-bottom: 0; cursor: pointer;">Enable Read Aloud</label>
+            </div>
+            <div id="estimate-message" style="font-size: 11px; color: var(--primary-red); margin-left: 28px; font-weight: 500;">
+              Estimated processing time: ~5-10 minutes
+            </div>
           </div>
         </div>
 
@@ -862,7 +867,20 @@
     let assessmentList = [];
 
     // --- INIT ---
+    function updateEstimate() {
+      const checkbox = document.getElementById('meta-readaloud');
+      const estimateMsg = document.getElementById('estimate-message');
+      if (checkbox.checked) {
+        estimateMsg.textContent = 'Estimated processing time: ~5-10 minutes (Audio & Text Chunking)';
+      } else {
+        estimateMsg.textContent = 'Estimated processing time: ~1-2 minutes (Text Chunking only)';
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
+      // Initialize estimate
+      updateEstimate();
+
       // Safe parsing of server data
       let userData = { name: 'Admin', role: 'teacher' };
       try {
