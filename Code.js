@@ -2342,7 +2342,7 @@ function getAllAssessments(sessionToken) {
         password: row[CONSTANTS.COL.PASSWORD] || '',
         studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || '',
         readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
-        accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]).toISOString() : ''
+        accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? Utilities.formatDate(new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]), "America/Chicago", "yyyy-MM-dd'T'HH:mm") : ''
       });
     }
 
@@ -2419,7 +2419,7 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
       sheet.getRange(actualRow, CONSTANTS.COL.READ_ALOUD_ENABLED + 1).setValue(data.readAloudEnabled);
     }
     if (data.accessExpires !== undefined) {
-      const expiryDate = data.accessExpires ? new Date(data.accessExpires) : '';
+      const expiryDate = data.accessExpires ? new Date(data.accessExpires.replace('T', ' ')) : '';
       sheet.getRange(actualRow, CONSTANTS.COL.ACCESS_EXPIRES + 1).setValue(expiryDate);
     }
 
@@ -2702,7 +2702,7 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     newRow[CONSTANTS.COL.PASSWORD] = metadata.password || '';
     newRow[CONSTANTS.COL.STUDENT_EMAILS] = parseStudentEmails(metadata.studentEmails || '');
     newRow[CONSTANTS.COL.READ_ALOUD_ENABLED] = metadata.readAloudEnabled !== false;
-    newRow[CONSTANTS.COL.ACCESS_EXPIRES] = metadata.accessExpires ? new Date(metadata.accessExpires) : '';
+    newRow[CONSTANTS.COL.ACCESS_EXPIRES] = metadata.accessExpires ? new Date(metadata.accessExpires.replace('T', ' ')) : '';
 
     sheet.appendRow(newRow);
     SpreadsheetApp.flush();
@@ -3364,6 +3364,7 @@ function getStudentAssessmentsForEmail(email) {
               className: className,
               instructor: instructor,
               assessmentUrl: pdfUrl,
+              readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
               rowIndex: i
             });
           }

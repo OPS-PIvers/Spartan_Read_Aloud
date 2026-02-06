@@ -191,6 +191,7 @@
       justify-content: center;
       color: var(--primary-blue);
       margin-bottom: 16px;
+      position: relative;
     }
 
     .card-title {
@@ -453,9 +454,65 @@
     .progress-meter-container { width: 60%; height: 4px; background: var(--gray-300); border-radius: 2px; overflow: hidden; margin-top: 12px; }
     .progress-meter-fill { height: 100%; background: var(--primary-blue); width: 0%; transition: width 0.3s; }
     
-    .error-message { color: var(--primary-red); background: var(--red-light); padding: 16px; border-radius: 8px; font-size: 14px; }
-
-  </style>
+        .error-message { color: var(--primary-red); background: var(--red-light); padding: 16px; border-radius: 8px; font-size: 14px; }
+    
+    
+    
+        /* Skeleton Loader */
+    
+        .skeleton-loader {
+    
+          display: flex;
+    
+          flex-direction: column;
+    
+          gap: 20px;
+    
+        }
+    
+        .skeleton-title {
+    
+          height: 32px;
+    
+          width: 60%;
+    
+          background: linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%);
+    
+          background-size: 200% 100%;
+    
+          animation: skeleton-loading 1.5s infinite;
+    
+          border-radius: 4px;
+    
+          margin-bottom: 10px;
+    
+        }
+    
+        .skeleton-text {
+    
+          height: 18px;
+    
+          width: 100%;
+    
+          background: linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%);
+    
+          background-size: 200% 100%;
+    
+          animation: skeleton-loading 1.5s infinite;
+    
+          border-radius: 4px;
+    
+        }
+    
+        @keyframes skeleton-loading {
+    
+          0% { background-position: 200% 0; }
+    
+          100% { background-position: -200% 0; }
+    
+        }
+    
+      </style>
 </head>
 <body>
 
@@ -617,13 +674,13 @@ function initializePasswordlessStudentView(user, targetUrl) {
   if (autoLoadAssessmentUrl) {
     console.log('Auto-loading assessment:', autoLoadAssessmentUrl);
     const loader = document.createElement('div');
-    loader.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:white;display:flex;justify-content:center;align-items:center;z-index:2000;flex-direction:column;gap:10px;"><span class="material-icons animate-spin" style="font-size:40px;color:var(--primary-blue)">refresh</span><div>Loading Preview...</div></div>';
+    loader.id = 'auto-load-overlay';
+    loader.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:white;display:flex;justify-content:center;align-items:center;z-index:2000;flex-direction:column;gap:10px;"><span class="material-icons animate-spin" style="font-size:40px;color:var(--primary-blue)">refresh</span><div>Preparing assessment...</div></div>';
     document.body.appendChild(loader);
     
     google.script.run
       .withSuccessHandler((result) => {
-        loader.remove();
-        onAssessmentLoadedForPreload(result);
+        onAssessmentLoadedForPreload(result, loader);
       })
       .withFailureHandler((error) => {
         loader.remove();
@@ -669,7 +726,12 @@ function showAssessmentSelection() {
     // New Card Design
     card.innerHTML = `
       <div class="card-icon-wrapper">
-        <span class="material-icons">library_books</span>
+        <span class="material-icons logo-document" style="color: var(--primary-blue); font-size: 28px;">description</span>
+        ${assessment.readAloudEnabled !== false ? `
+          <div class="logo-badge" style="position: absolute; bottom: -2px; right: -2px; width: 16px; height: 16px; background: var(--primary-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white;">
+            <span class="material-icons" style="font-size: 10px; color: white;">volume_up</span>
+          </div>
+        ` : ''}
       </div>
       <div class="card-title">${escapeHtml(assessment.assessmentName)}</div>
       <div class="card-meta-row">
@@ -680,7 +742,7 @@ function showAssessmentSelection() {
       </div>
       <div class="card-footer">
         <span class="status-badge">Ready</span>
-        <button class="start-btn">Start Reading <span class="material-icons" style="font-size:14px">arrow_forward</span></button>
+        <button class="start-btn">Start Assessment <span class="material-icons" style="font-size:14px">arrow_forward</span></button>
       </div>
     `;
 
@@ -703,7 +765,7 @@ function loadSpecificAssessment(assessmentUrl, cardElement) {
   overlay.innerHTML = `
     <span class="material-icons animate-spin" style="font-size:32px; color:var(--primary-blue)">refresh</span>
     <div class="progress-meter-container"><div class="progress-meter-fill"></div></div>
-    <div style="font-size:12px; margin-top:8px; color:var(--gray-500)">Loading audio...</div>
+    <div id="overlay-msg" style="font-size:12px; margin-top:8px; color:var(--gray-500)">Fetching assessment...</div>
   `;
   cardElement.appendChild(overlay);
   
@@ -711,6 +773,9 @@ function loadSpecificAssessment(assessmentUrl, cardElement) {
       element: overlay,
       updateProgress: (pct) => {
           overlay.querySelector('.progress-meter-fill').style.width = pct + '%';
+      },
+      updateMessage: (msg) => {
+          overlay.querySelector('#overlay-msg').textContent = msg;
       },
       remove: () => overlay.remove()
   };
@@ -721,24 +786,41 @@ function loadSpecificAssessment(assessmentUrl, cardElement) {
     .getAssessmentPdf(storedEmail, password, assessmentUrl);
 }
 
-function onAssessmentLoadedForPreload(result) {
+function onAssessmentLoadedForPreload(result, autoLoader = null) {
   if (result.error) {
+    if (autoLoader) autoLoader.remove();
     onPdfLoadError(result.error);
     return;
   }
 
   pendingAssessmentData = result;
-  serverChunks = result.audioChunks;
+  serverChunks = result.audioChunks || [];
   totalChunks = serverChunks.length;
   sessionToken = result.sessionToken;
   chunksLoaded = 0; 
   audioCache.clear(); 
 
-  bulkPreloadAudioWithProgress((progress) => {
-    if (currentLoadingOverlay) currentLoadingOverlay.updateProgress(progress);
-  }, () => {
+  const isReadAloudEnabled = result.readAloudEnabled !== false;
+
+  const cleanupAndBegin = () => {
+    if (autoLoader) autoLoader.remove();
+    // Also check for global auto-load-overlay just in case
+    const globalOverlay = document.getElementById('auto-load-overlay');
+    if (globalOverlay) globalOverlay.remove();
     beginAssessment();
-  });
+  };
+
+  if (isReadAloudEnabled && serverChunks.length > 0) {
+    if (currentLoadingOverlay) currentLoadingOverlay.updateMessage('Loading audio...');
+    bulkPreloadAudioWithProgress((progress) => {
+      if (currentLoadingOverlay) currentLoadingOverlay.updateProgress(progress);
+    }, () => {
+      cleanupAndBegin();
+    });
+  } else {
+    // Skip audio preloading
+    cleanupAndBegin();
+  }
 }
 
 function beginAssessment() {
@@ -746,6 +828,24 @@ function beginAssessment() {
   assessmentSelectionContainer.style.display = 'none';
   viewerContainer.style.display = 'block';
   document.getElementById('back-to-menu-btn').style.display = 'flex';
+  
+  // Show skeleton while the rest of the UI initializes
+  pdfContainer.innerHTML = `
+    <div class="skeleton-loader">
+      <div class="skeleton-title"></div>
+      <div class="skeleton-text" style="width: 90%"></div>
+      <div class="skeleton-text" style="width: 95%"></div>
+      <div class="skeleton-text" style="width: 85%"></div>
+      <br>
+      <div class="skeleton-text" style="width: 92%"></div>
+      <div class="skeleton-text" style="width: 88%"></div>
+      <div class="skeleton-text" style="width: 94%"></div>
+      <br>
+      <div class="skeleton-title" style="width: 40%"></div>
+      <div class="skeleton-text" style="width: 90%"></div>
+      <div class="skeleton-text" style="width: 95%"></div>
+    </div>
+  `;
 
   if (pendingAssessmentData) {
     onAssessmentLoaded(pendingAssessmentData);
