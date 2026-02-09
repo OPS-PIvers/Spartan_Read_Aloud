@@ -2357,12 +2357,15 @@ function getAllAssessments(sessionToken) {
       Logger.log(`Filtering assessments for teacher: ${teacherName}`);
 
       assessments = assessments.filter(assessment => {
-        const instructorLower = (assessment.instructor || '').toLowerCase();
+        const instructorField = (assessment.instructor || '').toLowerCase();
         const teacherLower = teacherName.toLowerCase();
 
-        // Match if teacher's name contains the instructor field they typed
-        // (e.g., "John Smith" contains "Smith" or "smith@school.com" contains "smith")
-        return teacherLower.includes(instructorLower);
+        // Split by comma or slash and check if any part is included in teacher's name/email
+        const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
+        
+        if (instructors.length === 0) return false;
+        
+        return instructors.some(name => teacherLower.includes(name));
       });
 
       Logger.log(`Teacher ${teacherName} has ${assessments.length} assessment(s)`);
@@ -2382,18 +2385,48 @@ function getAllAssessments(sessionToken) {
 }
 
 /**
+ * Checks if a user is authorized to modify or delete a specific assessment.
+ * Super Admins and Admins can access everything.
+ * Teachers can only access assessments where they are listed as an instructor.
+ * @param {Object} tokenData Decoded session token data
+ * @param {Array} rowData The spreadsheet row data for the assessment
+ * @returns {boolean} True if authorized
+ */
+function isAuthorizedForAssessment(tokenData, rowData) {
+  if (tokenData.role === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN || tokenData.role === CONSTANTS.ROLE_TOKEN_ADMIN) {
+    return true;
+  }
+  
+  if (tokenData.role === CONSTANTS.ROLE_TOKEN_TEACHER) {
+    const teacherName = tokenData.name || tokenData.email;
+    const instructorField = (rowData[CONSTANTS.COL.INSTRUCTOR] || '').toLowerCase();
+    const teacherLower = teacherName.toLowerCase();
+    
+    // Split by comma or slash and check if any part is included in teacher's name/email
+    const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
+    
+    if (instructors.length === 0) return false;
+    
+    return instructors.some(name => teacherLower.includes(name));
+  }
+  
+  return false;
+}
+
+/**
  * Updates an assessment row in the spreadsheet.
- * Admin-only function.
- * @param {string} sessionToken Admin session token
+ * Staff-only function. Teachers can only update their own assessments.
+ * @param {string} sessionToken Staff session token
  * @param {number} rowIndex Row index (1-based, excluding header)
  * @param {Object} data Data to update { className, instructor, password, studentEmails }
  * @returns {Object} { success: true } or { error: "..." }
  */
 function updateAssessmentRow(sessionToken, rowIndex, data) {
   try {
-    // Verify admin token
-    if (!validateAdminToken(sessionToken)) {
-      return { error: 'Unauthorized. Admin access required.' };
+    // Verify staff token
+    const tokenData = validateAdminToken(sessionToken);
+    if (!tokenData) {
+      return { error: 'Unauthorized. Staff access required.' };
     }
 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -2405,6 +2438,12 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
     const actualRow = rowIndex + 1;
     if (actualRow < 2 || actualRow > sheet.getLastRow()) {
       return { error: 'Invalid row index.' };
+    }
+
+    // Check ownership for teachers
+    const rowData = sheet.getRange(actualRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (!isAuthorizedForAssessment(tokenData, rowData)) {
+      return { error: 'Unauthorized. You can only update your own assessments.' };
     }
 
     // Update only the editable columns
@@ -2441,16 +2480,17 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
 
 /**
  * Deletes an assessment row from the spreadsheet.
- * Super Admin-only function.
- * @param {string} sessionToken Super Admin session token
+ * Staff-only function. Teachers can only delete their own assessments.
+ * @param {string} sessionToken Staff session token
  * @param {number} rowIndex Row index (1-based, excluding header)
  * @returns {Object} { success: true } or { error: "..." }
  */
 function deleteAssessmentRow(sessionToken, rowIndex) {
   try {
-    // Verify super admin token
-    if (!validateSuperAdminToken(sessionToken)) {
-      return { error: 'Unauthorized. Super Admin access required.' };
+    // Verify staff token
+    const tokenData = validateAdminToken(sessionToken);
+    if (!tokenData) {
+      return { error: 'Unauthorized. Staff access required.' };
     }
 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -2464,8 +2504,14 @@ function deleteAssessmentRow(sessionToken, rowIndex) {
       return { error: 'Invalid row index.' };
     }
 
+    // Check ownership for teachers
+    const rowData = sheet.getRange(actualRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (!isAuthorizedForAssessment(tokenData, rowData)) {
+      return { error: 'Unauthorized. You can only delete your own assessments.' };
+    }
+
     // 1. Get File URL to trash the file (prevent re-discovery)
-    const pdfUrl = sheet.getRange(actualRow, CONSTANTS.COL.PDF_URL + 1).getValue();
+    const pdfUrl = rowData[CONSTANTS.COL.PDF_URL];
     
     if (pdfUrl) {
       try {
@@ -2482,7 +2528,7 @@ function deleteAssessmentRow(sessionToken, rowIndex) {
 
     sheet.deleteRow(actualRow);
     SpreadsheetApp.flush();
-    Logger.log(`Deleted assessment at row ${rowIndex}`);
+    Logger.log(`Deleted assessment at row ${rowIndex} by ${tokenData.email}`);
 
     return { success: true };
 
@@ -2815,16 +2861,17 @@ function markAssessmentAsNoAudioRequired(sheet, rowIndex, pdfUrl) {
 
 /**
  * Manually re-processes an assessment (runs steps 1 and 2).
- * Super Admin-only function.
- * @param {string} sessionToken Super Admin session token
+ * Staff-only function. Teachers can only reprocess their own assessments.
+ * @param {string} sessionToken Staff session token
  * @param {number} rowIndex Row index (1-based, excluding header)
  * @returns {Object} { success: true } or { error: "..." }
  */
 function reprocessAssessment(sessionToken, rowIndex) {
   try {
-    // Verify super admin token
-    if (!validateSuperAdminToken(sessionToken)) {
-      return { error: 'Unauthorized. Super Admin access required.' };
+    // Verify staff token
+    const tokenData = validateAdminToken(sessionToken);
+    if (!tokenData) {
+      return { error: 'Unauthorized. Staff access required.' };
     }
 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -2837,7 +2884,13 @@ function reprocessAssessment(sessionToken, rowIndex) {
       return { error: 'Invalid row index.' };
     }
 
-    const pdfUrl = sheet.getRange(actualRow, CONSTANTS.COL.PDF_URL + 1).getValue();
+    // Check ownership for teachers
+    const rowData = sheet.getRange(actualRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (!isAuthorizedForAssessment(tokenData, rowData)) {
+      return { error: 'Unauthorized. You can only reprocess your own assessments.' };
+    }
+
+    const pdfUrl = rowData[CONSTANTS.COL.PDF_URL];
     if (!pdfUrl) {
       return { error: 'No file URL found in this row.' };
     }
@@ -3346,8 +3399,9 @@ function getStudentAssessmentsForEmail(email) {
       if (isStaff) {
         // Staff see all, or teachers see only their own
         if (isTeacher) {
-           // Simple containment check matching getAllAssessments
-           shouldShow = staffName.toLowerCase().includes(instructor.toLowerCase());
+           // Split by comma or slash and check if any part is included in staff's name/email
+           const instructors = instructor.toLowerCase().split(/[,\/]/).map(name => name.trim()).filter(name => name);
+           shouldShow = instructors.some(name => staffName.toLowerCase().includes(name));
         } else {
            shouldShow = true; // Admins see all
         }

@@ -710,16 +710,21 @@
             <input type="text" id="meta-class" class="form-control" placeholder="e.g. Grade 4 Math">
           </div>
           <div class="input-group">
-            <label class="input-label">Instructor Last Name</label>
-            <input type="text" id="meta-instructor" class="form-control" placeholder="e.g. Smith">
+            <label class="input-label">Instructor Last Name(s)</label>
+            <input type="text" id="meta-instructor" class="form-control" placeholder="e.g. Smith, Jones or Smith/Jones">
           </div>
           <div class="input-group">
             <label class="input-label">Student Password</label>
             <input type="text" id="meta-password" class="form-control" placeholder="Required for access">
           </div>
-          <div class="input-group">
-            <label class="input-label">Student Emails (Comma separated)</label>
-            <input type="text" id="meta-emails" class="form-control" placeholder="student1@school.com, student2@school.com">
+          <div class="input-group" style="grid-column: span 2;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
+              <label class="input-label" style="margin-bottom: 0;">Student Emails (Paste list or comma separated)</label>
+              <button class="btn" style="padding: 2px 8px; font-size: 11px; height: 20px; background: var(--gray-100); color: var(--gray-700);" onclick="document.getElementById('meta-emails').value = ''">
+                Clear All
+              </button>
+            </div>
+            <textarea id="meta-emails" class="form-control" rows="3" placeholder="student1@school.com&#10;student2@school.com&#10;..."></textarea>
           </div>
           <div class="input-group">
             <label class="input-label">Access Expires (Optional)</label>
@@ -997,7 +1002,7 @@
               <div style="font-weight:600; color:var(--primary-dark); margin-bottom: 6px;">${escapeHtml(item.fileName)}</div>
               <div style="display:flex; gap:6px;">
                 <input class="table-edit-input" style="font-size: 11px; padding: 2px 6px;" data-field="className" value="${escapeHtml(item.className)}" placeholder="Class Name">
-                <input class="table-edit-input" style="font-size: 11px; padding: 2px 6px;" data-field="instructor" value="${escapeHtml(item.instructor)}" placeholder="Instructor">
+                <input class="table-edit-input" style="font-size: 11px; padding: 2px 6px;" data-field="instructor" value="${escapeHtml(item.instructor)}" placeholder="Instructor(s)">
               </div>
             </td>
             <td>${statusBadge}</td>
@@ -1018,10 +1023,15 @@
               <input type="checkbox" data-field="readAloudEnabled" ${item.readAloudEnabled !== false ? 'checked' : ''} class="table-checkbox">
             </td>
             <td>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <span style="font-size: 10px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Students</span>
+                <button onclick="clearAllEmails(${item.rowIndex})" style="background:none; border:none; color:var(--primary-red); font-size:10px; cursor:pointer; font-weight:600; padding:0;">CLEAR ALL</button>
+              </div>
               <div class="email-chips-container" data-row="${item.rowIndex}" onclick="focusEmailInput(this)" style="max-height: 85px; overflow-y: auto;">
                 ${emailChipsHtml}
                 <input type="text" class="email-chips-input" placeholder="${emails.length ? 'Add email...' : 'student@school.com'}"
                   onkeydown="handleEmailInput(event, ${item.rowIndex})"
+                  onpaste="handleEmailPaste(event, ${item.rowIndex})"
                   onblur="addEmailChip(this, ${item.rowIndex})">
               </div>
             </td>
@@ -1030,10 +1040,10 @@
                 <a href="<?= ScriptApp.getService().getUrl() ?>?preview=true&assessmentUrl=${encodeURIComponent(item.pdfUrl)}" target="_blank" class="action-btn" title="Preview as Student" style="text-decoration: none;">
                   <span class="material-icons" style="font-size:18px;">visibility</span>
                 </a>
-                <button class="action-btn" onclick="saveRow(${item.rowIndex})" title="Save">
+                <button class="action-btn save-btn" onclick="saveRow(${item.rowIndex})" title="Save">
                   <span class="material-icons" style="font-size:18px;">save</span>
                 </button>
-                ${currentUserRole === 'super_admin' ? `
+                ${['super_admin', 'admin', 'teacher'].includes(currentUserRole) ? `
                 <button class="action-btn" onclick="reprocessRow(${item.rowIndex})" title="Reprocess">
                   <span class="material-icons" style="font-size:18px;">autorenew</span>
                 </button>
@@ -1152,7 +1162,7 @@
 
     function saveRow(rowIndex) {
       const row = document.querySelector(`tr[data-id="${rowIndex}"]`);
-      const btn = row.querySelector('.action-btn');
+      const btn = row.querySelector('.save-btn');
       const originalIcon = btn.innerHTML;
       
       btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite; font-size:18px">refresh</span>';
@@ -1172,7 +1182,12 @@
       };
 
       google.script.run
-        .withSuccessHandler(() => {
+        .withSuccessHandler((res) => {
+          if (res.error) {
+            alert('Save failed: ' + res.error);
+            btn.innerHTML = originalIcon;
+            return;
+          }
           btn.innerHTML = '<span class="material-icons" style="color:var(--success-green)">check</span>';
           setTimeout(() => btn.innerHTML = originalIcon, 1500);
         })
@@ -1216,41 +1231,90 @@
       }
     }
 
-    function addEmailChip(input, rowIndex) {
-      const email = input.value.trim().replace(/[,\s]+$/, ''); // Remove trailing commas/spaces
-      if (!email) return;
+    function handleEmailPaste(event, rowIndex) {
+      event.preventDefault();
+      const pasteData = (event.clipboardData || window.clipboardData).getData('text');
+      if (!pasteData) return;
+      
+      // Extract all emails from pasted text using regex
+      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+      const emails = pasteData.match(emailRegex);
+      
+      if (emails && emails.length > 0) {
+        const input = event.target;
+        const container = input.closest('.email-chips-container');
+        
+        // Get existing emails to avoid duplicates
+        const existingEmails = new Set(Array.from(container.querySelectorAll('.email-chip span:first-child'))
+          .map(span => span.textContent.trim().toLowerCase()));
+        
+        emails.forEach(email => {
+          const cleanEmail = email.toLowerCase().trim();
+          if (cleanEmail && !existingEmails.has(cleanEmail)) {
+            const chip = document.createElement('div');
+            chip.className = 'email-chip';
+            chip.innerHTML = `
+              <span>${escapeHtml(cleanEmail)}</span>
+              <span class="email-chip-remove" onclick="removeEmailChip(this, ${rowIndex})" title="Remove">×</span>
+            `;
+            container.insertBefore(chip, input);
+            existingEmails.add(cleanEmail);
+          }
+        });
+        
+        updateEmailsForRow(rowIndex);
+      }
+    }
 
-      // Basic email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        alert('Please enter a valid email address');
+    function addEmailChip(input, rowIndex) {
+      const value = input.value.trim();
+      if (!value) return;
+
+      // Extract all emails from input (handles if they pasted multiple and then blurred)
+      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+      const emails = value.match(emailRegex);
+      
+      if (!emails || emails.length === 0) {
+        // Only show alert if user actually typed something that's not an email
+        if (value.length > 0 && !value.includes('@')) {
+          alert('Please enter valid email addresses');
+        }
         input.value = '';
         return;
       }
 
       const container = input.closest('.email-chips-container');
 
-      // Check for duplicates
-      const existingEmails = Array.from(container.querySelectorAll('.email-chip span:first-child'))
-        .map(span => span.textContent.trim());
-      if (existingEmails.includes(email)) {
-        input.value = '';
-        return;
-      }
+      // Get existing emails
+      const existingEmails = new Set(Array.from(container.querySelectorAll('.email-chip span:first-child'))
+        .map(span => span.textContent.trim().toLowerCase()));
 
-      // Create chip
-      const chip = document.createElement('div');
-      chip.className = 'email-chip';
-      chip.innerHTML = `
-        <span>${escapeHtml(email)}</span>
-        <span class="email-chip-remove" onclick="removeEmailChip(this, ${rowIndex})" title="Remove">×</span>
-      `;
+      emails.forEach(email => {
+        const cleanEmail = email.toLowerCase().trim();
+        if (cleanEmail && !existingEmails.has(cleanEmail)) {
+          const chip = document.createElement('div');
+          chip.className = 'email-chip';
+          chip.innerHTML = `
+            <span>${escapeHtml(cleanEmail)}</span>
+            <span class="email-chip-remove" onclick="removeEmailChip(this, ${rowIndex})" title="Remove">×</span>
+          `;
+          container.insertBefore(chip, input);
+          existingEmails.add(cleanEmail);
+        }
+      });
 
-      // Insert before input
-      container.insertBefore(chip, input);
       input.value = '';
-
       updateEmailsForRow(rowIndex);
+    }
+
+    function clearAllEmails(rowIndex) {
+      if (!confirm('Clear all student emails for this assessment?')) return;
+      const container = document.querySelector(`.email-chips-container[data-row="${rowIndex}"]`);
+      if (container) {
+        const chips = container.querySelectorAll('.email-chip');
+        chips.forEach(chip => chip.remove());
+        updateEmailsForRow(rowIndex);
+      }
     }
 
     function removeEmailChip(removeBtn, rowIndex) {
