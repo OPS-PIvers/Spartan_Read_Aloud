@@ -1161,41 +1161,80 @@
     }
 
     function saveRow(rowIndex) {
+      console.log('Attempting to save row:', rowIndex);
+      if (rowIndex === undefined || rowIndex === null) {
+        alert('Error: Row index is undefined.');
+        return;
+      }
+
       const row = document.querySelector(`tr[data-id="${rowIndex}"]`);
+      if (!row) {
+        console.error('Row not found for ID:', rowIndex);
+        alert('Error: Row element not found in the table.');
+        return;
+      }
+
       const btn = row.querySelector('.save-btn');
-      const originalIcon = btn.innerHTML;
+      if (!btn) {
+        console.error('Save button not found in row');
+        return;
+      }
       
+      const originalIcon = btn.innerHTML;
       btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite; font-size:18px">refresh</span>';
       
-      // Collect emails from chips
-      const emailContainer = row.querySelector('.email-chips-container');
-      const emails = Array.from(emailContainer.querySelectorAll('.email-chip span:first-child'))
-        .map(span => span.textContent.trim());
+      try {
+        // Collect emails from chips
+        const emailContainer = row.querySelector('.email-chips-container');
+        const emails = Array.from(emailContainer.querySelectorAll('.email-chip span:first-child'))
+          .map(span => span.textContent.trim());
 
-      const data = {
-        className: row.querySelector('[data-field="className"]').value,
-        instructor: row.querySelector('[data-field="instructor"]').value,
-        password: row.querySelector('[data-field="password"]').value,
-        studentEmails: emails.join(', '),
-        readAloudEnabled: row.querySelector('[data-field="readAloudEnabled"]').checked,
-        accessExpires: row.querySelector('[data-field="accessExpires"]').value
-      };
+        const data = {
+          className: row.querySelector('[data-field="className"]')?.value || '',
+          instructor: row.querySelector('[data-field="instructor"]')?.value || '',
+          password: row.querySelector('[data-field="password"]')?.value || '',
+          studentEmails: emails.join(', '),
+          readAloudEnabled: row.querySelector('[data-field="readAloudEnabled"]')?.checked || false,
+          accessExpires: row.querySelector('[data-field="accessExpires"]')?.value || ''
+        };
 
-      google.script.run
-        .withSuccessHandler((res) => {
-          if (res.error) {
-            alert('Save failed: ' + res.error);
+        console.log('Saving data:', data);
+
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (res && res.error) {
+              console.error('Server error during save:', res.error);
+              alert('Save failed: ' + res.error);
+              btn.innerHTML = originalIcon;
+              return;
+            }
+            console.log('Save successful');
+            
+            // Update local state to ensure persistence in UI
+            const item = assessmentList.find(a => a.rowIndex === rowIndex);
+            if (item) {
+              item.className = data.className;
+              item.instructor = data.instructor;
+              item.password = data.password;
+              item.studentEmails = data.studentEmails;
+              item.readAloudEnabled = data.readAloudEnabled;
+              item.accessExpires = data.accessExpires;
+            }
+
+            btn.innerHTML = '<span class="material-icons" style="color:var(--success-green)">check</span>';
+            setTimeout(() => btn.innerHTML = originalIcon, 1500);
+          })
+          .withFailureHandler(err => {
+            console.error('Script error during save:', err);
+            alert('Save failed: ' + err);
             btn.innerHTML = originalIcon;
-            return;
-          }
-          btn.innerHTML = '<span class="material-icons" style="color:var(--success-green)">check</span>';
-          setTimeout(() => btn.innerHTML = originalIcon, 1500);
-        })
-        .withFailureHandler(err => {
-          alert('Save failed: ' + err);
-          btn.innerHTML = originalIcon;
-        })
-        .updateAssessmentRow(adminToken, rowIndex, data);
+          })
+          .updateAssessmentRow(adminToken, rowIndex, data);
+      } catch (err) {
+        console.error('Client error during save:', err);
+        alert('An error occurred while preparing the data: ' + err.message);
+        btn.innerHTML = originalIcon;
+      }
     }
 
     function deleteRow(rowIndex) {
