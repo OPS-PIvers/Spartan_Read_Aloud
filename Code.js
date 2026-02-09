@@ -2005,11 +2005,18 @@ function sanitizeHtml(html) {
   // 11. Trim leading/trailing whitespace
   sanitized = sanitized.trim();
 
+  // NEW: Ensure table cell content is wrapped in <p> if it's not already block-level
+  // This allows the chunk parser to process cell content as individual blocks
+  sanitized = sanitized.replace(/<(td|th)([^>]*)>([\s\S]*?)<\/\1>/gi, (match, tag, attrs, content) => {
+    if (/<(p|div|ul|ol|table|h[1-6])/i.test(content)) return match;
+    return `<${tag}${attrs}><p>${content}</p></${tag}>`;
+  });
+
   // 12. Assign unique IDs to all block elements for precise TTS mapping
   // This enables the frontend to highlight exactly what is being read
   let blockCounter = 0;
   // EXCLUDE div and blockquote to avoid nested tag parsing issues with simple regex
-  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th'];
+  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li'];
   const blockRegex = new RegExp(`<(${blockTags.join('|')})([^>]*)>`, 'gi');
 
   sanitized = sanitized.replace(blockRegex, (match, tag, attrs) => {
@@ -2038,7 +2045,7 @@ function parseHtmlToChunks(html) {
   
   // Extract all blocks with their text and ID using regex
   // Only target the specific tags we added IDs to in sanitizeHtml
-  const blockPattern = /<(p|h[1-6]|li|td|th)[^>]*id="(sra-block-\d+)"[^>]*>([\s\S]*?)<\/\1>/gi;
+  const blockPattern = /<(p|h[1-6]|li)[^>]*id="(sra-block-\d+)"[^>]*>([\s\S]*?)<\/\1>/gi;
   
   let match;
   const blocks = [];
@@ -2223,8 +2230,8 @@ function addPausesToText(text) {
   }
 
   try {
-    // PRONUNCIATION FIX: Replace "c." with "c " to avoid "circa" pronunciation
-    let processedText = text.replace(/\b[cC]\.\s/g, 'c ');
+
+    let processedText = text;
 
     // Step 1: Escape special XML characters to prevent SSML errors
     let ssmlText = processedText
@@ -2243,6 +2250,9 @@ function addPausesToText(text) {
     // Step 4: Add pause between question and first answer choice
     // Matches a newline that is immediately followed by "a.", "b)", etc.
     ssmlText = ssmlText.replace(/\n(?=[a-dA-D][.)])/g, ` <break time="${CONSTANTS.PAUSE_BEFORE_ANSWER_BLOCK_MS}ms"/>\n`);
+    // Step 4b: Add pause before inline answer choices (e.g. "a. Paris b. Madrid")
+    // Use PAUSE_BEFORE_INLINE_ANSWER_MS (slight pause)
+    ssmlText = ssmlText.replace(/(^|[^\n])[ \t]+(?=[a-dA-D][.)])/g, `$1 <break time="${CONSTANTS.PAUSE_BEFORE_INLINE_ANSWER_MS}ms"/> `);
 
     // Step 5: Add pauses after answer choices (A., B., C., D. or a), b), c), d))
     // Matches: "A." or "A)" (uppercase or lowercase, periods or parentheses), with optional whitespace
