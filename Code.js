@@ -1195,6 +1195,29 @@ function step2_GenerateMissingAudioAndFinalize() {
   }
   SpreadsheetApp.flush();
   Logger.log('Step 2 processing finished.');
+  
+  // Clean up any immediate triggers that might have called this
+  cleanupImmediateTriggers();
+}
+
+/**
+ * Cleans up any one-time immediate triggers for step2_GenerateMissingAudioAndFinalize.
+ */
+function cleanupImmediateTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'step2_GenerateMissingAudioAndFinalize' && 
+        trigger.getEventType() === ScriptApp.EventType.CLOCK) {
+      // We only want to delete it if it's not a recurring trigger
+      // Note: CLOCK triggers created with .after() are not recurring
+      try {
+        ScriptApp.deleteTrigger(trigger);
+        Logger.log('Cleaned up one-time background trigger');
+      } catch (e) {
+        // Ignore errors if trigger already deleted
+      }
+    }
+  });
 }
 
 
@@ -2815,13 +2838,33 @@ function processNewAssessment(fileUrl) {
         SpreadsheetApp.flush();
         Logger.log(`Step 1 complete: ${textChunks.length} chunks`);
 
-        // Step 2: Immediately generate audio
-        // This prevents the user from having to wait for the next time-based trigger
-        Logger.log('→ Triggering immediate audio generation (Step 2)...');
-        step2_GenerateMissingAudioAndFinalize();
+        // Step 2: Trigger audio generation in the background
+        // We use a trigger instead of direct call to prevent UI timeouts
+        Logger.log('→ Scheduling background audio generation (Step 2)...');
+        triggerImmediateProcessing();
       }
       break;
     }
+  }
+}
+
+/**
+ * Creates a one-time trigger to run audio generation immediately (in the background).
+ * This allows the main request to return to the user while processing continues.
+ */
+function triggerImmediateProcessing() {
+  // Check if a trigger is already scheduled to avoid duplicates
+  const triggers = ScriptApp.getProjectTriggers();
+  const alreadyScheduled = triggers.some(t => t.getHandlerFunction() === 'step2_GenerateMissingAudioAndFinalize');
+  
+  if (!alreadyScheduled) {
+    ScriptApp.newTrigger('step2_GenerateMissingAudioAndFinalize')
+      .timeBased()
+      .after(1000) // Run in 1 second
+      .create();
+    Logger.log('Created background trigger for Step 2');
+  } else {
+    Logger.log('Background trigger for Step 2 already exists, skipping');
   }
 }
 /**
