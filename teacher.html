@@ -1000,9 +1000,21 @@
           <tr data-id="${item.rowIndex}">
             <td>
               <div style="font-weight:600; color:var(--primary-dark); margin-bottom: 6px;">${escapeHtml(item.fileName)}</div>
-              <div style="display:flex; gap:6px;">
+              <div style="margin-bottom: 4px;">
                 <input class="table-edit-input" style="font-size: 11px; padding: 2px 6px;" data-field="className" value="${escapeHtml(item.className)}" placeholder="Class Name">
-                <input class="table-edit-input" style="font-size: 11px; padding: 2px 6px;" data-field="instructor" value="${escapeHtml(item.instructor)}" placeholder="Instructor(s)">
+              </div>
+              <div style="font-size: 10px; color: var(--gray-500); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Instructors</div>
+              <div class="email-chips-container instructor-chips-container" data-row="${item.rowIndex}" onclick="focusEmailInput(this)" style="max-height: 60px; overflow-y: auto;">
+                ${(item.instructor ? item.instructor.split(/[,\/]/).map(n => n.trim()).filter(n => n) : []).map(name => `
+                  <div class="email-chip" style="background: var(--gray-100); color: var(--gray-700);">
+                    <span>${escapeHtml(name)}</span>
+                    <span class="email-chip-remove" onclick="removeInstructorChip(this, ${item.rowIndex})" title="Remove">×</span>
+                  </div>
+                `).join('')}
+                <input type="text" class="email-chips-input" placeholder="Add teacher..."
+                  onkeydown="handleInstructorInput(event, ${item.rowIndex})"
+                  onpaste="handleInstructorPaste(event, ${item.rowIndex})"
+                  onblur="addInstructorChip(this, ${item.rowIndex})">
               </div>
             </td>
             <td>${statusBadge}</td>
@@ -1185,13 +1197,18 @@
       
       try {
         // Collect emails from chips
-        const emailContainer = row.querySelector('.email-chips-container');
+        const emailContainer = row.querySelector('.email-chips-container:not(.instructor-chips-container)');
         const emails = Array.from(emailContainer.querySelectorAll('.email-chip span:first-child'))
+          .map(span => span.textContent.trim());
+
+        // Collect instructors from chips
+        const instructorContainer = row.querySelector('.instructor-chips-container');
+        const instructors = Array.from(instructorContainer.querySelectorAll('.email-chip span:first-child'))
           .map(span => span.textContent.trim());
 
         const data = {
           className: row.querySelector('[data-field="className"]')?.value || '',
-          instructor: row.querySelector('[data-field="instructor"]')?.value || '',
+          instructor: instructors.join(', '),
           password: row.querySelector('[data-field="password"]')?.value || '',
           studentEmails: emails.join(', '),
           readAloudEnabled: row.querySelector('[data-field="readAloudEnabled"]')?.checked || false,
@@ -1234,6 +1251,100 @@
         console.error('Client error during save:', err);
         alert('An error occurred while preparing the data: ' + err.message);
         btn.innerHTML = originalIcon;
+      }
+    }
+
+    // Instructor chip functions
+    function handleInstructorInput(event, rowIndex) {
+      if (event.key === 'Enter' || event.key === ',' || event.key === '/') {
+        event.preventDefault();
+        addInstructorChip(event.target, rowIndex);
+      } else if (event.key === 'Backspace' && event.target.value === '') {
+        const container = event.target.closest('.instructor-chips-container');
+        const chips = container.querySelectorAll('.email-chip');
+        if (chips.length > 0) {
+          chips[chips.length - 1].remove();
+          updateInstructorsForRow(rowIndex);
+        }
+      }
+    }
+
+    function handleInstructorPaste(event, rowIndex) {
+      event.preventDefault();
+      const pasteData = (event.clipboardData || window.clipboardData).getData('text');
+      if (!pasteData) return;
+      
+      // Split by common delimiters
+      const names = pasteData.split(/[,\/\n\r\t]+/).map(n => n.trim()).filter(n => n);
+      
+      if (names.length > 0) {
+        const input = event.target;
+        const container = input.closest('.instructor-chips-container');
+        
+        const existingNames = new Set(Array.from(container.querySelectorAll('.email-chip span:first-child'))
+          .map(span => span.textContent.trim().toLowerCase()));
+        
+        names.forEach(name => {
+          const cleanName = name.trim();
+          if (cleanName && !existingNames.has(cleanName.toLowerCase())) {
+            const chip = document.createElement('div');
+            chip.className = 'email-chip';
+            chip.style.background = 'var(--gray-100)';
+            chip.style.color = 'var(--gray-700)';
+            chip.innerHTML = `
+              <span>${escapeHtml(cleanName)}</span>
+              <span class="email-chip-remove" onclick="removeInstructorChip(this, ${rowIndex})" title="Remove">×</span>
+            `;
+            container.insertBefore(chip, input);
+            existingNames.add(cleanName.toLowerCase());
+          }
+        });
+        
+        updateInstructorsForRow(rowIndex);
+      }
+    }
+
+    function addInstructorChip(input, rowIndex) {
+      const value = input.value.trim();
+      if (!value) return;
+
+      const names = value.split(/[,\/]+/).map(n => n.trim()).filter(n => n);
+      const container = input.closest('.instructor-chips-container');
+      const existingNames = new Set(Array.from(container.querySelectorAll('.email-chip span:first-child'))
+        .map(span => span.textContent.trim().toLowerCase()));
+
+      names.forEach(name => {
+        if (!existingNames.has(name.toLowerCase())) {
+          const chip = document.createElement('div');
+          chip.className = 'email-chip';
+          chip.style.background = 'var(--gray-100)';
+          chip.style.color = 'var(--gray-700)';
+          chip.innerHTML = `
+            <span>${escapeHtml(name)}</span>
+            <span class="email-chip-remove" onclick="removeInstructorChip(this, ${rowIndex})" title="Remove">×</span>
+          `;
+          container.insertBefore(chip, input);
+          existingNames.add(name.toLowerCase());
+        }
+      });
+
+      input.value = '';
+      updateInstructorsForRow(rowIndex);
+    }
+
+    function removeInstructorChip(removeBtn, rowIndex) {
+      removeBtn.closest('.email-chip').remove();
+      updateInstructorsForRow(rowIndex);
+    }
+
+    function updateInstructorsForRow(rowIndex) {
+      const container = document.querySelector(`.instructor-chips-container[data-row="${rowIndex}"]`);
+      const names = Array.from(container.querySelectorAll('.email-chip span:first-child'))
+        .map(span => span.textContent.trim());
+
+      const item = assessmentList.find(a => a.rowIndex === rowIndex);
+      if (item) {
+        item.instructor = names.join(', ');
       }
     }
 
