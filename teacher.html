@@ -1308,7 +1308,7 @@
             </td>
             <td class="table-checkbox-cell col-hide-md">
               <input type="checkbox" data-field="submissionEnabled" ${item.submissionEnabled ? 'checked' : ''}
-                class="table-checkbox">
+                class="table-checkbox" onchange="saveRow(${item.rowIndex})">
             </td>
             <td class="col-hide-sm">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">

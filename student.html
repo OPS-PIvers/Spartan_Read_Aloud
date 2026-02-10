@@ -931,11 +931,9 @@
     .submit-progress { font-size: 12px; color: var(--gray-500); text-align: center; margin-top: 8px; }
 
     body.sidebar-open .main-container {
-      margin-right: 360px;
       transition: margin-right 0.3s var(--ease);
     }
     body.sidebar-open .audio-toolbar {
-      right: 360px;
       transition: right 0.3s var(--ease);
     }
 
@@ -1962,6 +1960,7 @@ let sidebarOpen = false;
 let sidebarWidth = 360;
 let sidebarResizeInitialized = false;
 let submissionFields = []; // { chunkIndex, questionLabel, questionType, mcOptions }
+let sidebarResizeHandlers = null; // Store event handlers for cleanup
 
 /**
  * Detects if a chunk is multiple choice by looking for answer option patterns.
@@ -1969,7 +1968,7 @@ let submissionFields = []; // { chunkIndex, questionLabel, questionType, mcOptio
  */
 function detectQuestionType(chunkText) {
   const lines = chunkText.split('\n').map(l => l.trim()).filter(l => l);
-  const mcPattern = /^(?:\(?([a-dA-D])[.)]\s*)(.+)/;
+  const mcPattern = /^(?:\(?([a-eA-E])[.)]\s*)(.+)/;
   const options = [];
   for (const line of lines) {
     const m = line.match(mcPattern);
@@ -2002,8 +2001,9 @@ function getQuestionPreview(chunkText) {
 
 /**
  * URL pattern for detection and stripping.
+ * Requires proper URL schemes or known TLDs with word boundaries.
  */
-const URL_PATTERN = /https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\/[^\s]*/gi;
+const URL_PATTERN = /https?:\/\/[^\s]+|\bwww\.[^\s]+|\b(?:[a-zA-Z0-9-]+\.)+(?:com|org|net|edu|gov|io|co|us|uk|ca|au|de|fr|jp|mil)\b(?:\/[^\s]*)?/gi;
 
 /**
  * Strips URLs from text and returns cleaned text.
@@ -2223,16 +2223,21 @@ function toggleSidebar() {
  * Sets up the sidebar resize drag behavior.
  */
 function setupSidebarResize() {
-  if (sidebarResizeInitialized) return;
+  // Clean up old listeners if they exist
+  if (sidebarResizeHandlers) {
+    document.removeEventListener('mousemove', sidebarResizeHandlers.mousemove);
+    document.removeEventListener('mouseup', sidebarResizeHandlers.mouseup);
+    sidebarResizeHandlers = null;
+  }
+
   const handle = document.getElementById('sidebar-resize-handle');
   const sidebar = document.getElementById('submission-sidebar');
   if (!handle || !sidebar) return;
-  sidebarResizeInitialized = true;
 
   let isResizing = false;
   let startX, startWidth;
 
-  handle.addEventListener('mousedown', function(e) {
+  const mousedownHandler = function(e) {
     isResizing = true;
     startX = e.clientX;
     startWidth = sidebar.offsetWidth;
@@ -2240,9 +2245,9 @@ function setupSidebarResize() {
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
     e.preventDefault();
-  });
+  };
 
-  document.addEventListener('mousemove', function(e) {
+  const mousemoveHandler = function(e) {
     if (!isResizing) return;
     const diff = startX - e.clientX;
     let newWidth = startWidth + diff;
@@ -2257,15 +2262,26 @@ function setupSidebarResize() {
       document.querySelector('.main-container').style.marginRight = newWidth + 'px';
       document.querySelector('.audio-toolbar').style.right = newWidth + 'px';
     }
-  });
+  };
 
-  document.addEventListener('mouseup', function() {
+  const mouseupHandler = function() {
     if (!isResizing) return;
     isResizing = false;
     handle.classList.remove('active');
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
-  });
+  };
+
+  // Store handlers for cleanup
+  sidebarResizeHandlers = {
+    mousemove: mousemoveHandler,
+    mouseup: mouseupHandler
+  };
+
+  handle.addEventListener('mousedown', mousedownHandler);
+  document.addEventListener('mousemove', mousemoveHandler);
+  document.addEventListener('mouseup', mouseupHandler);
+  sidebarResizeInitialized = true;
 }
 
 /**

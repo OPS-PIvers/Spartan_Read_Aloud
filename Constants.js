@@ -35,7 +35,8 @@ const CONSTANTS = {
     PROCESSING_MODE: 11,
     READ_ALOUD_ENABLED: 12,
     ACCESS_EXPIRES: 13,
-    SUBMISSION_ENABLED: 14
+    SUBMISSION_ENABLED: 14,
+    SUBMISSION_TIMESTAMPS: 15 // JSON object: { studentEmail: timestamp }
   },
 
   // --- File Handling ---
