@@ -3767,13 +3767,32 @@ function getInstructorEmail(instructorName) {
     }
   }
 
-  // 3. Last name fallback
+  // 3. Last name fallback (with ambiguity handling and logging)
+  const fallbackMatches = [];
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const lastName = row[1] ? row[1].toString().toLowerCase().trim() : '';
     if (lastName && primaryName.includes(lastName)) {
-      return row[2] ? row[2].toString().trim() : null;
+      fallbackMatches.push(row);
     }
+  }
+
+  if (fallbackMatches.length === 1) {
+    const match = fallbackMatches[0];
+    Logger.log(
+      'getInstructorEmail: using last-name fallback for "%s" -> "%s %s" (%s)',
+      primaryName,
+      match[0],
+      match[1],
+      match[2]
+    );
+    return match[2] ? match[2].toString().trim() : null;
+  } else if (fallbackMatches.length > 1) {
+    Logger.log(
+      'getInstructorEmail: ambiguous last-name fallback for "%s"; %s matches found. No email selected.',
+      primaryName,
+      fallbackMatches.length
+    );
   }
 
   return null;
@@ -3812,14 +3831,46 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     let className = '';
     let instructorName = '';
     let assessmentFound = false;
+    let assessmentRowIndex = -1;
+    let storedChunks = [];
 
     for (let i = 1; i < data.length; i++) {
       if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
         assessmentFound = true;
+        assessmentRowIndex = i;
         // Verify submissions are enabled for this assessment
         if (data[i][CONSTANTS.COL.SUBMISSION_ENABLED] !== true) {
           return { error: 'Submissions are not enabled for this assessment.' };
         }
+
+        // Check for duplicate submission
+        const submissionTimestampsJson = data[i][CONSTANTS.COL.SUBMISSION_TIMESTAMPS];
+        if (submissionTimestampsJson) {
+          try {
+            const submissionTimestamps = JSON.parse(submissionTimestampsJson);
+            if (submissionTimestamps[studentEmail]) {
+              const previousSubmission = new Date(submissionTimestamps[studentEmail]);
+              return { 
+                error: 'You have already submitted this assessment on ' + 
+                  previousSubmission.toLocaleString('en-US', { timeZone: 'America/Chicago' }) + 
+                  '. Multiple submissions are not allowed.' 
+              };
+            }
+          } catch (e) {
+            Logger.log('Error parsing submission timestamps: ' + e.toString());
+          }
+        }
+
+        // Load stored chunks for validation
+        try {
+          const audioDataJson = data[i][CONSTANTS.COL.AUDIO_JSON];
+          if (audioDataJson) {
+            storedChunks = JSON.parse(audioDataJson);
+          }
+        } catch (e) {
+          Logger.log('Error parsing audio chunks for validation: ' + e.toString());
+        }
+
         className = data[i][CONSTANTS.COL.CLASS_NAME] ? data[i][CONSTANTS.COL.CLASS_NAME].toString().trim() : '';
         instructorName = data[i][CONSTANTS.COL.INSTRUCTOR] ? data[i][CONSTANTS.COL.INSTRUCTOR].toString().trim() : '';
         try {
@@ -3834,6 +3885,21 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
 
     if (!assessmentFound) {
       return { error: 'Assessment not found.' };
+    }
+
+    // Validate that submission contains at least some answers
+    const answeredCount = responses.filter(r => r.answer && r.answer.toString().trim()).length;
+    if (answeredCount === 0) {
+      return { error: 'Cannot submit an empty assessment. Please answer at least one question.' };
+    }
+
+    // Validate response indices against stored chunks to prevent manipulation
+    for (let i = 0; i < responses.length; i++) {
+      const response = responses[i];
+      if (response.chunkIndex < 0 || response.chunkIndex >= storedChunks.length) {
+        Logger.log('Warning: Invalid chunk index ' + response.chunkIndex + ' in submission from ' + studentEmail);
+        return { error: 'Invalid response data. Please refresh and try again.' };
+      }
     }
 
     // Build the response document as HTML
@@ -3907,6 +3973,24 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
         replyTo: studentEmail
       });
       Logger.log('Submission email sent to fallback ' + fallbackEmail + ' (instructor "' + instructorName + '" not found)');
+    }
+
+    // Record submission timestamp
+    try {
+      const currentTimestamps = data[assessmentRowIndex][CONSTANTS.COL.SUBMISSION_TIMESTAMPS];
+      let submissionTimestamps = {};
+      if (currentTimestamps) {
+        try {
+          submissionTimestamps = JSON.parse(currentTimestamps);
+        } catch (e) {
+          Logger.log('Error parsing existing submission timestamps: ' + e.toString());
+        }
+      }
+      submissionTimestamps[studentEmail] = new Date().toISOString();
+      sheet.getRange(assessmentRowIndex + 1, CONSTANTS.COL.SUBMISSION_TIMESTAMPS + 1)
+        .setValue(JSON.stringify(submissionTimestamps));
+    } catch (e) {
+      Logger.log('Error recording submission timestamp: ' + e.toString());
     }
 
     return { success: true, sentTo: instructorEmail || 'fallback' };
