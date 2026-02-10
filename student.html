@@ -852,17 +852,23 @@
       overflow: hidden;
     }
 
-    .mc-options { display: flex; flex-direction: column; gap: 6px; }
+    .mc-options-grid { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); 
+      gap: 8px; 
+    }
     .mc-option-label {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px;
       background: var(--bg-surface);
       border: 1px solid var(--gray-300);
       border-radius: var(--radius-sm);
       cursor: pointer;
-      font-size: 14px;
+      font-size: 15px;
+      font-weight: 600;
       color: var(--gray-700);
       transition: all 0.15s;
     }
@@ -872,7 +878,6 @@
       border-color: var(--primary-blue);
       background: var(--primary-lighter);
       color: var(--primary-dark);
-      font-weight: 500;
     }
 
     .sidebar-text-input {
@@ -1964,20 +1969,20 @@ let sidebarResizeHandlers = null; // Store event handlers for cleanup
 
 /**
  * Detects if a chunk is multiple choice by looking for answer option patterns.
- * Returns the extracted options if MC, or null if free response.
+ * Returns the extracted letters if MC, or null if free response.
  */
 function detectQuestionType(chunkText) {
-  const lines = chunkText.split('\n').map(l => l.trim()).filter(l => l);
-  const mcPattern = /^(?:\(?([a-eA-E])[.)]\s*)(.+)/;
-  const options = [];
-  for (const line of lines) {
-    const m = line.match(mcPattern);
-    if (m) {
-      options.push({ letter: m[1].toUpperCase(), text: m[2].trim() });
-    }
+  // Look for patterns like "A.", "A )", "(a)", "B.", etc. globally
+  // This helps catch options even if they are on the same line
+  const mcPattern = /(?:^|\s|\()([a-eA-E])\s*[.)](?:\s+|$)/g;
+  const matches = [...chunkText.matchAll(mcPattern)];
+  
+  if (matches.length >= 2) {
+    // Extract unique letters and sort them
+    const letters = [...new Set(matches.map(m => m[1].toUpperCase()))].sort();
+    return letters.map(l => ({ letter: l }));
   }
-  // Need at least 2 options to be considered MC
-  return options.length >= 2 ? options : null;
+  return null;
 }
 
 /**
@@ -2035,11 +2040,11 @@ function buildSidebarFields() {
     let fieldHtml = '';
 
     if (mcOptions) {
-      fieldHtml = '<div class="mc-options">';
+      fieldHtml = '<div class="mc-options-grid">';
       mcOptions.forEach((opt, optIdx) => {
         fieldHtml += '<label class="mc-option-label" data-chunk="' + index + '" data-option="' + opt.letter + '">';
         fieldHtml += '<input type="radio" name="mc-' + index + '" value="' + escapeHtml(opt.letter) + '">';
-        fieldHtml += '<span>' + escapeHtml(opt.letter + '. ' + opt.text) + '</span>';
+        fieldHtml += '<span>' + escapeHtml(opt.letter) + '</span>';
         fieldHtml += '</label>';
       });
       fieldHtml += '</div>';
@@ -2067,7 +2072,7 @@ function buildSidebarFields() {
       const chunkIdx = parseInt(this.closest('.mc-option-label').dataset.chunk);
       submissionFields[chunkIdx].answer = this.value;
       // Update selected styling
-      this.closest('.mc-options').querySelectorAll('.mc-option-label').forEach(l => l.classList.remove('selected'));
+      this.closest('.mc-options-grid').querySelectorAll('.mc-option-label').forEach(l => l.classList.remove('selected'));
       this.closest('.mc-option-label').classList.add('selected');
       updateAnswerCount();
     });
