@@ -2815,7 +2815,8 @@ function handleGoogleDocUrl(sessionToken, docUrl) {
 function addNewAssessment(sessionToken, fileUrl, metadata) {
   try {
     // Verify admin token
-    if (!validateAdminToken(sessionToken)) {
+    const tokenData = validateAdminToken(sessionToken);
+    if (!tokenData) {
       return { error: 'Unauthorized. Admin access required.' };
     }
 
