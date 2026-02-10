@@ -1132,18 +1132,9 @@ function step2_GenerateMissingAudioAndFinalize() {
          // --- NEW: Generate the descriptive filename ---
          const newChunkName = generateSafeFilenameFromText(chunkText, j);
 
-         // Define legacy names for backwards compatibility
-         const cleanLegacyName = `${baseName}-chunk-${j + 1}.wav`;
-         const legacyFullName = `${fileName}-chunk-${j + 1}.wav`;
-
-         // Check for new name, then the two old formats
+         // ONLY look for the descriptive filename that includes the text representation
+         // This prevents picking up old, mismatched audio files if chunking changes
          let existingFiles = assessmentSubfolder.getFilesByName(newChunkName);
-         if (!existingFiles.hasNext()) {
-            existingFiles = assessmentSubfolder.getFilesByName(cleanLegacyName);
-         }
-         if (!existingFiles.hasNext()) {
-            existingFiles = assessmentSubfolder.getFilesByName(legacyFullName);
-         }
 
          let audioFile = null;
 
@@ -2057,9 +2048,10 @@ function sanitizeHtml(html) {
   const blockRegex = new RegExp(`<(${blockTags.join('|')})([^>]*)>`, 'gi');
 
   sanitized = sanitized.replace(blockRegex, (match, tag, attrs) => {
-    // Don't add ID if it already has one (though we stripped them earlier)
-    if (/id=["']/.test(attrs)) return match;
-    return `<${tag}${attrs} id="sra-block-${blockCounter++}">`;
+    // Remove any existing ID to ensure our sequential ones are used consistently
+    const cleanAttrs = attrs.replace(/\bid=["'][^"']*["']\s?/gi, '').trim();
+    const space = cleanAttrs ? ' ' : '';
+    return `<${tag}${space}${cleanAttrs} id="sra-block-${blockCounter++}">`;
   });
 
   // 13. Add question-start class for visual separation
@@ -2261,6 +2253,9 @@ function extractTextFromFile(fileId) {
  * @returns {string} SSML-formatted text wrapped in <speak> tags, or original text if SSML disabled
  */
 function addPausesToText(text) {
+  if (!text) return '';
+  text = text.trim();
+
   // Return plain text if SSML pauses are disabled
   if (!CONSTANTS.ENABLE_SSML_PAUSES) {
     return text;
@@ -2416,6 +2411,21 @@ function getAllAssessments(sessionToken) {
       Logger.log(`Teacher ${teacherName} has ${assessments.length} assessment(s)`);
     }
 
+    // NEW: Filter assessments for Sp.Ed. users (show assessments with their caseload students)
+    if (tokenData.role === CONSTANTS.ROLE_TOKEN_SPED) {
+      const caseloadStudents = getStudentsByCaseManager(tokenData.email);
+      Logger.log(`Filtering assessments for Sp.Ed. (${tokenData.email}) with ${caseloadStudents.length} caseload students`);
+
+      assessments = assessments.filter(assessment => {
+        const studentEmailsField = (assessment.studentEmails || '').toLowerCase();
+        
+        // Check if any student in the assessment is on the Sp.Ed. caseload
+        return caseloadStudents.some(studentEmail => studentEmailsField.includes(studentEmail));
+      });
+
+      Logger.log(`Sp.Ed. user ${tokenData.email} has ${assessments.length} assessment(s)`);
+    }
+
     Logger.log(`Retrieved ${assessments.length} assessments for ${tokenData.role}`);
     return {
       success: true,
@@ -2454,6 +2464,14 @@ function isAuthorizedForAssessment(tokenData, rowData) {
     
     return instructors.some(name => teacherLower.includes(name));
   }
+
+  if (tokenData.role === CONSTANTS.ROLE_TOKEN_SPED) {
+    const caseloadStudents = getStudentsByCaseManager(tokenData.email);
+    const studentEmailsField = (rowData[CONSTANTS.COL.STUDENT_EMAILS] || '').toLowerCase();
+    
+    // Sp.Ed. is authorized if any student in the assessment is on their caseload
+    return caseloadStudents.some(studentEmail => studentEmailsField.includes(studentEmail));
+  }
   
   return false;
 }
@@ -2489,6 +2507,27 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
     const rowData = sheet.getRange(actualRow, 1, 1, sheet.getLastColumn()).getValues()[0];
     if (!isAuthorizedForAssessment(tokenData, rowData)) {
       return { error: 'Unauthorized. You can only update your own assessments.' };
+    }
+
+    // Rename file in Drive if title provided
+    if (data.assessmentTitle !== undefined) {
+      try {
+        const fileId = getFileIdFromUrl(rowData[CONSTANTS.COL.PDF_URL]);
+        if (fileId) {
+          const file = DriveApp.getFileById(fileId);
+          let newName = data.assessmentTitle;
+          // Maintain extension if it's a PDF
+          if (file.getMimeType() === MimeType.PDF && !newName.toLowerCase().endsWith('.pdf')) {
+            newName += '.pdf';
+          }
+          if (file.getName() !== newName) {
+            file.setName(newName);
+            Logger.log(`Renamed assessment file to: ${newName}`);
+          }
+        }
+      } catch (renameError) {
+        Logger.log(`Warning: Failed to rename file: ${renameError.toString()}`);
+      }
     }
 
     // Update only the editable columns
@@ -2790,6 +2829,21 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
       }
     }
 
+    // Rename file in Drive if title provided
+    if (metadata.assessmentTitle) {
+      try {
+        const file = DriveApp.getFileById(fileId);
+        // Ensure it keeps its extension if it's a PDF
+        let newName = metadata.assessmentTitle;
+        if (file.getMimeType() === MimeType.PDF && !newName.toLowerCase().endsWith('.pdf')) {
+          newName += '.pdf';
+        }
+        file.setName(newName);
+      } catch (e) {
+        Logger.log(`Warning: Could not rename file: ${e.toString()}`);
+      }
+    }
+
     // Add new row with file URL and metadata
     const newRow = new Array(14).fill(''); // 14 columns
     newRow[CONSTANTS.COL.PDF_URL] = fileUrl;
@@ -3048,6 +3102,7 @@ function doGet(e) {
   // Check if staff user wants to preview student view
   if (user && e.parameter.preview === 'true' && 
       (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || 
+       user.userType === CONSTANTS.ROLE_TOKEN_SPED || 
        user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || 
        user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN)) {
     Logger.log(`doGet: Entering student preview mode. Preview: ${e.parameter.preview}, Assessment URL: ${e.parameter.assessmentUrl}`);
@@ -3058,7 +3113,10 @@ function doGet(e) {
     return template.evaluate().setTitle('Student Preview').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
   }
 
-  if (user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN)) {
+  if (user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || 
+               user.userType === CONSTANTS.ROLE_TOKEN_SPED || 
+               user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || 
+               user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN)) {
     // For teachers/admins, serve the teacher dashboard.
     const template = HtmlService.createTemplateFromFile('teacher');
     template.user = user;
@@ -3103,12 +3161,16 @@ function getUserByEmail(email) {
           userType = CONSTANTS.ROLE_TOKEN_SUPER_ADMIN;
         } else if (teacherRole === CONSTANTS.ROLE_ADMIN) {
           userType = CONSTANTS.ROLE_TOKEN_ADMIN;
+        } else if (teacherRole === CONSTANTS.ROLE_SPED) {
+          userType = CONSTANTS.ROLE_TOKEN_SPED;
         }
         
         return {
           userType: userType,
-          role: teacherRole,
+          role: userType, // Use token role consistently for frontend logic
+          displayName: teacherRole, // Keep display name separately if needed
           name: `${row[0]} ${row[1]}`.trim(),
+          lastName: row[1] ? row[1].toString().trim() : '',
           email: cleanEmail
         };
       }
@@ -3130,6 +3192,43 @@ function getUserByEmail(email) {
 
   // 3. User not found in any list.
   return null;
+}
+
+/**
+ * Retrieves a list of student emails assigned to a specific case manager.
+ * Matches Case Manager Email in 'Student Directory' sheet.
+ * @param {string} caseManagerEmail The email of the Sp.Ed. teacher
+ * @returns {string[]} Array of student emails
+ */
+function getStudentsByCaseManager(caseManagerEmail) {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const directorySheet = spreadsheet.getSheetByName('Student Directory');
+    if (!directorySheet) {
+      Logger.log('Student Directory sheet not found.');
+      return [];
+    }
+
+    const data = directorySheet.getDataRange().getValues();
+    const students = [];
+    const cleanCMEmail = caseManagerEmail.toLowerCase().trim();
+
+    // Directory Structure: A) First, B) Last, C) Student Email, D) Case Manager Email
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const studentEmail = row[2] ? row[2].toString().toLowerCase().trim() : '';
+      const cmEmail = row[3] ? row[3].toString().toLowerCase().trim() : '';
+
+      if (cmEmail === cleanCMEmail && studentEmail) {
+        students.push(studentEmail);
+      }
+    }
+
+    return students;
+  } catch (e) {
+    Logger.log(`Error in getStudentsByCaseManager: ${e.toString()}`);
+    return [];
+  }
 }
 
 
@@ -3444,9 +3543,14 @@ function getStudentAssessmentsForEmail(email) {
 
     // Check if user is staff (for preview mode)
     const user = getUserByEmail(cleanEmail);
-    const isStaff = user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN);
+    const isStaff = user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || 
+                             user.userType === CONSTANTS.ROLE_TOKEN_SPED || 
+                             user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || 
+                             user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN);
     const isTeacher = user && user.userType === CONSTANTS.ROLE_TOKEN_TEACHER;
+    const isSpEd = user && user.userType === CONSTANTS.ROLE_TOKEN_SPED;
     const staffName = user ? user.name : '';
+    const caseloadStudents = isSpEd ? getStudentsByCaseManager(cleanEmail) : [];
 
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
@@ -3462,11 +3566,14 @@ function getStudentAssessmentsForEmail(email) {
       let shouldShow = false;
 
       if (isStaff) {
-        // Staff see all, or teachers see only their own
+        // Staff see all, or teachers see only their own, or Sp.Ed. see caseload
         if (isTeacher) {
            // Split by comma or slash and check if any part is included in staff's name/email
            const instructors = instructor.toLowerCase().split(/[,\/]/).map(name => name.trim()).filter(name => name);
            shouldShow = instructors.some(name => staffName.toLowerCase().includes(name));
+        } else if (isSpEd) {
+           // Sp.Ed. see if any student in assessment is on their caseload
+           shouldShow = caseloadStudents.some(studentEmail => studentEmailsRaw.includes(studentEmail));
         } else {
            shouldShow = true; // Admins see all
         }
@@ -3538,7 +3645,10 @@ function getAssessmentPdf(email, password, assessmentUrl) {
 
         // Check if user is staff
         const user = getUserByEmail(cleanEmail);
-        const isStaff = user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN);
+        const isStaff = user && (user.userType === CONSTANTS.ROLE_TOKEN_TEACHER || 
+                                 user.userType === CONSTANTS.ROLE_TOKEN_SPED || 
+                                 user.userType === CONSTANTS.ROLE_TOKEN_ADMIN || 
+                                 user.userType === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN);
 
         // Verify this authenticated user's email is in the list for this assessment (or is staff)
         if (isStaff || studentEmails.includes(cleanEmail)) {

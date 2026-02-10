@@ -86,16 +86,18 @@ const CONSTANTS = {
   ROLE_SUPER_ADMIN: 'Super Admin',
   ROLE_ADMIN: 'Admin',
   ROLE_TEACHER: 'Teacher',
+  ROLE_SPED: 'Sp.Ed.',
   ROLE_STUDENT: 'student',
 
   // Token roles (used in session tokens and validation)
   ROLE_TOKEN_SUPER_ADMIN: 'super_admin',
   ROLE_TOKEN_ADMIN: 'admin',
   ROLE_TOKEN_TEACHER: 'teacher',
+  ROLE_TOKEN_SPED: 'sp_ed',
   ROLE_TOKEN_STUDENT: 'student',
 
   // List of staff token roles (for validation)
-  STAFF_ROLES: ['admin', 'super_admin', 'teacher'],
+  STAFF_ROLES: ['admin', 'super_admin', 'teacher', 'sp_ed'],
 
   // --- UI & Menu ---
   MENU_NAME: 'Spartan Assessment Portal',

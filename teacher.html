@@ -149,7 +149,7 @@
 
     /* --- LAYOUT --- */
     .main-content {
-      max-width: 1200px;
+      max-width: 1600px;
       margin: 32px auto;
       padding: 0 24px;
       display: grid;
@@ -313,7 +313,7 @@
     /* --- FORM ELEMENTS --- */
     .form-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 20px;
       margin-top: 24px;
     }
@@ -374,12 +374,14 @@
     /* --- TABLE --- */
     .table-responsive {
       overflow-x: auto;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-md);
+      background: white;
     }
 
     .table {
       width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
+      border-collapse: collapse;
     }
 
     .table th {
@@ -394,12 +396,34 @@
       border-bottom: 1px solid var(--gray-300);
     }
 
+    /* Responsive Column Hiding */
+    @media (max-width: 1100px) {
+      .col-hide-md { display: none !important; }
+    }
+    @media (max-width: 800px) {
+      .col-hide-sm { display: none !important; }
+    }
+
+    /* More Menu Trigger (Only visible when columns are hidden) */
+    .more-trigger {
+      display: none;
+      color: var(--primary-blue);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+    }
+    .more-trigger:hover { background: var(--primary-lighter); }
+
+    @media (max-width: 1100px) {
+      .more-trigger { display: inline-flex; }
+    }
+
     .table td {
       padding: 16px 24px;
       font-size: 14px;
       border-bottom: 1px solid var(--gray-100);
       color: var(--gray-700);
-      transition: background 0.1s;
+      vertical-align: top;
     }
 
     .table tr:last-child td { border-bottom: none; }
@@ -410,15 +434,35 @@
       background: transparent;
       border: 1px solid transparent;
       padding: 6px 10px;
+      margin-left: -10px; /* Align text with labels below */
       border-radius: 4px;
-      width: 100%;
+      width: auto;
+      min-width: 50px;
       font-family: inherit;
       font-size: 13px;
       color: var(--gray-900);
+      display: inline-block;
+      vertical-align: top;
+      resize: none;
+      overflow: hidden;
+      line-height: 1.4;
     }
 
     .table-edit-input:hover { border-color: var(--gray-300); background: white; }
     .table-edit-input:focus { border-color: var(--primary-blue); background: white; box-shadow: 0 0 0 2px rgba(45, 63, 137, 0.1); }
+
+    /* Inline Title & Class Edit */
+    .title-edit-input {
+      font-weight: 600;
+      color: var(--primary-blue);
+      flex: 1;
+      min-width: 200px;
+    }
+    .class-edit-input {
+      color: var(--gray-500);
+      flex: 0 1 auto;
+      min-width: 100px;
+    }
 
     /* Email chips container */
     .email-chips-container {
@@ -531,10 +575,10 @@
       display: flex;
       justify-content: flex-end;
       gap: 4px;
-      opacity: 0.6;
+      min-width: 140px;
       transition: opacity 0.2s;
     }
-    .table tr:hover .action-group { opacity: 1; }
+    .table tr .action-group { opacity: 1; }
 
     .action-btn {
       width: 32px;
@@ -619,9 +663,101 @@
       height: 18px;
       cursor: pointer;
     }
+
+    /* --- TOAST SYSTEM --- */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .toast {
+      min-width: 300px;
+      max-width: 450px;
+      background: white;
+      border-radius: var(--radius-md);
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      pointer-events: auto;
+      animation: slideUp 0.3s var(--ease);
+      border-left: 4px solid var(--gray-300);
+    }
+
+    .toast.success { border-left-color: var(--success-green); }
+    .toast.error { border-left-color: var(--primary-red); }
+    .toast.warning { border-left-color: var(--warning-orange); }
+
+    .toast-icon { font-size: 20px; }
+    .toast.success .toast-icon { color: var(--success-green); }
+    .toast.error .toast-icon { color: var(--primary-red); }
+    .toast.warning .toast-icon { color: var(--warning-orange); }
+
+    .toast-content { flex: 1; font-size: 14px; color: var(--gray-900); line-height: 1.4; }
+
+    /* --- CUSTOM MODAL --- */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .modal-card {
+      background: white;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-hover);
+      width: 100%;
+      max-width: 400px;
+      animation: slideUp 0.3s var(--ease);
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--gray-100);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title { font-weight: 600; font-size: 18px; color: var(--primary-dark); }
+    
+    .modal-body { padding: 24px; }
+    
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--gray-100);
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
   </style>
 </head>
 <body>
+  <!-- Standardized UI Components -->
+  <div id="toast-container"></div>
+
+  <div id="custom-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">Notification</div>
+        <button class="action-btn" onclick="closeModal()"><span class="material-icons">close</span></button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer" id="modal-footer"></div>
+    </div>
+  </div>
 
   <!-- LOADING OVERLAY (Full Page) -->
   <div id="page-loader" class="loader-overlay">
@@ -650,10 +786,10 @@
       <span>Spartan Assessment Portal</span>
     </div>
     <div class="app-user">
-      <a href="<?= ScriptApp.getService().getUrl() ?>?preview=true" target="_blank" class="logout-btn" style="text-decoration: none; margin-right: 8px;">
+      <button onclick="openPreview()" class="logout-btn" style="margin-right: 8px;">
         <span class="material-icons" style="font-size: 14px;">visibility</span>
         Preview
-      </a>
+      </button>
       <span id="admin-name-display">Welcome</span>
       <button onclick="logoutAdmin()" class="logout-btn">
         <span class="material-icons" style="font-size: 14px;">logout</span>
@@ -725,32 +861,47 @@
 
         <!-- Metadata Inputs -->
         <div class="form-grid">
+          <!-- ROW 1 -->
           <div class="input-group">
-            <label class="input-label">Class Name</label>
+            <label class="input-label">Class</label>
             <input type="text" id="meta-class" class="form-control" placeholder="e.g. Grade 4 Math">
           </div>
           <div class="input-group">
-            <label class="input-label">Instructor Last Name(s)</label>
-            <input type="text" id="meta-instructor" class="form-control" placeholder="e.g. Smith, Jones or Smith/Jones">
+            <label class="input-label">Assessment Title</label>
+            <input type="text" id="meta-title" class="form-control" placeholder="e.g. Unit 1 Test">
           </div>
+          <div class="input-group">
+            <label class="input-label">Instructor Last Name(s)</label>
+            <div id="meta-instructor-container" class="email-chips-container instructor-chips-container" data-row="new" onclick="focusEmailInput(this)" style="background: white; border: 1px solid var(--gray-300); padding: 6px 10px; border-radius: 4px;">
+              <input type="text" id="meta-instructor-input" class="email-chips-input" placeholder="Add teacher..."
+                onkeydown="handleInstructorInput(event, 'new')"
+                onpaste="handleInstructorPaste(event, 'new')"
+                onblur="addInstructorChip(this, 'new')">
+            </div>
+          </div>
+
+          <!-- ROW 2 -->
           <div class="input-group">
             <label class="input-label">Student Password</label>
             <input type="text" id="meta-password" class="form-control" placeholder="Required for access">
-          </div>
-          <div class="input-group" style="grid-column: span 2;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
-              <label class="input-label" style="margin-bottom: 0;">Student Emails (Paste list or comma separated)</label>
-              <button class="btn" style="padding: 2px 8px; font-size: 11px; height: 20px; background: var(--gray-100); color: var(--gray-700);" onclick="document.getElementById('meta-emails').value = ''">
-                Clear All
-              </button>
-            </div>
-            <textarea id="meta-emails" class="form-control" rows="3" placeholder="student1@school.com&#10;student2@school.com&#10;..."></textarea>
           </div>
           <div class="input-group">
             <label class="input-label">Access Expires (Optional)</label>
             <input type="datetime-local" id="meta-expires" class="form-control">
           </div>
-          <div class="input-group checkbox-group" style="align-items: flex-start; flex-direction: column; gap: 4px;">
+          <div class="input-group">
+            <label class="input-label">Student Emails (Paste list or comma separated)</label>
+            <div id="meta-emails-container" class="email-chips-container" data-row="new" onclick="focusEmailInput(this)" style="background: white; border: 1px solid var(--gray-300); padding: 6px 10px; border-radius: 4px; min-height: 42px; max-height: 120px; overflow-y: auto;">
+              <input type="text" id="meta-emails-input" class="email-chips-input" placeholder="Add email..."
+                onkeydown="handleEmailInput(event, 'new')"
+                onpaste="handleEmailPaste(event, 'new')"
+                onblur="addEmailChip(this, 'new')">
+            </div>
+          </div>
+
+          <!-- ROW 3 -->
+          <div></div> <!-- Column 1 Blank -->
+          <div class="input-group checkbox-group" style="align-items: flex-start; flex-direction: column; gap: 4px; padding-top: 0;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" id="meta-readaloud" checked class="checkbox-control" onchange="updateEstimate()">
               <label for="meta-readaloud" class="input-label" style="margin-bottom: 0; cursor: pointer;">Enable Read Aloud</label>
@@ -759,13 +910,12 @@
               Estimated processing time: ~5-10 minutes
             </div>
           </div>
-        </div>
-
-        <div style="margin-top:24px; display:flex; justify-content:flex-end;">
-          <button class="btn btn-primary" onclick="submitAssessment()">
-            <span class="material-icons" style="font-size:18px;">auto_awesome</span>
-            Process Assessment
-          </button>
+          <div class="input-group" style="display: flex; align-items: flex-end; justify-content: flex-end;">
+            <button class="btn btn-primary" onclick="submitAssessment()" style="width: 100%; height: 42px;">
+              <span class="material-icons" style="font-size:18px;">auto_awesome</span>
+              Process Assessment
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -787,11 +937,11 @@
           <thead>
             <tr>
               <th style="width: 25%;">Assessment / Class / Instructor</th>
-              <th style="width: 10%;">Status</th>
-              <th style="width: 20%;">Access Control (Pass / Expiry)</th>
-              <th style="width: 8%; text-align:center;">Read Aloud</th>
-              <th style="width: 27%;">Students</th>
-              <th style="width: 10%; text-align:right;">Actions</th>
+              <th style="width: 10%;" class="col-hide-sm">Status</th>
+              <th style="width: 20%;" class="col-hide-md">Access Control (Pass / Expiry)</th>
+              <th style="width: 8%; text-align:center;" class="col-hide-md">Read Aloud</th>
+              <th style="width: 27%;" class="col-hide-sm">Students</th>
+              <th style="width: 10%; text-align:right; min-width: 140px;">Actions</th>
             </tr>
           </thead>
           <tbody id="table-body">
@@ -810,6 +960,72 @@
   </div>
 
   <script>
+    // --- UI UTILITIES (Toast & Modal) ---
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      
+      let icon = 'check_circle';
+      if (type === 'error') icon = 'error';
+      if (type === 'warning') icon = 'warning';
+      
+      toast.innerHTML = `
+        <span class="material-icons toast-icon">${icon}</span>
+        <div class="toast-content">${message}</div>
+      `;
+      
+      container.appendChild(toast);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(20px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 5000);
+    }
+
+    function showModal(options) {
+      const modal = document.getElementById('custom-modal');
+      const title = document.getElementById('modal-title');
+      const body = document.getElementById('modal-body');
+      const footer = document.getElementById('modal-footer');
+      
+      title.textContent = options.title || 'Notification';
+      body.innerHTML = options.body || '';
+      
+      footer.innerHTML = '';
+      if (options.buttons) {
+        options.buttons.forEach(btn => {
+          const b = document.createElement('button');
+          b.className = `btn ${btn.class || ''}`;
+          b.textContent = btn.text;
+          b.onclick = () => {
+            if (btn.onclick) btn.onclick();
+            if (!btn.preventClose) closeModal();
+          };
+          footer.appendChild(b);
+        });
+      } else {
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'btn btn-primary';
+        closeBtn.textContent = 'Close';
+        closeBtn.onclick = closeModal;
+        footer.appendChild(closeBtn);
+      }
+      
+      modal.style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('custom-modal').style.display = 'none';
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+
     // --- Mock GAS Environment for Local Testing ---
     // If google is undefined (local browser or preview tool), mock it to avoid ReferenceError.
     if (typeof google === 'undefined') {
@@ -915,11 +1131,20 @@
       } catch (e) { console.warn('User parse error', e); }
 
       adminToken = '<?!= sessionToken ?>';
+      window.scriptUrl = '<?!= ScriptApp.getService().getUrl() ?>';
       
       // Init UI
       const nameDisplay = document.getElementById('admin-name-display');
       if (nameDisplay) nameDisplay.textContent = userData.name;
       currentUserRole = userData.role;
+      window.userLastName = userData.lastName || '';
+
+      // Pre-populate Instructor
+      const instructorInput = document.getElementById('meta-instructor-input');
+      if (instructorInput && userData.lastName) {
+        instructorInput.value = userData.lastName;
+        addInstructorChip(instructorInput, 'new');
+      }
       
       // Setup Drag & Drop
       initDragDrop();
@@ -930,6 +1155,16 @@
 
     function logoutAdmin() {
       window.location.reload();
+    }
+
+    function openPreview(assessmentUrl = null) {
+      let url = window.scriptUrl + '?preview=true';
+      if (assessmentUrl) url += '&assessmentUrl=' + encodeURIComponent(assessmentUrl);
+      if (window.top) {
+        window.top.location.href = url;
+      } else {
+        window.location.href = url;
+      }
     }
 
     // --- DATA HANDLING ---
@@ -987,7 +1222,7 @@
       const addSection = document.getElementById('add-assessment-section');
 
       // Visibility based on role
-      addSection.style.display = ['super_admin', 'admin', 'teacher'].includes(currentUserRole) ? 'block' : 'none';
+      addSection.style.display = ['super_admin', 'admin', 'teacher', 'sp_ed'].includes(currentUserRole) ? 'block' : 'none';
 
       if (assessmentList.length === 0) {
         tbody.innerHTML = '';
@@ -1019,9 +1254,16 @@
         return `
           <tr data-id="${item.rowIndex}">
             <td>
-              <div style="font-weight:600; color:var(--primary-dark); margin-bottom: 6px;">${escapeHtml(item.fileName)}</div>
-              <div style="margin-bottom: 4px;">
-                <input class="table-edit-input" style="font-size: 11px; padding: 2px 6px;" data-field="className" value="${escapeHtml(item.className)}" placeholder="Class Name">
+              <div style="display: flex; align-items: flex-start; gap: 4px; margin-bottom: 8px; flex-wrap: wrap;">
+                <textarea class="table-edit-input title-edit-input" data-field="assessmentTitle" 
+                  rows="1" oninput="autoResize(this)" placeholder="Assessment Title">${escapeHtml(item.fileName.replace(/\.pdf$/i, ''))}</textarea>
+                <span style="color: var(--gray-300); padding-top: 6px;">-</span>
+                <textarea class="table-edit-input class-edit-input" data-field="className" 
+                  rows="1" oninput="autoResize(this)" placeholder="Class Name">${escapeHtml(item.className)}</textarea>
+                
+                <button class="more-trigger" onclick="showMoreMenu(${item.rowIndex})" title="Show hidden columns" style="margin-left: auto; padding-top: 6px;">
+                  <span class="material-icons">more_vert</span>
+                </button>
               </div>
               <div style="font-size: 10px; color: var(--gray-500); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Instructors</div>
               <div class="email-chips-container instructor-chips-container" data-row="${item.rowIndex}" onclick="focusEmailInput(this)" >
@@ -1037,8 +1279,8 @@
                   onblur="addInstructorChip(this, ${item.rowIndex})">
               </div>
             </td>
-            <td>${statusBadge}</td>
-            <td>
+            <td class="col-hide-sm">${statusBadge}</td>
+            <td class="col-hide-md">
               <div style="display:flex; flex-direction:column; gap:6px;">
                 <div style="display:flex; align-items:center; gap:6px;">
                   <span class="material-icons" style="font-size:16px; color:var(--gray-500)">lock</span>
@@ -1051,10 +1293,11 @@
                 </div>
               </div>
             </td>
-            <td class="table-checkbox-cell">
-              <input type="checkbox" data-field="readAloudEnabled" ${item.readAloudEnabled !== false ? 'checked' : ''} class="table-checkbox">
+            <td class="table-checkbox-cell col-hide-md">
+              <input type="checkbox" data-field="readAloudEnabled" ${item.readAloudEnabled !== false ? 'checked' : ''} 
+                class="table-checkbox" onchange="handleReadAloudToggle(this, ${item.rowIndex})">
             </td>
-            <td>
+            <td class="col-hide-sm">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                 <span style="font-size: 10px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Students</span>
                 <button onclick="clearAllEmails(${item.rowIndex})" style="background:none; border:none; color:var(--primary-red); font-size:10px; cursor:pointer; font-weight:600; padding:0;">CLEAR ALL</button>
@@ -1068,14 +1311,14 @@
               </div>
             </td>
             <td>
-              <div class="action-group">
-                <a href="<?= ScriptApp.getService().getUrl() ?>?preview=true&assessmentUrl=${encodeURIComponent(item.pdfUrl)}" target="_blank" class="action-btn" title="Preview as Student" style="text-decoration: none;">
+              <div class="action-group" style="display: flex; justify-content: flex-end; gap: 4px;">
+                <button onclick="openPreview('${item.pdfUrl}')" class="action-btn" title="Preview as Student">
                   <span class="material-icons" style="font-size:18px;">visibility</span>
-                </a>
+                </button>
                 <button class="action-btn save-btn" onclick="saveRow(${item.rowIndex})" title="Save">
                   <span class="material-icons" style="font-size:18px;">save</span>
                 </button>
-                ${['super_admin', 'admin', 'teacher'].includes(currentUserRole) ? `
+                ${['super_admin', 'admin', 'teacher', 'sp_ed'].includes(currentUserRole) ? `
                 <button class="action-btn" onclick="reprocessRow(${item.rowIndex})" title="Reprocess">
                   <span class="material-icons" style="font-size:18px;">autorenew</span>
                 </button>
@@ -1087,6 +1330,11 @@
           </tr>
         `;
       }).join('');
+
+      // Auto-resize textareas after render
+      setTimeout(() => {
+        tbody.querySelectorAll('textarea.table-edit-input').forEach(autoResize);
+      }, 0);
     }
 
     // --- ACTIONS ---
@@ -1122,11 +1370,23 @@
 
     function submitAssessment() {
       const isFile = document.getElementById('content-file').classList.contains('active');
+      
+      // Collect instructors from chips
+      const instructorContainer = document.getElementById('meta-instructor-container');
+      const instructors = Array.from(instructorContainer.querySelectorAll('.email-chip span:first-child'))
+        .map(span => span.textContent.trim());
+
+      // Collect emails from chips
+      const emailContainer = document.getElementById('meta-emails-container');
+      const emails = Array.from(emailContainer.querySelectorAll('.email-chip span:first-child'))
+        .map(span => span.textContent.trim());
+
       const meta = {
         className: document.getElementById('meta-class').value.trim(),
-        instructor: document.getElementById('meta-instructor').value.trim(),
+        assessmentTitle: document.getElementById('meta-title').value.trim(),
+        instructor: instructors.join(', '),
         password: document.getElementById('meta-password').value.trim(),
-        studentEmails: document.getElementById('meta-emails').value.trim(), // Server handles parsing
+        studentEmails: emails.join(', '), // Server handles parsing
         readAloudEnabled: document.getElementById('meta-readaloud').checked,
         accessExpires: document.getElementById('meta-expires').value
       };
@@ -1136,9 +1396,12 @@
       
       if(isFile) {
         const fileInput = document.getElementById('file-input');
-        if(!fileInput.files.length) return alert('Please select a file.');
+        if(!fileInput.files.length) return showToast('Please select a file.', 'warning');
         
         const file = fileInput.files[0];
+        // If assessmentTitle is empty, use filename
+        if (!meta.assessmentTitle) meta.assessmentTitle = file.name;
+        
         overlay.style.display = 'flex';
         statusTitle.textContent = "Uploading File...";
         
@@ -1153,7 +1416,7 @@
         reader.readAsDataURL(file);
       } else {
         const url = document.getElementById('gdoc-input').value.trim();
-        if(!url) return alert('Enter URL.');
+        if(!url) return showToast('Please enter a Google Doc URL.', 'warning');
         
         overlay.style.display = 'flex';
         statusTitle.textContent = "Linking Google Doc...";
@@ -1173,13 +1436,27 @@
       google.script.run
         .withSuccessHandler((res) => {
           document.getElementById('conversion-overlay').style.display = 'none';
-          if(res.error) return alert(res.error);
+          if(res.error) return showToast(res.error, 'error');
+          
+          showToast('Assessment successfully added!', 'success');
           
           // Clear form
           document.getElementById('file-input').value = '';
           document.getElementById('file-name-display').textContent = '';
           document.getElementById('gdoc-input').value = '';
           document.getElementById('meta-class').value = '';
+          document.getElementById('meta-title').value = '';
+          
+          // Clear chips
+          document.querySelectorAll('#meta-instructor-container .email-chip, #meta-emails-container .email-chip')
+            .forEach(chip => chip.remove());
+          
+          // Re-populate user's name as a chip
+          const instructorInput = document.getElementById('meta-instructor-input');
+          if (instructorInput && window.userLastName) {
+            instructorInput.value = window.userLastName;
+            addInstructorChip(instructorInput, 'new');
+          }
           
           refreshData();
         })
@@ -1189,20 +1466,85 @@
 
     function handleError(err) {
       document.getElementById('conversion-overlay').style.display = 'none';
-      alert('Error: ' + (err.message || err));
+      showToast('Error: ' + (err.message || err), 'error');
+    }
+
+    function showMoreMenu(rowIndex) {
+      const item = assessmentList.find(a => a.rowIndex === rowIndex);
+      if (!item) return;
+
+      const expiry = item.accessExpires ? new Date(item.accessExpires).toLocaleString() : 'None';
+      const readAloudStatus = item.readAloudEnabled !== false ? 'Enabled' : 'Disabled';
+      
+      showModal({
+        title: 'Hidden Columns',
+        body: `
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Status</label>
+              <div>${item.isComplete ? 'Ready' : 'Processing'}</div>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Password</label>
+              <div style="font-family: monospace;">${escapeHtml(item.password) || 'None'}</div>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Read Aloud</label>
+              <div>${readAloudStatus}</div>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Access Expires</label>
+              <div>${expiry}</div>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Assigned Students</label>
+              <div style="max-height: 100px; overflow-y: auto; border: 1px solid var(--gray-100); border-radius: 6px; padding: 8px; margin-top: 4px; font-size: 13px;">
+                ${item.studentEmails ? item.studentEmails.split(',').join('<br>') : 'No students assigned'}
+              </div>
+            </div>
+          </div>
+        `,
+        buttons: [{ text: 'Close', class: 'btn-secondary', onclick: closeModal }]
+      });
+    }
+
+    function handleReadAloudToggle(checkbox, rowIndex) {
+      if (checkbox.checked) {
+        const item = assessmentList.find(a => a.rowIndex === rowIndex);
+        // Check if it was previously disabled or has no audio but is marked complete
+        if (item && (item.readAloudEnabled === false || (item.isComplete && !item.audioJson))) {
+          showModal({
+            title: 'Action Required',
+            body: `
+              <div style="text-align: center; padding: 10px;">
+                <div style="background: var(--primary-lighter); width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                  <span class="material-icons" style="color: var(--primary-blue); font-size: 32px;">autorenew</span>
+                </div>
+                <p>You've enabled <strong>Read Aloud</strong> for an assessment that was previously processed without audio.</p>
+                <p style="margin-top: 12px; font-size: 14px; color: var(--gray-700);">
+                  To generate the audio files now, please click the <strong>Reprocess</strong> icon 
+                  <span class="material-icons" style="font-size: 18px; vertical-align: middle; color: var(--gray-500);">autorenew</span> 
+                  in the Actions column after saving your changes.
+                </p>
+              </div>
+            `,
+            buttons: [{ text: 'I Understand', class: 'btn-primary', onclick: closeModal }]
+          });
+        }
+      }
     }
 
     function saveRow(rowIndex) {
       console.log('Attempting to save row:', rowIndex);
       if (rowIndex === undefined || rowIndex === null) {
-        alert('Error: Row index is undefined.');
+        showToast('Error: Row index is undefined.', 'error');
         return;
       }
 
       const row = document.querySelector(`tr[data-id="${rowIndex}"]`);
       if (!row) {
         console.error('Row not found for ID:', rowIndex);
-        alert('Error: Row element not found in the table.');
+        showToast('Error: Row element not found in the table.', 'error');
         return;
       }
 
@@ -1227,6 +1569,7 @@
           .map(span => span.textContent.trim());
 
         const data = {
+          assessmentTitle: row.querySelector('[data-field="assessmentTitle"]')?.value || '',
           className: row.querySelector('[data-field="className"]')?.value || '',
           instructor: instructors.join(', '),
           password: row.querySelector('[data-field="password"]')?.value || '',
@@ -1241,11 +1584,12 @@
           .withSuccessHandler((res) => {
             if (res && res.error) {
               console.error('Server error during save:', res.error);
-              alert('Save failed: ' + res.error);
+              showToast('Save failed: ' + res.error, 'error');
               btn.innerHTML = originalIcon;
               return;
             }
             console.log('Save successful');
+            showToast('Changes saved successfully', 'success');
             
             // Update local state to ensure persistence in UI
             const item = assessmentList.find(a => a.rowIndex === rowIndex);
@@ -1263,20 +1607,21 @@
           })
           .withFailureHandler(err => {
             console.error('Script error during save:', err);
-            alert('Save failed: ' + err);
+            showToast('Save failed: ' + err, 'error');
             btn.innerHTML = originalIcon;
           })
           .updateAssessmentRow(adminToken, rowIndex, data);
       } catch (err) {
         console.error('Client error during save:', err);
-        alert('An error occurred while preparing the data: ' + err.message);
+        showToast('An error occurred: ' + err.message, 'error');
         btn.innerHTML = originalIcon;
       }
     }
 
     // Instructor chip functions
     function handleInstructorInput(event, rowIndex) {
-      if (event.key === 'Enter' || event.key === ',' || event.key === '/') {
+      if (event.key === 'Enter' || event.key === ',' || event.key === '/' || event.key === 'Tab') {
+        if (event.key === 'Tab' && event.target.value === '') return; // Let default tab behavior happen if empty
         event.preventDefault();
         addInstructorChip(event.target, rowIndex);
       } else if (event.key === 'Backspace' && event.target.value === '') {
@@ -1362,22 +1707,48 @@
       const names = Array.from(container.querySelectorAll('.email-chip span:first-child'))
         .map(span => span.textContent.trim());
 
-      const item = assessmentList.find(a => a.rowIndex === rowIndex);
-      if (item) {
-        item.instructor = names.join(', ');
+      if (rowIndex !== 'new') {
+        const item = assessmentList.find(a => a.rowIndex === rowIndex);
+        if (item) {
+          item.instructor = names.join(', ');
+        }
       }
     }
 
     function deleteRow(rowIndex) {
-      if(!confirm('Delete this assessment permanently?')) return;
-      google.script.run.withSuccessHandler(refreshData).deleteAssessmentRow(adminToken, rowIndex);
+      showModal({
+        title: 'Confirm Delete',
+        body: '<p>Are you sure you want to delete this assessment permanently? This action cannot be undone.</p>',
+        buttons: [
+          { text: 'Cancel', class: 'btn-secondary', onclick: closeModal },
+          { text: 'Delete', class: 'btn-primary', onclick: () => {
+            google.script.run
+              .withSuccessHandler(() => {
+                showToast('Assessment deleted', 'success');
+                refreshData();
+              })
+              .deleteAssessmentRow(adminToken, rowIndex);
+          }}
+        ]
+      });
     }
 
     function reprocessRow(rowIndex) {
-      if(!confirm('Regenerate all audio for this assessment?')) return;
-      google.script.run
-        .withSuccessHandler(() => { alert('Processing started.'); refreshData(); })
-        .reprocessAssessment(adminToken, rowIndex);
+      showModal({
+        title: 'Regenerate Audio',
+        body: '<p>This will regenerate all audio chunks for this assessment. Any current audio files will be replaced.</p>',
+        buttons: [
+          { text: 'Cancel', class: 'btn-secondary', onclick: closeModal },
+          { text: 'Regenerate', class: 'btn-primary', onclick: () => {
+            google.script.run
+              .withSuccessHandler(() => { 
+                showToast('Reprocessing started', 'success'); 
+                refreshData(); 
+              })
+              .reprocessAssessment(adminToken, rowIndex);
+          }}
+        ]
+      });
     }
 
     // Email chip functions
@@ -1387,7 +1758,8 @@
     }
 
     function handleEmailInput(event, rowIndex) {
-      if (event.key === 'Enter' || event.key === ',' || event.key === ' ') {
+      if (event.key === 'Enter' || event.key === ',' || event.key === ' ' || event.key === 'Tab') {
+        if (event.key === 'Tab' && event.target.value === '') return;
         event.preventDefault();
         addEmailChip(event.target, rowIndex);
       } else if (event.key === 'Backspace' && event.target.value === '') {
@@ -1445,9 +1817,9 @@
       const emails = value.match(emailRegex);
       
       if (!emails || emails.length === 0) {
-        // Only show alert if user actually typed something that's not an email
+        // Only show toast if user actually typed something that's not an email
         if (value.length > 0 && !value.includes('@')) {
-          alert('Please enter valid email addresses');
+          showToast('Please enter valid email addresses', 'warning');
         }
         input.value = '';
         return;
@@ -1478,13 +1850,22 @@
     }
 
     function clearAllEmails(rowIndex) {
-      if (!confirm('Clear all student emails for this assessment?')) return;
-      const container = document.querySelector(`.email-chips-container[data-row="${rowIndex}"]`);
-      if (container) {
-        const chips = container.querySelectorAll('.email-chip');
-        chips.forEach(chip => chip.remove());
-        updateEmailsForRow(rowIndex);
-      }
+      showModal({
+        title: 'Clear Student List',
+        body: '<p>Remove all student email addresses from this assessment?</p>',
+        buttons: [
+          { text: 'Cancel', class: 'btn-secondary', onclick: closeModal },
+          { text: 'Clear All', class: 'btn-primary', onclick: () => {
+            const container = document.querySelector(`.email-chips-container[data-row="${rowIndex}"]`);
+            if (container) {
+              const chips = container.querySelectorAll('.email-chip');
+              chips.forEach(chip => chip.remove());
+              updateEmailsForRow(rowIndex);
+              showToast('Student list cleared', 'success');
+            }
+          }}
+        ]
+      });
     }
 
     function removeEmailChip(removeBtn, rowIndex) {
@@ -1493,14 +1874,16 @@
     }
 
     function updateEmailsForRow(rowIndex) {
-      const container = document.querySelector(`.email-chips-container[data-row="${rowIndex}"]`);
+      const container = document.querySelector(`.email-chips-container[data-row="${rowIndex}"]:not(.instructor-chips-container)`) || 
+                        document.querySelector(`.email-chips-container[data-row="${rowIndex}"]`);
       const emails = Array.from(container.querySelectorAll('.email-chip span:first-child'))
         .map(span => span.textContent.trim());
 
-      // Update the assessment data
-      const item = assessmentList.find(a => a.rowIndex === rowIndex);
-      if (item) {
-        item.studentEmails = emails.join(', ');
+      if (rowIndex !== 'new') {
+        const item = assessmentList.find(a => a.rowIndex === rowIndex);
+        if (item) {
+          item.studentEmails = emails.join(', ');
+        }
       }
     }
 
