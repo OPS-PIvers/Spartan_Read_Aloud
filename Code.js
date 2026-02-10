@@ -3737,25 +3737,41 @@ function getAssessmentPdf(email, password, assessmentUrl) {
  */
 function getInstructorEmail(instructorName) {
   if (!instructorName) return null;
-  const cleanName = instructorName.toLowerCase().trim();
+
+  // Support comma-separated instructor names; use the first (primary) instructor
+  const instructorNames = instructorName.toLowerCase().trim().split(',').map(function(s) { return s.trim(); });
+  const primaryName = instructorNames[0];
+  if (!primaryName) return null;
+
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const teacherSheet = spreadsheet.getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
   if (!teacherSheet) return null;
 
   const data = teacherSheet.getDataRange().getValues();
+
+  // 1. Exact full name match
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    const fullName = `${row[0]} ${row[1]}`.toLowerCase().trim();
-    if (fullName === cleanName || fullName.includes(cleanName) || cleanName.includes(fullName)) {
+    const fullName = (row[0] + ' ' + row[1]).toLowerCase().trim();
+    if (fullName === primaryName) {
       return row[2] ? row[2].toString().trim() : null;
     }
   }
 
-  // Try partial match on last name as fallback
+  // 2. Full name contains the search name (e.g., search "Smith" matches "John Smith")
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const fullName = (row[0] + ' ' + row[1]).toLowerCase().trim();
+    if (fullName.includes(primaryName)) {
+      return row[2] ? row[2].toString().trim() : null;
+    }
+  }
+
+  // 3. Last name fallback
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const lastName = row[1] ? row[1].toString().toLowerCase().trim() : '';
-    if (lastName && cleanName.includes(lastName)) {
+    if (lastName && primaryName.includes(lastName)) {
       return row[2] ? row[2].toString().trim() : null;
     }
   }
@@ -3779,6 +3795,11 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
       return { error: 'Session expired. Please log in again.' };
     }
 
+    // Ensure student tokens are only used for their authorized assessment
+    if (tokenData.role === CONSTANTS.ROLE_TOKEN_STUDENT && tokenData.url !== assessmentUrl) {
+      return { error: 'Unauthorized for this assessment.' };
+    }
+
     const studentEmail = tokenData.email;
     const studentName = tokenData.name || studentEmail;
 
@@ -3790,9 +3811,15 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     let assessmentName = 'Assessment';
     let className = '';
     let instructorName = '';
+    let assessmentFound = false;
 
     for (let i = 1; i < data.length; i++) {
       if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
+        assessmentFound = true;
+        // Verify submissions are enabled for this assessment
+        if (data[i][CONSTANTS.COL.SUBMISSION_ENABLED] !== true) {
+          return { error: 'Submissions are not enabled for this assessment.' };
+        }
         className = data[i][CONSTANTS.COL.CLASS_NAME] ? data[i][CONSTANTS.COL.CLASS_NAME].toString().trim() : '';
         instructorName = data[i][CONSTANTS.COL.INSTRUCTOR] ? data[i][CONSTANTS.COL.INSTRUCTOR].toString().trim() : '';
         try {
@@ -3803,6 +3830,10 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
         }
         break;
       }
+    }
+
+    if (!assessmentFound) {
+      return { error: 'Assessment not found.' };
     }
 
     // Build the response document as HTML
@@ -3821,13 +3852,14 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     // Add each response
     for (let i = 0; i < responses.length; i++) {
       const r = responses[i];
-      const answer = r.answer ? r.answer.toString().trim() : '<em style="color: #999;">No answer provided</em>';
+      const answerText = r.answer ? r.answer.toString().trim() : '';
+      const answerDisplay = answerText ? escapeHtmlBackend(answerText) : '<em style="color: #999;">No answer provided</em>';
       htmlBody += '<div style="margin: 16px 0; padding: 12px; background: #f8f9fc; border-radius: 8px; border-left: 3px solid #2d3f89;">';
       htmlBody += '<p style="margin: 0 0 6px 0; font-weight: bold; color: #2d3f89;">' + escapeHtmlBackend(r.questionLabel) + '</p>';
       if (r.questionType === 'mc') {
-        htmlBody += '<p style="margin: 0; font-size: 15px;">Selected: <strong>' + escapeHtmlBackend(answer) + '</strong></p>';
+        htmlBody += '<p style="margin: 0; font-size: 15px;">Selected: <strong>' + answerDisplay + '</strong></p>';
       } else {
-        htmlBody += '<p style="margin: 0; font-size: 15px; white-space: pre-wrap;">' + escapeHtmlBackend(answer) + '</p>';
+        htmlBody += '<p style="margin: 0; font-size: 15px; white-space: pre-wrap;">' + answerDisplay + '</p>';
       }
       htmlBody += '</div>';
     }
@@ -3896,7 +3928,8 @@ function escapeHtmlBackend(text) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // --- TESTING FUNCTIONS (Optional) ---

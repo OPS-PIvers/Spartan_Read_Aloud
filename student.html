@@ -1960,7 +1960,7 @@ function escapeHtml(text) {
 
 let sidebarOpen = false;
 let sidebarWidth = 360;
-let currentAssessmentUrl = null;
+let sidebarResizeInitialized = false;
 let submissionFields = []; // { chunkIndex, questionLabel, questionType, mcOptions }
 
 /**
@@ -2009,7 +2009,7 @@ const URL_PATTERN = /https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\
  * Strips URLs from text and returns cleaned text.
  */
 function stripUrls(text) {
-  return text.replace(URL_PATTERN, '').replace(/\s{2,}/g, ' ');
+  return text.replace(URL_PATTERN, '').replace(/[^\S\n]{2,}/g, ' ');
 }
 
 /**
@@ -2223,9 +2223,11 @@ function toggleSidebar() {
  * Sets up the sidebar resize drag behavior.
  */
 function setupSidebarResize() {
+  if (sidebarResizeInitialized) return;
   const handle = document.getElementById('sidebar-resize-handle');
   const sidebar = document.getElementById('submission-sidebar');
   if (!handle || !sidebar) return;
+  sidebarResizeInitialized = true;
 
   let isResizing = false;
   let startX, startWidth;
