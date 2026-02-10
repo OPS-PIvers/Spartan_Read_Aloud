@@ -437,6 +437,26 @@
     }
     .email-chips-container:hover { border-color: var(--gray-400); }
     .email-chips-container:focus-within { border-color: var(--primary-blue); box-shadow: 0 0 0 2px rgba(45, 63, 137, 0.1); }
+    /* Specific styles for instructor chips container to prevent wrapping */
+    .email-chips-container.instructor-chips-container {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      white-space: nowrap;
+      padding-bottom: 2px;
+      align-items: center;
+      min-height: 36px;
+    }
+    .email-chips-container.instructor-chips-container .email-chip {
+      flex-shrink: 0;
+    }
+    .email-chips-container.instructor-chips-container::-webkit-scrollbar {
+      height: 4px;
+    }
+    .email-chips-container.instructor-chips-container::-webkit-scrollbar-thumb {
+      background: var(--gray-300);
+      border-radius: 4px;
+    }
 
     /* Individual email chip */
     .email-chip {
@@ -1004,7 +1024,7 @@
                 <input class="table-edit-input" style="font-size: 11px; padding: 2px 6px;" data-field="className" value="${escapeHtml(item.className)}" placeholder="Class Name">
               </div>
               <div style="font-size: 10px; color: var(--gray-500); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Instructors</div>
-              <div class="email-chips-container instructor-chips-container" data-row="${item.rowIndex}" onclick="focusEmailInput(this)" style="max-height: 60px; overflow-y: auto;">
+              <div class="email-chips-container instructor-chips-container" data-row="${item.rowIndex}" onclick="focusEmailInput(this)" >
                 ${(item.instructor ? item.instructor.split(/[,\/]/).map(n => n.trim()).filter(n => n) : []).map(name => `
                   <div class="email-chip" style="background: var(--gray-100); color: var(--gray-700);">
                     <span>${escapeHtml(name)}</span>

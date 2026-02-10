@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    /* CSS from teacher.html */
+    :root {
+      --primary-blue: #2d3f89;
+      --primary-lighter: #eaecf5;
+      --gray-900: #1a1a1a;
+      --gray-700: #4a4a4a;
+      --gray-300: #d4d4d4;
+      --gray-100: #f5f5f5;
+      --primary-dark: #1d2a5d;
+      --gray-500: #737373;
+      --font-main: sans-serif;
+    }
+    body { font-family: var(--font-main); padding: 20px; }
+
+    .email-chips-container {
+      background: white;
+      border: 1px solid var(--gray-300);
+      border-radius: 4px;
+      padding: 4px;
+      min-height: 36px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      cursor: text;
+      max-height: 150px;
+      overflow-y: auto;
+      resize: vertical;
+    }
+
+    /* Specific styles for instructor chips container to prevent wrapping */
+    .email-chips-container.instructor-chips-container {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      white-space: nowrap;
+      padding-bottom: 2px;
+      align-items: center;
+      min-height: 36px;
+    }
+    .email-chips-container.instructor-chips-container .email-chip {
+      flex-shrink: 0;
+    }
+    .email-chips-container.instructor-chips-container::-webkit-scrollbar {
+      height: 4px;
+    }
+    .email-chips-container.instructor-chips-container::-webkit-scrollbar-thumb {
+      background: var(--gray-300);
+      border-radius: 4px;
+    }
+
+    .email-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--primary-lighter);
+      color: var(--primary-blue);
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .email-chips-input {
+      flex: 1;
+      min-width: 120px;
+      border: none;
+      outline: none;
+      padding: 4px;
+      font-size: 13px;
+    }
+
+    /* Mock table structure */
+    td { border: 1px solid #ccc; padding: 10px; width: 300px; }
+</style>
+</head>
+<body>
+
+<table>
+  <tr>
+    <td>
+      <div style="font-weight:600; color:var(--primary-dark); margin-bottom: 6px;">Assessment Title</div>
+      <div style="margin-bottom: 4px;">Class Name</div>
+      <div style="font-size: 10px; color: var(--gray-500); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Instructors</div>
+
+      <!-- The component under test -->
+      <div class="email-chips-container instructor-chips-container">
+        <!-- Multiple chips to force overflow -->
+        <div class="email-chip" style="background: var(--gray-100); color: var(--gray-700);"><span>Mr. Smith</span></div>
+        <div class="email-chip" style="background: var(--gray-100); color: var(--gray-700);"><span>Mrs. Johnson</span></div>
+        <div class="email-chip" style="background: var(--gray-100); color: var(--gray-700);"><span>Dr. Brown</span></div>
+        <div class="email-chip" style="background: var(--gray-100); color: var(--gray-700);"><span>Prof. Davis</span></div>
+        <div class="email-chip" style="background: var(--gray-100); color: var(--gray-700);"><span>Ms. Wilson</span></div>
+        <input type="text" class="email-chips-input" placeholder="Add teacher...">
+      </div>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
