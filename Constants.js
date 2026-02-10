@@ -101,6 +101,11 @@ const CONSTANTS = {
   // List of staff token roles (for validation)
   STAFF_ROLES: ['admin', 'super_admin', 'teacher', 'sp_ed'],
 
+  // Feature Flags / Restrictions
+  SUBMISSION_FEATURE_ENABLED: true, // Master switch for the student submission feature
+  SUBMISSION_ADMIN_ONLY: true,     // If true, only roles in SUBMISSION_ADMIN_ROLES can enable it
+  SUBMISSION_ADMIN_ROLES: ['super_admin'],
+
   // --- Submission Sidebar ---
   SUBMISSION_EMAIL_SUBJECT: 'Assessment Submission: {assessmentName} - {studentName}',
 

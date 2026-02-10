@@ -2548,7 +2548,12 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
       sheet.getRange(actualRow, CONSTANTS.COL.READ_ALOUD_ENABLED + 1).setValue(data.readAloudEnabled);
     }
     if (data.submissionEnabled !== undefined) {
-      sheet.getRange(actualRow, CONSTANTS.COL.SUBMISSION_ENABLED + 1).setValue(data.submissionEnabled);
+      const canManageSubmissions = CONSTANTS.SUBMISSION_FEATURE_ENABLED && 
+        (!CONSTANTS.SUBMISSION_ADMIN_ONLY || CONSTANTS.SUBMISSION_ADMIN_ROLES.includes(tokenData.role));
+      
+      if (canManageSubmissions) {
+        sheet.getRange(actualRow, CONSTANTS.COL.SUBMISSION_ENABLED + 1).setValue(data.submissionEnabled);
+      }
     }
     if (data.accessExpires !== undefined) {
       const expiryDate = data.accessExpires ? new Date(data.accessExpires.replace('T', ' ')) : '';
@@ -2849,7 +2854,7 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     }
 
     // Add new row with file URL and metadata
-    const newRow = new Array(15).fill(''); // 15 columns (0-14)
+    const newRow = new Array(16).fill(''); // 16 columns (0-15)
     newRow[CONSTANTS.COL.PDF_URL] = fileUrl;
     newRow[CONSTANTS.COL.CLASS_NAME] = metadata.className || '';
     newRow[CONSTANTS.COL.INSTRUCTOR] = metadata.instructor || '';
@@ -2857,7 +2862,10 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     newRow[CONSTANTS.COL.STUDENT_EMAILS] = parseStudentEmails(metadata.studentEmails || '');
     newRow[CONSTANTS.COL.READ_ALOUD_ENABLED] = metadata.readAloudEnabled !== false;
     newRow[CONSTANTS.COL.ACCESS_EXPIRES] = metadata.accessExpires ? new Date(metadata.accessExpires.replace('T', ' ')) : '';
-    newRow[CONSTANTS.COL.SUBMISSION_ENABLED] = metadata.submissionEnabled === true;
+    
+    const canManageSubmissions = CONSTANTS.SUBMISSION_FEATURE_ENABLED && 
+      (!CONSTANTS.SUBMISSION_ADMIN_ONLY || CONSTANTS.SUBMISSION_ADMIN_ROLES.includes(tokenData.role));
+    newRow[CONSTANTS.COL.SUBMISSION_ENABLED] = canManageSubmissions && metadata.submissionEnabled === true;
 
     sheet.appendRow(newRow);
     SpreadsheetApp.flush();
@@ -3090,6 +3098,18 @@ function getOrCreateSubfolder(parentFolder, subfolderName) {
     Logger.log(`Error creating subfolder "${subfolderName}": ${e.toString()}`);
     return null;
   }
+}
+
+/**
+ * Exposes specific public constants to the frontend.
+ * @returns {Object} Public constants
+ */
+function getConstants() {
+  return {
+    SUBMISSION_FEATURE_ENABLED: CONSTANTS.SUBMISSION_FEATURE_ENABLED,
+    SUBMISSION_ADMIN_ONLY: CONSTANTS.SUBMISSION_ADMIN_ONLY,
+    SUBMISSION_ADMIN_ROLES: CONSTANTS.SUBMISSION_ADMIN_ROLES
+  };
 }
 
 function doGet(e) {
@@ -3601,7 +3621,7 @@ function getStudentAssessmentsForEmail(email) {
               instructor: instructor,
               assessmentUrl: pdfUrl,
               readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
-              submissionEnabled: row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
+              submissionEnabled: CONSTANTS.SUBMISSION_FEATURE_ENABLED && row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
               rowIndex: i
             });
           }
@@ -3702,7 +3722,7 @@ function getAssessmentPdf(email, password, assessmentUrl) {
             return { error: `Could not load assessment: ${conversionResult.error}` };
           }
 
-          const submissionEnabled = row[CONSTANTS.COL.SUBMISSION_ENABLED] === true;
+          const submissionEnabled = CONSTANTS.SUBMISSION_FEATURE_ENABLED && row[CONSTANTS.COL.SUBMISSION_ENABLED] === true;
 
           return {
             fileType: "html",

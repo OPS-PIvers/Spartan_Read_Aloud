@@ -900,7 +900,7 @@
           </div>
 
           <!-- ROW 3 -->
-          <div class="input-group checkbox-group" style="align-items: flex-start; flex-direction: column; gap: 4px; padding-top: 0;">
+          <div id="meta-submissions-group" class="input-group checkbox-group" style="align-items: flex-start; flex-direction: column; gap: 4px; padding-top: 0; display: none;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" id="meta-submissions" class="checkbox-control">
               <label for="meta-submissions" class="input-label" style="margin-bottom: 0; cursor: pointer;">Enable Submissions</label>
@@ -944,13 +944,13 @@
         <table class="table">
           <thead>
             <tr>
-              <th style="width: 22%;">Assessment / Class / Instructor</th>
+              <th style="width: 25%;">Assessment / Class / Instructor</th>
               <th style="width: 8%;" class="col-hide-sm">Status</th>
-              <th style="width: 17%;" class="col-hide-md">Access Control (Pass / Expiry)</th>
+              <th style="width: 18%;" class="col-hide-md">Access Control (Pass / Expiry)</th>
               <th style="width: 6%; text-align:center;" class="col-hide-md">Read Aloud</th>
-              <th style="width: 6%; text-align:center;" class="col-hide-md">Submissions</th>
-              <th style="width: 22%;" class="col-hide-sm">Students</th>
-              <th style="width: 9%; text-align:right; min-width: 130px;">Actions</th>
+              <th id="th-submissions" style="width: 6%; text-align:center; display: none;" class="col-hide-md">Submissions</th>
+              <th style="width: 27%;" class="col-hide-sm">Students</th>
+              <th style="width: 10%; text-align:right; min-width: 130px;">Actions</th>
             </tr>
           </thead>
           <tbody id="table-body">
@@ -1115,6 +1115,11 @@
     let adminToken = null;
     let currentUserRole = 'student';
     let assessmentList = [];
+    let appConstants = {
+      SUBMISSION_FEATURE_ENABLED: false,
+      SUBMISSION_ADMIN_ONLY: true,
+      SUBMISSION_ADMIN_ROLES: ['super_admin']
+    };
 
     // --- INIT ---
     function updateEstimate() {
@@ -1158,8 +1163,13 @@
       // Setup Drag & Drop
       initDragDrop();
       
-      // Load Data
-      refreshData();
+      // Load Constants then Data
+      google.script.run
+        .withSuccessHandler(constants => {
+          appConstants = constants;
+          refreshData();
+        })
+        .getConstants();
     });
 
     function logoutAdmin() {
@@ -1232,6 +1242,16 @@
 
       // Visibility based on role
       addSection.style.display = ['super_admin', 'admin', 'teacher', 'sp_ed'].includes(currentUserRole) ? 'block' : 'none';
+
+      // Submission feature visibility
+      const canSeeSubmissions = appConstants.SUBMISSION_FEATURE_ENABLED && 
+        (!appConstants.SUBMISSION_ADMIN_ONLY || appConstants.SUBMISSION_ADMIN_ROLES.includes(currentUserRole));
+      
+      const metaSubmissionsGroup = document.getElementById('meta-submissions-group');
+      if (metaSubmissionsGroup) metaSubmissionsGroup.style.display = canSeeSubmissions ? 'block' : 'none';
+      
+      const thSubmissions = document.getElementById('th-submissions');
+      if (thSubmissions) thSubmissions.style.display = canSeeSubmissions ? 'table-cell' : 'none';
 
       if (assessmentList.length === 0) {
         tbody.innerHTML = '';
@@ -1306,7 +1326,7 @@
               <input type="checkbox" data-field="readAloudEnabled" ${item.readAloudEnabled !== false ? 'checked' : ''}
                 class="table-checkbox" onchange="handleReadAloudToggle(this, ${item.rowIndex})">
             </td>
-            <td class="table-checkbox-cell col-hide-md">
+            <td class="table-checkbox-cell col-hide-md" style="display: ${canSeeSubmissions ? 'table-cell' : 'none'}">
               <input type="checkbox" data-field="submissionEnabled" ${item.submissionEnabled ? 'checked' : ''}
                 class="table-checkbox" onchange="saveRow(${item.rowIndex})">
             </td>
@@ -1493,6 +1513,9 @@
       const readAloudStatus = item.readAloudEnabled !== false ? 'Enabled' : 'Disabled';
       const submissionStatus = item.submissionEnabled ? 'Enabled' : 'Disabled';
 
+      const canSeeSubmissions = appConstants.SUBMISSION_FEATURE_ENABLED && 
+        (!appConstants.SUBMISSION_ADMIN_ONLY || appConstants.SUBMISSION_ADMIN_ROLES.includes(currentUserRole));
+
       showModal({
         title: 'Hidden Columns',
         body: `
@@ -1509,10 +1532,12 @@
               <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Read Aloud</label>
               <div>${readAloudStatus}</div>
             </div>
+            ${canSeeSubmissions ? `
             <div>
               <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Submissions</label>
               <div>${submissionStatus}</div>
             </div>
+            ` : ''}
             <div>
               <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Access Expires</label>
               <div>${expiry}</div>
