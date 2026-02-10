@@ -2387,6 +2387,7 @@ function getAllAssessments(sessionToken) {
         password: row[CONSTANTS.COL.PASSWORD] || '',
         studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || '',
         readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
+        submissionEnabled: row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
         accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? Utilities.formatDate(new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]), "America/Chicago", "yyyy-MM-dd'T'HH:mm") : ''
       });
     }
@@ -2545,6 +2546,9 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
     }
     if (data.readAloudEnabled !== undefined) {
       sheet.getRange(actualRow, CONSTANTS.COL.READ_ALOUD_ENABLED + 1).setValue(data.readAloudEnabled);
+    }
+    if (data.submissionEnabled !== undefined) {
+      sheet.getRange(actualRow, CONSTANTS.COL.SUBMISSION_ENABLED + 1).setValue(data.submissionEnabled);
     }
     if (data.accessExpires !== undefined) {
       const expiryDate = data.accessExpires ? new Date(data.accessExpires.replace('T', ' ')) : '';
@@ -2845,7 +2849,7 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     }
 
     // Add new row with file URL and metadata
-    const newRow = new Array(14).fill(''); // 14 columns
+    const newRow = new Array(15).fill(''); // 15 columns (0-14)
     newRow[CONSTANTS.COL.PDF_URL] = fileUrl;
     newRow[CONSTANTS.COL.CLASS_NAME] = metadata.className || '';
     newRow[CONSTANTS.COL.INSTRUCTOR] = metadata.instructor || '';
@@ -2853,6 +2857,7 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     newRow[CONSTANTS.COL.STUDENT_EMAILS] = parseStudentEmails(metadata.studentEmails || '');
     newRow[CONSTANTS.COL.READ_ALOUD_ENABLED] = metadata.readAloudEnabled !== false;
     newRow[CONSTANTS.COL.ACCESS_EXPIRES] = metadata.accessExpires ? new Date(metadata.accessExpires.replace('T', ' ')) : '';
+    newRow[CONSTANTS.COL.SUBMISSION_ENABLED] = metadata.submissionEnabled === true;
 
     sheet.appendRow(newRow);
     SpreadsheetApp.flush();
@@ -3596,6 +3601,7 @@ function getStudentAssessmentsForEmail(email) {
               instructor: instructor,
               assessmentUrl: pdfUrl,
               readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
+              submissionEnabled: row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
               rowIndex: i
             });
           }
@@ -3696,13 +3702,16 @@ function getAssessmentPdf(email, password, assessmentUrl) {
             return { error: `Could not load assessment: ${conversionResult.error}` };
           }
 
+          const submissionEnabled = row[CONSTANTS.COL.SUBMISSION_ENABLED] === true;
+
           return {
             fileType: "html",
             assessmentHtml: sanitizeHtml(conversionResult.html),
             fileName: fileName,
             audioChunks: audioChunks,
             sessionToken: sessionToken,
-            readAloudEnabled: readAloudEnabled
+            readAloudEnabled: readAloudEnabled,
+            submissionEnabled: submissionEnabled
           };
         } else {
           // User is trying to access an assessment they are not assigned to.

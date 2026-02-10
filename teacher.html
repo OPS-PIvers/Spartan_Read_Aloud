@@ -900,7 +900,15 @@
           </div>
 
           <!-- ROW 3 -->
-          <div></div> <!-- Column 1 Blank -->
+          <div class="input-group checkbox-group" style="align-items: flex-start; flex-direction: column; gap: 4px; padding-top: 0;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="meta-submissions" class="checkbox-control">
+              <label for="meta-submissions" class="input-label" style="margin-bottom: 0; cursor: pointer;">Enable Submissions</label>
+            </div>
+            <div style="font-size: 11px; color: var(--gray-500); margin-left: 28px; font-weight: 500;">
+              Students can submit answers via a sidebar
+            </div>
+          </div>
           <div class="input-group checkbox-group" style="align-items: flex-start; flex-direction: column; gap: 4px; padding-top: 0;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" id="meta-readaloud" checked class="checkbox-control" onchange="updateEstimate()">
@@ -940,6 +948,7 @@
               <th style="width: 10%;" class="col-hide-sm">Status</th>
               <th style="width: 20%;" class="col-hide-md">Access Control (Pass / Expiry)</th>
               <th style="width: 8%; text-align:center;" class="col-hide-md">Read Aloud</th>
+              <th style="width: 8%; text-align:center;" class="col-hide-md">Submissions</th>
               <th style="width: 27%;" class="col-hide-sm">Students</th>
               <th style="width: 10%; text-align:right; min-width: 140px;">Actions</th>
             </tr>
@@ -1294,8 +1303,12 @@
               </div>
             </td>
             <td class="table-checkbox-cell col-hide-md">
-              <input type="checkbox" data-field="readAloudEnabled" ${item.readAloudEnabled !== false ? 'checked' : ''} 
+              <input type="checkbox" data-field="readAloudEnabled" ${item.readAloudEnabled !== false ? 'checked' : ''}
                 class="table-checkbox" onchange="handleReadAloudToggle(this, ${item.rowIndex})">
+            </td>
+            <td class="table-checkbox-cell col-hide-md">
+              <input type="checkbox" data-field="submissionEnabled" ${item.submissionEnabled ? 'checked' : ''}
+                class="table-checkbox">
             </td>
             <td class="col-hide-sm">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
@@ -1388,6 +1401,7 @@
         password: document.getElementById('meta-password').value.trim(),
         studentEmails: emails.join(', '), // Server handles parsing
         readAloudEnabled: document.getElementById('meta-readaloud').checked,
+        submissionEnabled: document.getElementById('meta-submissions').checked,
         accessExpires: document.getElementById('meta-expires').value
       };
 
@@ -1447,6 +1461,8 @@
           document.getElementById('meta-class').value = '';
           document.getElementById('meta-title').value = '';
           
+          document.getElementById('meta-submissions').checked = false;
+
           // Clear chips
           document.querySelectorAll('#meta-instructor-container .email-chip, #meta-emails-container .email-chip')
             .forEach(chip => chip.remove());
@@ -1475,7 +1491,8 @@
 
       const expiry = item.accessExpires ? new Date(item.accessExpires).toLocaleString() : 'None';
       const readAloudStatus = item.readAloudEnabled !== false ? 'Enabled' : 'Disabled';
-      
+      const submissionStatus = item.submissionEnabled ? 'Enabled' : 'Disabled';
+
       showModal({
         title: 'Hidden Columns',
         body: `
@@ -1491,6 +1508,10 @@
             <div>
               <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Read Aloud</label>
               <div>${readAloudStatus}</div>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Submissions</label>
+              <div>${submissionStatus}</div>
             </div>
             <div>
               <label style="font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Access Expires</label>
@@ -1575,6 +1596,7 @@
           password: row.querySelector('[data-field="password"]')?.value || '',
           studentEmails: emails.join(', '),
           readAloudEnabled: row.querySelector('[data-field="readAloudEnabled"]')?.checked || false,
+          submissionEnabled: row.querySelector('[data-field="submissionEnabled"]')?.checked || false,
           accessExpires: row.querySelector('[data-field="accessExpires"]')?.value || ''
         };
 
@@ -1599,6 +1621,7 @@
               item.password = data.password;
               item.studentEmails = data.studentEmails;
               item.readAloudEnabled = data.readAloudEnabled;
+              item.submissionEnabled = data.submissionEnabled;
               item.accessExpires = data.accessExpires;
             }
 

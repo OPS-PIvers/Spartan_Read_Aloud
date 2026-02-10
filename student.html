@@ -1204,6 +1204,7 @@ let sessionToken = null;
 let totalChunks = 0; 
 let chunksLoaded = 0; 
 let isReadAloudEnabled = true;
+let isSubmissionEnabled = false;
 
 // Session storage
 let storedEmail = null;
@@ -1436,9 +1437,10 @@ function beginAssessment() {
 
 function onAssessmentLoaded(result) {
   isReadAloudEnabled = result.readAloudEnabled !== false;
+  isSubmissionEnabled = result.submissionEnabled === true;
   serverChunks = result.audioChunks || [];
   totalChunks = serverChunks.length;
-  sessionToken = result.sessionToken; 
+  sessionToken = result.sessionToken;
 
   renderHtmlAssessment(result.assessmentHtml);
 
@@ -1447,8 +1449,10 @@ function onAssessmentLoaded(result) {
   setLineSpacing(currentLineSpacing);
   setupEventListeners();
 
-  // Initialize submission sidebar
-  initSubmissionSidebar();
+  // Initialize submission sidebar only if enabled for this assessment
+  if (isSubmissionEnabled) {
+    initSubmissionSidebar();
+  }
 
   // Handle Read Aloud specific features
   if (isReadAloudEnabled) {
