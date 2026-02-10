@@ -2028,11 +2028,32 @@ function sanitizeHtml(html) {
   // 11. Trim leading/trailing whitespace
   sanitized = sanitized.trim();
 
+  // NEW: Ensure ALL table cell content is wrapped in <p> if it's not already block-level
+  // This version handles mixed content (text + block elements) more robustly
+  sanitized = sanitized.replace(/<(td|th)([^>]*)>([\s\S]*?)<\/\1>/gi, (match, tag, attrs, content) => {
+    // If there are no block tags at all, wrap the whole content
+    if (!/<(p|div|ul|ol|table|h[1-6])/i.test(content)) {
+      return `<${tag}${attrs}><p>${content}</p></${tag}>`;
+    }
+
+    // If there ARE block tags, we need to wrap "orphan" text nodes
+    // Split by block tags, keeping the tags in the array
+    const parts = content.split(/(<p[^>]*>[\s\S]*?<\/p>|<div[^>]*>[\s\S]*?<\/div>|<ul[^>]*>[\s\S]*?<\/ul>|<ol[^>]*>[\s\S]*?<\/ol>|<table[^>]*>[\s\S]*?<\/table>|<h[1-6][^>]*>[\s\S]*?<\/h[1-6]>)/gi);
+    
+    const wrappedParts = parts.map(part => {
+      if (!part.trim()) return ''; // Ignore empty/whitespace-only parts
+      if (part.startsWith('<')) return part; // Already a block element
+      return `<p>${part.trim()}</p>`; // Wrap orphan text
+    });
+
+    return `<${tag}${attrs}>${wrappedParts.join('')}</${tag}>`;
+  });
+
   // 12. Assign unique IDs to all block elements for precise TTS mapping
   // This enables the frontend to highlight exactly what is being read
   let blockCounter = 0;
   // EXCLUDE div and blockquote to avoid nested tag parsing issues with simple regex
-  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th'];
+  const blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li'];
   const blockRegex = new RegExp(`<(${blockTags.join('|')})([^>]*)>`, 'gi');
 
   sanitized = sanitized.replace(blockRegex, (match, tag, attrs) => {
@@ -2061,7 +2082,7 @@ function parseHtmlToChunks(html) {
   
   // Extract all blocks with their text and ID using regex
   // Only target the specific tags we added IDs to in sanitizeHtml
-  const blockPattern = /<(p|h[1-6]|li|td|th)[^>]*id="(sra-block-\d+)"[^>]*>([\s\S]*?)<\/\1>/gi;
+  const blockPattern = /<(p|h[1-6]|li)[^>]*id="(sra-block-\d+)"[^>]*>([\s\S]*?)<\/\1>/gi;
   
   let match;
   const blocks = [];
@@ -2246,11 +2267,8 @@ function addPausesToText(text) {
   }
 
   try {
-    // PRONUNCIATION FIX: Replace "c." with "c " to avoid "circa" pronunciation
-    let processedText = text.replace(/\b[cC]\.\s/g, 'c ');
-
     // Step 1: Escape special XML characters to prevent SSML errors
-    let ssmlText = processedText
+    let ssmlText = text
       .replace(/&/g, '&amp;')   // Must be first to avoid double-escaping
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
@@ -2267,9 +2285,13 @@ function addPausesToText(text) {
     // Matches a newline that is immediately followed by "a.", "b)", etc.
     ssmlText = ssmlText.replace(/\n(?=[a-dA-D][.)])/g, ` <break time="${CONSTANTS.PAUSE_BEFORE_ANSWER_BLOCK_MS}ms"/>\n`);
 
+    // Step 4b: Add pause before inline answer choices (e.g. "a. Paris b. Madrid")
+    // Use word boundary to ensure we only match standalone choice markers
+    ssmlText = ssmlText.replace(/(^|[^\n])[ \t]+(?=\b[a-dA-D][.)])/g, `$1 <break time="${CONSTANTS.PAUSE_BEFORE_INLINE_ANSWER_MS}ms"/> `);
+
     // Step 5: Add pauses after answer choices (A., B., C., D. or a), b), c), d))
     // Matches: "A." or "A)" (uppercase or lowercase, periods or parentheses), with optional whitespace
-    ssmlText = ssmlText.replace(/([A-Da-d][.)])\s*/g, `$1 <break time="${CONSTANTS.PAUSE_AFTER_ANSWER_CHOICE_MS}ms"/> `);
+    ssmlText = ssmlText.replace(/(\b[A-Da-d][.)])\s*/g, `$1 <break time="${CONSTANTS.PAUSE_AFTER_ANSWER_CHOICE_MS}ms"/> `);
 
     // Step 6: Wrap in SSML speak tags
     const result = `<speak>${ssmlText}</speak>`;
