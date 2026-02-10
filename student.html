@@ -736,7 +736,232 @@
         
     
             @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    
+
+    /* --- SUBMISSION SIDEBAR --- */
+    .submission-sidebar {
+      position: fixed;
+      top: 64px;
+      right: 0;
+      bottom: var(--toolbar-height);
+      width: 360px;
+      min-width: 280px;
+      max-width: 50vw;
+      background: var(--bg-surface);
+      border-left: 1px solid rgba(0,0,0,0.08);
+      box-shadow: -4px 0 20px rgba(0,0,0,0.06);
+      z-index: 90;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.3s var(--ease);
+    }
+    .submission-sidebar.open { transform: translateX(0); }
+
+    .sidebar-resize-handle {
+      position: absolute;
+      left: -4px;
+      top: 0;
+      bottom: 0;
+      width: 8px;
+      cursor: col-resize;
+      background: transparent;
+      z-index: 2;
+    }
+    .sidebar-resize-handle:hover,
+    .sidebar-resize-handle.active { background: var(--primary-blue); opacity: 0.3; }
+
+    .sidebar-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--gray-100);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .sidebar-header h3 {
+      margin: 0;
+      font-size: 16px;
+      color: var(--primary-dark);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sidebar-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--gray-500);
+      cursor: pointer;
+      border-radius: 6px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sidebar-close-btn:hover { background: var(--gray-100); }
+
+    .sidebar-questions {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 20px;
+    }
+
+    .sidebar-question-item {
+      margin-bottom: 16px;
+      padding: 14px;
+      background: var(--bg-app);
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+    .sidebar-question-item.active-chunk {
+      border-color: var(--primary-blue);
+      background: var(--primary-lighter);
+    }
+
+    .sidebar-question-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--primary-blue);
+      margin-bottom: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sidebar-question-label:hover { text-decoration: underline; }
+    .sidebar-question-label .chunk-num {
+      background: var(--primary-blue);
+      color: white;
+      border-radius: 4px;
+      font-size: 11px;
+      padding: 2px 6px;
+      font-weight: 700;
+      min-width: 22px;
+      text-align: center;
+    }
+
+    .sidebar-question-preview {
+      font-size: 12px;
+      color: var(--gray-500);
+      margin-bottom: 10px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .mc-options { display: flex; flex-direction: column; gap: 6px; }
+    .mc-option-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--bg-surface);
+      border: 1px solid var(--gray-300);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--gray-700);
+      transition: all 0.15s;
+    }
+    .mc-option-label:hover { border-color: var(--primary-light); background: rgba(67,86,160,0.04); }
+    .mc-option-label input[type="radio"] { accent-color: var(--primary-blue); margin: 0; flex-shrink: 0; }
+    .mc-option-label.selected {
+      border-color: var(--primary-blue);
+      background: var(--primary-lighter);
+      color: var(--primary-dark);
+      font-weight: 500;
+    }
+
+    .sidebar-text-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--gray-300);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-main);
+      font-size: 14px;
+      color: var(--gray-900);
+      resize: vertical;
+      min-height: 40px;
+      transition: border-color 0.2s;
+      background: var(--bg-surface);
+    }
+    .sidebar-text-input:focus {
+      outline: none;
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 3px rgba(45,63,137,0.1);
+    }
+    .sidebar-text-input.single-line { min-height: 40px; resize: none; }
+    .sidebar-text-input.multi-line { min-height: 80px; }
+
+    .url-warning {
+      font-size: 11px;
+      color: #e74c3c;
+      margin-top: 4px;
+      display: none;
+    }
+    .url-warning.visible { display: block; }
+
+    .sidebar-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--gray-100);
+      flex-shrink: 0;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--primary-blue);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-main);
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+    .submit-btn:hover { background: var(--primary-dark); }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .submit-progress { font-size: 12px; color: var(--gray-500); text-align: center; margin-top: 8px; }
+
+    body.sidebar-open .main-container {
+      margin-right: 360px;
+      transition: margin-right 0.3s var(--ease);
+    }
+    body.sidebar-open .audio-toolbar {
+      right: 360px;
+      transition: right 0.3s var(--ease);
+    }
+
+    .sidebar-toggle-btn { position: relative; }
+    .sidebar-toggle-btn .answer-count-badge {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      background: var(--success-green);
+      color: white;
+      font-size: 9px;
+      font-weight: 700;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @media (max-width: 768px) {
+      .submission-sidebar { width: 100vw; max-width: 100vw; min-width: 100vw; }
+      body.sidebar-open .main-container { margin-right: 0; }
+      body.sidebar-open .audio-toolbar { right: 0; }
+    }
+
           </style>
     
         </head>
@@ -808,6 +1033,26 @@
 
   </div>
 
+  <!-- SUBMISSION SIDEBAR -->
+  <div id="submission-sidebar" class="submission-sidebar">
+    <div class="sidebar-resize-handle" id="sidebar-resize-handle"></div>
+    <div class="sidebar-header">
+      <h3><span class="material-icons" style="font-size:20px">edit_note</span> Your Answers</h3>
+      <button class="sidebar-close-btn" id="sidebar-close-btn" title="Close sidebar">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+    <div class="sidebar-questions" id="sidebar-questions">
+      <!-- Question fields injected by JS -->
+    </div>
+    <div class="sidebar-footer">
+      <button class="submit-btn" id="submit-btn" disabled>
+        <span class="material-icons" style="font-size:18px">send</span> Submit Assessment
+      </button>
+      <div class="submit-progress" id="submit-progress"></div>
+    </div>
+  </div>
+
   <!-- AUDIO TOOLBAR -->
   <div id="audio-toolbar" class="audio-toolbar" style="display: none;">
     <div class="toolbar-inner">
@@ -852,6 +1097,7 @@
         <button id="speed-btn" class="tool-btn" title="Playback Speed"><span class="material-icons" style="font-size:20px;">speed</span></button>
         <button id="focus-btn" class="tool-btn" title="Focus Mode"><span class="material-icons" style="font-size:20px;">center_focus_strong</span></button>
         <button id="line-spacing-btn" class="tool-btn" title="Line Spacing"><span class="material-icons" style="font-size:20px;">format_line_spacing</span></button>
+        <button id="sidebar-toggle-btn" class="tool-btn sidebar-toggle-btn" title="Answer Sheet" style="display:none;"><span class="material-icons" style="font-size:20px;">assignment</span><span class="answer-count-badge" id="answer-count-badge" style="display:none;">0</span></button>
       </div>
     </div>
   </div>
@@ -986,6 +1232,7 @@ function initializePasswordlessStudentView(user, targetUrl) {
   }
 
   if (autoLoadAssessmentUrl) {
+    currentAssessmentUrl = autoLoadAssessmentUrl;
     console.log('Auto-loading assessment:', autoLoadAssessmentUrl);
     const loader = document.createElement('div');
     loader.id = 'auto-load-overlay';
@@ -1087,6 +1334,7 @@ function loadSpecificAssessment(assessmentUrl, cardElement) {
 }
 
 function startAssessment(assessmentUrl, cardElement, password) {
+  currentAssessmentUrl = assessmentUrl;
   currentLoadingCard = cardElement;
   // Disable interaction
   cardElement.style.opacity = '0.7';
@@ -1199,6 +1447,9 @@ function onAssessmentLoaded(result) {
   setLineSpacing(currentLineSpacing);
   setupEventListeners();
 
+  // Initialize submission sidebar
+  initSubmissionSidebar();
+
   // Handle Read Aloud specific features
   if (isReadAloudEnabled) {
     if (chunksLoaded < totalChunks) {
@@ -1298,6 +1549,11 @@ function highlightChunkInHTML(chunkIndex) {
   // Scroll the first element into view
   if (elements.length > 0) {
     elements[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // Sync sidebar highlight
+  if (sidebarOpen) {
+    highlightActiveSidebarQuestion(chunkIndex);
   }
 }
 
@@ -1478,6 +1734,10 @@ function setupEventListeners() {
     document.getElementById('audio-toolbar').style.display = 'none';
     assessmentSelectionContainer.style.display = 'block';
     document.getElementById('back-to-menu-btn').style.display = 'none';
+    // Close sidebar
+    if (sidebarOpen) toggleSidebar();
+    document.getElementById('submission-sidebar').classList.remove('open');
+    document.getElementById('sidebar-toggle-btn').style.display = 'none';
     if (autoLoadAssessmentUrl) window.close(); // Close tab if direct preview
   };
 
@@ -1690,6 +1950,377 @@ function onPdfLoadError(error) {
 function escapeHtml(text) {
     if (!text) return '';
     return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// --- SUBMISSION SIDEBAR LOGIC ---
+
+let sidebarOpen = false;
+let sidebarWidth = 360;
+let currentAssessmentUrl = null;
+let submissionFields = []; // { chunkIndex, questionLabel, questionType, mcOptions }
+
+/**
+ * Detects if a chunk is multiple choice by looking for answer option patterns.
+ * Returns the extracted options if MC, or null if free response.
+ */
+function detectQuestionType(chunkText) {
+  const lines = chunkText.split('\n').map(l => l.trim()).filter(l => l);
+  const mcPattern = /^(?:\(?([a-dA-D])[.)]\s*)(.+)/;
+  const options = [];
+  for (const line of lines) {
+    const m = line.match(mcPattern);
+    if (m) {
+      options.push({ letter: m[1].toUpperCase(), text: m[2].trim() });
+    }
+  }
+  // Need at least 2 options to be considered MC
+  return options.length >= 2 ? options : null;
+}
+
+/**
+ * Extracts a short question label from chunk text (e.g., "Question 3").
+ */
+function getQuestionLabel(chunkText, index) {
+  const numMatch = chunkText.match(/^(\d+)[.)\]]/);
+  if (numMatch) return 'Question ' + numMatch[1];
+  return 'Question ' + (index + 1);
+}
+
+/**
+ * Gets a preview of the question text (first line, truncated).
+ */
+function getQuestionPreview(chunkText) {
+  const firstLine = chunkText.split('\n')[0].trim();
+  // Strip leading question number
+  const cleaned = firstLine.replace(/^\d+[.)\]]\s*/, '');
+  return cleaned.length > 80 ? cleaned.substring(0, 80) + '...' : cleaned;
+}
+
+/**
+ * URL pattern for detection and stripping.
+ */
+const URL_PATTERN = /https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\/[^\s]*/gi;
+
+/**
+ * Strips URLs from text and returns cleaned text.
+ */
+function stripUrls(text) {
+  return text.replace(URL_PATTERN, '').replace(/\s{2,}/g, ' ');
+}
+
+/**
+ * Builds the sidebar question fields based on serverChunks.
+ */
+function buildSidebarFields() {
+  const container = document.getElementById('sidebar-questions');
+  container.innerHTML = '';
+  submissionFields = [];
+
+  serverChunks.forEach((chunk, index) => {
+    const mcOptions = detectQuestionType(chunk.text);
+    const questionLabel = getQuestionLabel(chunk.text, index);
+    const preview = getQuestionPreview(chunk.text);
+    const questionType = mcOptions ? 'mc' : 'text';
+
+    submissionFields.push({ chunkIndex: index, questionLabel, questionType, answer: '' });
+
+    const item = document.createElement('div');
+    item.className = 'sidebar-question-item';
+    item.id = 'sidebar-q-' + index;
+
+    let fieldHtml = '';
+
+    if (mcOptions) {
+      fieldHtml = '<div class="mc-options">';
+      mcOptions.forEach((opt, optIdx) => {
+        fieldHtml += '<label class="mc-option-label" data-chunk="' + index + '" data-option="' + opt.letter + '">';
+        fieldHtml += '<input type="radio" name="mc-' + index + '" value="' + escapeHtml(opt.letter) + '">';
+        fieldHtml += '<span>' + escapeHtml(opt.letter + '. ' + opt.text) + '</span>';
+        fieldHtml += '</label>';
+      });
+      fieldHtml += '</div>';
+    } else {
+      // Determine if it looks like a short fill-in-the-blank or longer response
+      const isShort = chunk.text.length < 100 && !chunk.text.includes('\n');
+      const inputClass = isShort ? 'sidebar-text-input single-line' : 'sidebar-text-input multi-line';
+      const rows = isShort ? 1 : 3;
+      fieldHtml = '<textarea class="' + inputClass + '" data-chunk="' + index + '" rows="' + rows + '" placeholder="Type your answer..."></textarea>';
+      fieldHtml += '<div class="url-warning" id="url-warn-' + index + '">Links are not allowed and have been removed.</div>';
+    }
+
+    item.innerHTML = '<div class="sidebar-question-label" onclick="jumpToChunkFromSidebar(' + index + ')">' +
+      '<span class="chunk-num">' + (index + 1) + '</span> ' + escapeHtml(questionLabel) +
+      '</div>' +
+      '<div class="sidebar-question-preview">' + escapeHtml(preview) + '</div>' +
+      fieldHtml;
+
+    container.appendChild(item);
+  });
+
+  // Attach event listeners for MC radio buttons
+  container.querySelectorAll('.mc-option-label input[type="radio"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      const chunkIdx = parseInt(this.closest('.mc-option-label').dataset.chunk);
+      submissionFields[chunkIdx].answer = this.value;
+      // Update selected styling
+      this.closest('.mc-options').querySelectorAll('.mc-option-label').forEach(l => l.classList.remove('selected'));
+      this.closest('.mc-option-label').classList.add('selected');
+      updateAnswerCount();
+    });
+  });
+
+  // Attach event listeners for text inputs with URL stripping
+  container.querySelectorAll('.sidebar-text-input').forEach(textarea => {
+    const chunkIdx = parseInt(textarea.dataset.chunk);
+
+    textarea.addEventListener('input', function() {
+      const original = this.value;
+      const cleaned = stripUrls(original);
+      if (cleaned !== original) {
+        this.value = cleaned;
+        const warn = document.getElementById('url-warn-' + chunkIdx);
+        if (warn) {
+          warn.classList.add('visible');
+          setTimeout(() => warn.classList.remove('visible'), 3000);
+        }
+      }
+      submissionFields[chunkIdx].answer = this.value;
+      updateAnswerCount();
+    });
+
+    // Block paste of HTML/rich text - only allow plain text
+    textarea.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      const cleaned = stripUrls(text);
+      if (cleaned !== text) {
+        const warn = document.getElementById('url-warn-' + chunkIdx);
+        if (warn) {
+          warn.classList.add('visible');
+          setTimeout(() => warn.classList.remove('visible'), 3000);
+        }
+      }
+      // Insert at cursor position
+      const start = this.selectionStart;
+      const end = this.selectionEnd;
+      this.value = this.value.substring(0, start) + cleaned + this.value.substring(end);
+      this.selectionStart = this.selectionEnd = start + cleaned.length;
+      submissionFields[chunkIdx].answer = this.value;
+      updateAnswerCount();
+    });
+
+    // Block drag-and-drop of links
+    textarea.addEventListener('drop', function(e) {
+      e.preventDefault();
+    });
+  });
+}
+
+/**
+ * Updates the answer count badge and submit button state.
+ */
+function updateAnswerCount() {
+  const answered = submissionFields.filter(f => f.answer && f.answer.trim()).length;
+  const total = submissionFields.length;
+  const badge = document.getElementById('answer-count-badge');
+  const submitBtn = document.getElementById('submit-btn');
+  const progress = document.getElementById('submit-progress');
+
+  if (badge) {
+    if (answered > 0) {
+      badge.textContent = answered;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = answered === 0;
+  }
+
+  if (progress) {
+    progress.textContent = answered + ' of ' + total + ' answered';
+  }
+}
+
+/**
+ * Initializes the submission sidebar after assessment loads.
+ */
+function initSubmissionSidebar() {
+  if (!serverChunks || serverChunks.length === 0) return;
+
+  // Show the toggle button
+  const toggleBtn = document.getElementById('sidebar-toggle-btn');
+  if (toggleBtn) toggleBtn.style.display = 'flex';
+
+  // Build the answer fields
+  buildSidebarFields();
+  updateAnswerCount();
+  setupSidebarResize();
+
+  // Wire up toggle and close buttons
+  if (toggleBtn) toggleBtn.onclick = toggleSidebar;
+  const closeBtn = document.getElementById('sidebar-close-btn');
+  if (closeBtn) closeBtn.onclick = toggleSidebar;
+
+  // Submit button
+  const submitBtn = document.getElementById('submit-btn');
+  if (submitBtn) submitBtn.onclick = submitAssessment;
+}
+
+/**
+ * Jump to a chunk when clicking its label in the sidebar.
+ */
+function jumpToChunkFromSidebar(index) {
+  jumpToChunk(index);
+  highlightActiveSidebarQuestion(index);
+}
+
+/**
+ * Highlights the active question in the sidebar.
+ */
+function highlightActiveSidebarQuestion(index) {
+  document.querySelectorAll('.sidebar-question-item').forEach(el => el.classList.remove('active-chunk'));
+  const activeItem = document.getElementById('sidebar-q-' + index);
+  if (activeItem) {
+    activeItem.classList.add('active-chunk');
+    activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+/**
+ * Toggles the submission sidebar open/closed.
+ */
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  const sidebar = document.getElementById('submission-sidebar');
+  const toggleBtn = document.getElementById('sidebar-toggle-btn');
+
+  sidebar.classList.toggle('open', sidebarOpen);
+  document.body.classList.toggle('sidebar-open', sidebarOpen);
+  if (toggleBtn) toggleBtn.classList.toggle('active', sidebarOpen);
+
+  // Sync margins with actual sidebar width
+  const mainContainer = document.querySelector('.main-container');
+  const toolbar = document.querySelector('.audio-toolbar');
+  if (sidebarOpen) {
+    const w = sidebar.offsetWidth + 'px';
+    if (mainContainer) mainContainer.style.marginRight = w;
+    if (toolbar) toolbar.style.right = w;
+    highlightActiveSidebarQuestion(currentChunkIndex);
+  } else {
+    if (mainContainer) mainContainer.style.marginRight = '';
+    if (toolbar) toolbar.style.right = '';
+  }
+}
+
+/**
+ * Sets up the sidebar resize drag behavior.
+ */
+function setupSidebarResize() {
+  const handle = document.getElementById('sidebar-resize-handle');
+  const sidebar = document.getElementById('submission-sidebar');
+  if (!handle || !sidebar) return;
+
+  let isResizing = false;
+  let startX, startWidth;
+
+  handle.addEventListener('mousedown', function(e) {
+    isResizing = true;
+    startX = e.clientX;
+    startWidth = sidebar.offsetWidth;
+    handle.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!isResizing) return;
+    const diff = startX - e.clientX;
+    let newWidth = startWidth + diff;
+    const maxWidth = window.innerWidth * 0.5;
+    const minWidth = 280;
+    newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+    sidebar.style.width = newWidth + 'px';
+    sidebarWidth = newWidth;
+
+    // Update body margin to match
+    if (sidebarOpen) {
+      document.querySelector('.main-container').style.marginRight = newWidth + 'px';
+      document.querySelector('.audio-toolbar').style.right = newWidth + 'px';
+    }
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!isResizing) return;
+    isResizing = false;
+    handle.classList.remove('active');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+}
+
+/**
+ * Handles assessment submission.
+ */
+function submitAssessment() {
+  const submitBtn = document.getElementById('submit-btn');
+  const progress = document.getElementById('submit-progress');
+
+  // Confirm
+  showModal({
+    title: 'Submit Assessment',
+    body: '<p>Are you sure you want to submit your answers? This action cannot be undone.</p><p style="font-size:13px; color:var(--gray-500);">Your responses will be sent as a PDF to your instructor.</p>',
+    buttons: [
+      { text: 'Cancel', class: 'btn-secondary' },
+      { text: 'Submit', class: 'btn-primary', onclick: () => {
+        doSubmit();
+      }}
+    ]
+  });
+}
+
+function doSubmit() {
+  const submitBtn = document.getElementById('submit-btn');
+  const progress = document.getElementById('submit-progress');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="material-icons animate-spin" style="font-size:18px">refresh</span> Submitting...';
+  progress.textContent = 'Sending to instructor...';
+
+  const responses = submissionFields.map(f => ({
+    chunkIndex: f.chunkIndex,
+    questionLabel: f.questionLabel,
+    questionType: f.questionType,
+    answer: f.answer
+  }));
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        submitBtn.innerHTML = '<span class="material-icons" style="font-size:18px">check_circle</span> Submitted';
+        submitBtn.style.background = 'var(--success-green)';
+        progress.textContent = 'Your responses have been submitted successfully.';
+        showToast('Assessment submitted successfully!', 'success');
+
+        // Disable all input fields
+        document.querySelectorAll('.sidebar-text-input').forEach(el => { el.disabled = true; });
+        document.querySelectorAll('.mc-option-label input[type="radio"]').forEach(el => { el.disabled = true; });
+      } else {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span class="material-icons" style="font-size:18px">send</span> Submit Assessment';
+        progress.textContent = '';
+        showToast(result.error || 'Submission failed. Please try again.', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span class="material-icons" style="font-size:18px">send</span> Submit Assessment';
+      progress.textContent = '';
+      showToast('Submission failed: ' + err, 'error');
+    })
+    .submitAssessmentResponses(sessionToken, currentAssessmentUrl, responses);
 }
 
 // --- INITIALIZATION ---

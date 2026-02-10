@@ -99,6 +99,12 @@ const CONSTANTS = {
   // List of staff token roles (for validation)
   STAFF_ROLES: ['admin', 'super_admin', 'teacher', 'sp_ed'],
 
+  // --- Submission Sidebar ---
+  SUBMISSION_ENABLED: true,
+  SUBMISSION_EMAIL_SUBJECT: 'Assessment Submission: {assessmentName} - {studentName}',
+  // Regex to detect multiple-choice answer options in chunk text
+  MC_OPTION_REGEX: /^(?:\(?[a-dA-D][.)]\s)/m,
+
   // --- UI & Menu ---
   MENU_NAME: 'Spartan Assessment Portal',
   MENU_ITEMS: {

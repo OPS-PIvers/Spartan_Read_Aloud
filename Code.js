@@ -3718,6 +3718,178 @@ function getAssessmentPdf(email, password, assessmentUrl) {
   }
 }
 
+// --- SUBMISSION FUNCTIONS ---
+
+/**
+ * Looks up an instructor's email from the Teachers sheet by name.
+ * Matches against "First Last" name format.
+ * @param {string} instructorName The instructor's display name (e.g., "John Smith")
+ * @returns {string|null} The instructor's email or null if not found
+ */
+function getInstructorEmail(instructorName) {
+  if (!instructorName) return null;
+  const cleanName = instructorName.toLowerCase().trim();
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const teacherSheet = spreadsheet.getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
+  if (!teacherSheet) return null;
+
+  const data = teacherSheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const fullName = `${row[0]} ${row[1]}`.toLowerCase().trim();
+    if (fullName === cleanName || fullName.includes(cleanName) || cleanName.includes(fullName)) {
+      return row[2] ? row[2].toString().trim() : null;
+    }
+  }
+
+  // Try partial match on last name as fallback
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const lastName = row[1] ? row[1].toString().toLowerCase().trim() : '';
+    if (lastName && cleanName.includes(lastName)) {
+      return row[2] ? row[2].toString().trim() : null;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Submits student assessment responses. Generates a PDF from the responses
+ * and emails it to the instructor.
+ * @param {string} sessionToken Session token for authentication
+ * @param {string} assessmentUrl The assessment URL identifier
+ * @param {Array<Object>} responses Array of { chunkIndex, questionLabel, questionType, answer }
+ * @returns {Object} { success: true } or { error: "..." }
+ */
+function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
+  try {
+    // Validate session
+    const tokenData = validateSessionToken(sessionToken);
+    if (!tokenData) {
+      return { error: 'Session expired. Please log in again.' };
+    }
+
+    const studentEmail = tokenData.email;
+    const studentName = tokenData.name || studentEmail;
+
+    // Look up assessment metadata
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+    if (!sheet) return { error: 'Assessment Database not found.' };
+
+    const data = sheet.getDataRange().getValues();
+    let assessmentName = 'Assessment';
+    let className = '';
+    let instructorName = '';
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
+        className = data[i][CONSTANTS.COL.CLASS_NAME] ? data[i][CONSTANTS.COL.CLASS_NAME].toString().trim() : '';
+        instructorName = data[i][CONSTANTS.COL.INSTRUCTOR] ? data[i][CONSTANTS.COL.INSTRUCTOR].toString().trim() : '';
+        try {
+          const fileId = getFileIdFromUrl(assessmentUrl);
+          if (fileId) assessmentName = DriveApp.getFileById(fileId).getName();
+        } catch (e) {
+          Logger.log('Could not get assessment filename: ' + e.toString());
+        }
+        break;
+      }
+    }
+
+    // Build the response document as HTML
+    const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' });
+    let htmlBody = '<html><body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">';
+    htmlBody += '<h1 style="color: #2d3f89; border-bottom: 2px solid #2d3f89; padding-bottom: 10px;">Assessment Submission</h1>';
+    htmlBody += '<table style="width: 100%; margin-bottom: 20px; font-size: 14px;">';
+    htmlBody += '<tr><td style="padding: 4px 8px;"><strong>Student:</strong></td><td>' + escapeHtmlBackend(studentName) + ' (' + escapeHtmlBackend(studentEmail) + ')</td></tr>';
+    htmlBody += '<tr><td style="padding: 4px 8px;"><strong>Assessment:</strong></td><td>' + escapeHtmlBackend(assessmentName) + '</td></tr>';
+    if (className) htmlBody += '<tr><td style="padding: 4px 8px;"><strong>Class:</strong></td><td>' + escapeHtmlBackend(className) + '</td></tr>';
+    if (instructorName) htmlBody += '<tr><td style="padding: 4px 8px;"><strong>Instructor:</strong></td><td>' + escapeHtmlBackend(instructorName) + '</td></tr>';
+    htmlBody += '<tr><td style="padding: 4px 8px;"><strong>Submitted:</strong></td><td>' + timestamp + '</td></tr>';
+    htmlBody += '</table>';
+    htmlBody += '<hr style="border: 1px solid #eee;">';
+
+    // Add each response
+    for (let i = 0; i < responses.length; i++) {
+      const r = responses[i];
+      const answer = r.answer ? r.answer.toString().trim() : '<em style="color: #999;">No answer provided</em>';
+      htmlBody += '<div style="margin: 16px 0; padding: 12px; background: #f8f9fc; border-radius: 8px; border-left: 3px solid #2d3f89;">';
+      htmlBody += '<p style="margin: 0 0 6px 0; font-weight: bold; color: #2d3f89;">' + escapeHtmlBackend(r.questionLabel) + '</p>';
+      if (r.questionType === 'mc') {
+        htmlBody += '<p style="margin: 0; font-size: 15px;">Selected: <strong>' + escapeHtmlBackend(answer) + '</strong></p>';
+      } else {
+        htmlBody += '<p style="margin: 0; font-size: 15px; white-space: pre-wrap;">' + escapeHtmlBackend(answer) + '</p>';
+      }
+      htmlBody += '</div>';
+    }
+
+    htmlBody += '</body></html>';
+
+    // Create a Google Doc from the HTML content (Drive v3 import/convert)
+    const htmlBlob = Utilities.newBlob(htmlBody, 'text/html', 'submission.html');
+    const tempDocMeta = Drive.Files.create(
+      { name: 'Submission - ' + assessmentName + ' - ' + studentName, mimeType: 'application/vnd.google-apps.document' },
+      htmlBlob
+    );
+
+    // Export as PDF
+    const pdfBlob = DriveApp.getFileById(tempDocMeta.id).getAs('application/pdf');
+    pdfBlob.setName(assessmentName + ' - ' + studentName + ' - Submission.pdf');
+
+    // Clean up temp doc
+    DriveApp.getFileById(tempDocMeta.id).setTrashed(true);
+
+    // Find instructor email
+    const instructorEmail = getInstructorEmail(instructorName);
+
+    // Build email subject from template
+    const subject = CONSTANTS.SUBMISSION_EMAIL_SUBJECT
+      .replace('{assessmentName}', assessmentName)
+      .replace('{studentName}', studentName);
+
+    // Send email
+    if (instructorEmail) {
+      GmailApp.sendEmail(instructorEmail, subject,
+        'Please see the attached assessment submission from ' + studentName + '.', {
+        attachments: [pdfBlob],
+        name: 'Spartan Assessment Portal',
+        replyTo: studentEmail
+      });
+      Logger.log('Submission email sent to ' + instructorEmail + ' for ' + studentEmail);
+    } else {
+      // Fallback: send to the script owner / deployer
+      const fallbackEmail = Session.getEffectiveUser().getEmail();
+      GmailApp.sendEmail(fallbackEmail, subject + ' [Instructor Not Found]',
+        'Could not find email for instructor "' + instructorName + '". Submission from ' + studentName + ' attached.', {
+        attachments: [pdfBlob],
+        name: 'Spartan Assessment Portal',
+        replyTo: studentEmail
+      });
+      Logger.log('Submission email sent to fallback ' + fallbackEmail + ' (instructor "' + instructorName + '" not found)');
+    }
+
+    return { success: true, sentTo: instructorEmail || 'fallback' };
+
+  } catch (e) {
+    Logger.log('Error in submitAssessmentResponses: ' + e.toString());
+    return { error: 'Failed to submit responses. Please try again.' };
+  }
+}
+
+/**
+ * Server-side HTML escaping utility for building email/doc HTML.
+ * @param {string} text Text to escape
+ * @returns {string} Escaped text
+ */
+function escapeHtmlBackend(text) {
+  if (!text) return '';
+  return text.toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // --- TESTING FUNCTIONS (Optional) ---
 
 /**
