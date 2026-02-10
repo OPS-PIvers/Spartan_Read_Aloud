@@ -2008,7 +2008,10 @@ function sanitizeHtml(html) {
   // NEW: Ensure table cell content is wrapped in <p> if it's not already block-level
   // This allows the chunk parser to process cell content as individual blocks
   sanitized = sanitized.replace(/<(td|th)([^>]*)>([\s\S]*?)<\/\1>/gi, (match, tag, attrs, content) => {
-    if (/<(p|div|ul|ol|table|h[1-6])/i.test(content)) return match;
+    if (/<(p|div|ul|ol|table|h[1-6])/i.test(content)) {
+      const wrappedContent = content.replace(/^([^<]+)/, '<p>$1</p>');
+      return `<${tag}${attrs}>${wrappedContent}</${tag}>`;
+    }
     return `<${tag}${attrs}><p>${content}</p></${tag}>`;
   });
 
