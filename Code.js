@@ -4089,7 +4089,7 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     // Send email
     if (instructorEmail) {
       Logger.log('[SUBMIT] Sending email to instructor: ' + instructorEmail);
-      GmailApp.sendEmail(instructorEmail, subject,
+      MailApp.sendEmail(instructorEmail, subject,
         'Please see the attached assessment submission from ' + studentName + '.', {
         attachments: [pdfBlob],
         name: 'Spartan Assessment Portal',
@@ -4100,7 +4100,7 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
       // Fallback: send to the script owner / deployer
       const fallbackEmail = Session.getEffectiveUser().getEmail();
       Logger.log('[SUBMIT] Falling back to script owner email: ' + fallbackEmail);
-      GmailApp.sendEmail(fallbackEmail, subject + ' [Instructor Not Found]',
+      MailApp.sendEmail(fallbackEmail, subject + ' [Instructor Not Found]',
         'Could not find email for instructor "' + instructorName + '". Submission from ' + studentName + ' attached.', {
         attachments: [pdfBlob],
         name: 'Spartan Assessment Portal',
