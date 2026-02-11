@@ -388,7 +388,7 @@
       width: 100%;
       background: transparent;
       cursor: pointer;
-      height: 16px; /* Hit area */
+      height: 24px; /* Increased hit area */
       margin: 0;
     }
     
@@ -397,20 +397,20 @@
     /* Webkit (Chrome/Safari) */
     input[type=range].slider-track-input::-webkit-slider-runnable-track {
       width: 100%;
-      height: 4px;
+      height: 6px; /* Slightly thicker track */
       background: var(--gray-300);
-      border-radius: 2px;
+      border-radius: 3px;
     }
     
     input[type=range].slider-track-input::-webkit-slider-thumb {
-      height: 12px;
-      width: 12px;
+      height: 18px; /* Larger thumb */
+      width: 18px;
       border-radius: 50%;
       background: var(--primary-blue);
       border: 2px solid white;
       box-shadow: 0 1px 3px rgba(0,0,0,0.3);
       -webkit-appearance: none;
-      margin-top: -4px; /* Center on track */
+      margin-top: -6px; /* Center on track: (track_height/2) - (thumb_height/2) */
       transition: transform 0.1s;
     }
     
@@ -830,16 +830,6 @@
       gap: 6px;
     }
     .sidebar-question-label:hover { text-decoration: underline; }
-    .sidebar-question-label .chunk-num {
-      background: var(--primary-blue);
-      color: white;
-      border-radius: 4px;
-      font-size: 11px;
-      padding: 2px 6px;
-      font-weight: 700;
-      min-width: 22px;
-      text-align: center;
-    }
 
     .sidebar-question-preview {
       font-size: 12px;
@@ -1075,7 +1065,7 @@
       <div class="toolbar-controls">
         <div class="control-buttons">
           <button id="skip-back-btn" class="ctrl-btn" title="Back 10s"><span class="material-icons">replay_10</span></button>
-          <button id="prev-btn" class="ctrl-btn" title="Previous Chunk"><span class="material-icons" style="font-size:28px;">skip_previous</span></button>
+          <button id="prev-btn" class="ctrl-btn" title="Previous"><span class="material-icons" style="font-size:28px;">skip_previous</span></button>
           
           <button id="play-pause-btn" class="play-btn" title="Play/Pause">
              <span class="material-icons play-icon">play_arrow</span>
@@ -1083,7 +1073,7 @@
              <span class="material-icons loading-spinner" style="display:none;">refresh</span>
           </button>
           
-          <button id="next-btn" class="ctrl-btn" title="Next Chunk"><span class="material-icons" style="font-size:28px;">skip_next</span></button>
+          <button id="next-btn" class="ctrl-btn" title="Next"><span class="material-icons" style="font-size:28px;">skip_next</span></button>
           <button id="skip-forward-btn" class="ctrl-btn" title="Forward 10s"><span class="material-icons">forward_10</span></button>
         </div>
         
@@ -1100,7 +1090,7 @@
         <button id="speed-btn" class="tool-btn" title="Playback Speed"><span class="material-icons" style="font-size:20px;">speed</span></button>
         <button id="focus-btn" class="tool-btn" title="Focus Mode"><span class="material-icons" style="font-size:20px;">center_focus_strong</span></button>
         <button id="line-spacing-btn" class="tool-btn" title="Line Spacing"><span class="material-icons" style="font-size:20px;">format_line_spacing</span></button>
-        <button id="sidebar-toggle-btn" class="tool-btn sidebar-toggle-btn" title="Answer Sheet" style="display:none;"><span class="material-icons" style="font-size:20px;">assignment</span><span class="answer-count-badge" id="answer-count-badge" style="display:none;">0</span></button>
+        <button id="sidebar-toggle-btn" class="tool-btn sidebar-toggle-btn" title="Answer Sheet" style="display:none;"><span class="material-icons" style="font-size:20px;">checklist</span><span class="answer-count-badge" id="answer-count-badge" style="display:none;">0</span></button>
       </div>
     </div>
   </div>
@@ -1523,8 +1513,9 @@ function updateToolbarDisplay() {
   const currentChunk = serverChunks[currentChunkIndex];
   if (currentChunk) {
     const chunkText = getCleanedChunkText(currentChunk.text);
+    const label = getQuestionLabel(currentChunk.text, currentChunkIndex);
     document.getElementById('toolbar-title').textContent = chunkText;
-    document.getElementById('toolbar-subtitle').textContent = `Chunk ${currentChunkIndex + 1} of ${totalChunks}`;
+    document.getElementById('toolbar-subtitle').textContent = label + ` (of ${totalChunks})`;
   }
   
   // Update nav buttons
@@ -1793,6 +1784,9 @@ function setupEventListeners() {
         document.getElementById('speed-display').textContent = Math.round(currentPlaybackRate * 100) + '%';
         console.log('[DEBUG] Set playback rate to:', currentPlaybackRate);
     };
+    // Prevent global click handler from closing popup when interacting with slider
+    speedSlider.onclick = (e) => e.stopPropagation();
+    speedSlider.onmousedown = (e) => e.stopPropagation();
   } else {
     console.error('[DEBUG] speed-slider-popup not found!');
   }
@@ -1828,6 +1822,9 @@ function setupEventListeners() {
         document.getElementById('line-spacing-display').textContent = currentLineSpacing.toFixed(1);
         console.log('[DEBUG] Set line spacing to:', currentLineSpacing);
     };
+    // Prevent global click handler from closing popup when interacting with slider
+    lineSpacingSlider.onclick = (e) => e.stopPropagation();
+    lineSpacingSlider.onmousedown = (e) => e.stopPropagation();
   } else {
     console.error('[DEBUG] line-spacing-slider-popup not found!');
   }
@@ -1991,7 +1988,7 @@ function detectQuestionType(chunkText) {
 function getQuestionLabel(chunkText, index) {
   const numMatch = chunkText.match(/^(\d+)[.)\]]/);
   if (numMatch) return 'Question ' + numMatch[1];
-  return 'Question ' + (index + 1);
+  return 'Part ' + (index + 1);
 }
 
 /**
@@ -2058,7 +2055,7 @@ function buildSidebarFields() {
     }
 
     item.innerHTML = '<div class="sidebar-question-label" onclick="jumpToChunkFromSidebar(' + index + ')">' +
-      '<span class="chunk-num">' + (index + 1) + '</span> ' + escapeHtml(questionLabel) +
+      escapeHtml(questionLabel) +
       '</div>' +
       '<div class="sidebar-question-preview">' + escapeHtml(preview) + '</div>' +
       fieldHtml;

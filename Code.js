@@ -615,7 +615,7 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
 
     // Save final JSON
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
-    sheet.getRange(rowIndex, CONSTANTS.COL.AUDIO_JSON + 1).setValue(JSON.stringify(audioFileObjects, null, 2));
+    setLargeDataInCell(sheet.getRange(rowIndex, CONSTANTS.COL.AUDIO_JSON + 1), JSON.stringify(audioFileObjects, null, 2), fileName);
 
     Logger.log(`Successfully processed batch results for ${fileName}`);
     return true;
@@ -1176,7 +1176,7 @@ function step2_GenerateMissingAudioAndFinalize() {
              audioFilename: audioFile.getName()
            });
         }
-        sheet.getRange(i + 1, CONSTANTS.COL.AUDIO_JSON + 1).setValue(JSON.stringify(audioDataForSheet, null, 2));
+        setLargeDataInCell(sheet.getRange(i + 1, CONSTANTS.COL.AUDIO_JSON + 1), JSON.stringify(audioDataForSheet, null, 2), fileName);
         sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
         Logger.log(`--> Successfully created JSON and marked as complete.`);
       } else {
@@ -2019,6 +2019,23 @@ function sanitizeHtml(html) {
   // 11. Trim leading/trailing whitespace
   sanitized = sanitized.trim();
 
+  // NEW: Split merged paragraphs (common in PDF extraction)
+  // Fixes "text b." and "text28. Which" issues
+  sanitized = sanitized.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, (match, attrs, content) => {
+    // 1. Split on answer options in the middle of text: "text b. more text"
+    // Matches a space, then an option marker like b. c. d. e.
+    let splitContent = content.replace(/(\s)([b-e][.)]\s+)/g, '</p><p$1>$2');
+    
+    // 2. Split on question numbers merged with text: "text28. Which" or "text 28. Which"
+    // Matches text followed by optional space, then a number and period/parenthesis
+    splitContent = splitContent.replace(/([a-zA-Z])(\s?\d+[.)\]]\s+)/g, '$1</p><p$1>$2');
+    
+    if (splitContent !== content) {
+      return `<p${attrs}>${splitContent}</p>`;
+    }
+    return match;
+  });
+
   // NEW: Ensure ALL table cell content is wrapped in <p> if it's not already block-level
   // This version handles mixed content (text + block elements) more robustly
   sanitized = sanitized.replace(/<(td|th)([^>]*)>([\s\S]*?)<\/\1>/gi, (match, tag, attrs, content) => {
@@ -2117,10 +2134,10 @@ function parseHtmlToChunks(html) {
     // --- Detection Logic ---
     
     // 1. Question Start: "1.", "1)", "Q1", "(1)"
-    const isQuestionStart = /^(?:\d+|Q\d+)[.)\]]/.test(block.text);
+    const isQuestionStart = /^(?:\(?\d+|Q\d+)[.)\]]/.test(block.text);
     
-    // 2. Answer Option: "a.", "A)", "(a)"
-    const isAnswerOption = /^(?:\(?[a-zA-Z][.)]|[a-zA-Z]\.)\s/.test(block.text);
+    // 2. Answer Option: "a.", "b.", "A)", "(a)"
+    const isAnswerOption = /^(?:\(?[a-zA-Z][.)]|[a-zA-Z]\.)(?:\s|$)/.test(block.text);
     
     // 3. Header
     const isHeader = /^h[1-6]/.test(block.tag);
@@ -2135,6 +2152,12 @@ function parseHtmlToChunks(html) {
       currentChunk.text = block.text;
       currentChunk.ids.push(block.id);
     } 
+    else if (isAnswerOption) {
+      // Rule: Merge answer options with the preceding chunk (likely the question or previous option)
+      // This MUST come before isQuestionStart to ensure options are grouped even if the question was long
+      currentChunk.text += '\n' + block.text;
+      currentChunk.ids.push(block.id);
+    }
     else if (isQuestionStart || isHeader) {
       // Rule: Questions and Headers usually start a NEW thought/context
       // Priority 1: Force break before a new question or header
@@ -2146,12 +2169,6 @@ function parseHtmlToChunks(html) {
       // Rule: Directions usually precede content. 
       commitChunk();
       currentChunk.text = block.text;
-      currentChunk.ids.push(block.id);
-    }
-    else if (isAnswerOption) {
-      // Rule: Merge answer options with the preceding chunk (likely the question)
-      // Only if it wasn't a new question (handled above)
-      currentChunk.text += '\n' + block.text;
       currentChunk.ids.push(block.id);
     }
     else {
@@ -2380,7 +2397,7 @@ function getAllAssessments(sessionToken) {
         fileName: fileName,
         pdfUrl: pdfUrl,
         chunkCount: row[CONSTANTS.COL.CHUNK_COUNT] || 0,
-        audioJson: row[CONSTANTS.COL.AUDIO_JSON] || '',
+        audioJson: getLargeDataFromCell(row[CONSTANTS.COL.AUDIO_JSON]),
         isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
         className: row[CONSTANTS.COL.CLASS_NAME] || '',
         instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
@@ -2984,7 +3001,7 @@ function markAssessmentAsNoAudioRequired(sheet, rowIndex, pdfUrl) {
   }
 
   sheet.getRange(rowIndex, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(chunkCount);
-  sheet.getRange(rowIndex, CONSTANTS.COL.AUDIO_JSON + 1).setValue(audioChunksJson);
+  setLargeDataInCell(sheet.getRange(rowIndex, CONSTANTS.COL.AUDIO_JSON + 1), audioChunksJson, pdfUrl);
   sheet.getRange(rowIndex, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
   sheet.getRange(rowIndex, CONSTANTS.COL.PROCESSING_STATUS + 1).setValue("NO_AUDIO_REQUIRED");
   SpreadsheetApp.flush();
@@ -3099,6 +3116,70 @@ function getOrCreateSubfolder(parentFolder, subfolderName) {
     Logger.log(`Error creating subfolder "${subfolderName}": ${e.toString()}`);
     return null;
   }
+}
+
+/**
+ * Sets a value in a spreadsheet cell, automatically offloading to a Drive file
+ * if the content exceeds the 50,000 character limit for Google Sheets.
+ * @param {GoogleAppsScript.Spreadsheet.Range} range The cell range to set
+ * @param {string} content The content to set
+ * @param {string} fileName Optional filename prefix for the Drive file
+ */
+function setLargeDataInCell(range, content, fileName) {
+  if (!content) {
+    range.setValue('');
+    return;
+  }
+  
+  const limit = 45000; // Safe limit below 50,000
+  if (content.length <= limit) {
+    range.setValue(content);
+    return;
+  }
+  
+  Logger.log(`[DATA_OFFLOAD] Content length (${content.length}) exceeds limit. Offloading to Drive...`);
+  
+  try {
+    const mainAudioFolder = getOrCreateFolder(CONSTANTS.AUDIO_DRIVE_FOLDER_NAME);
+    const jsonFolder = getOrCreateSubfolder(mainAudioFolder, "JSON Metadata");
+    
+    if (!jsonFolder) throw new Error("Could not create JSON Metadata folder");
+    
+    const safeFileName = (fileName || "Data").substring(0, 50) + "_" + new Date().getTime() + ".json";
+    const file = jsonFolder.createFile(safeFileName, content, MimeType.PLAIN_TEXT);
+    
+    // Store as a pointer
+    const pointer = "DRIVE_FILE_ID:" + file.getId();
+    range.setValue(pointer);
+    Logger.log(`[DATA_OFFLOAD] Content offloaded to Drive file: ${file.getId()}`);
+  } catch (e) {
+    Logger.log(`[DATA_OFFLOAD] ERROR: Failed to offload to Drive: ${e.toString()}`);
+    throw e;
+  }
+}
+
+/**
+ * Retrieves content from a cell, automatically fetching from a Drive file
+ * if the content is a pointer (starts with "DRIVE_FILE_ID:").
+ * @param {string} cellValue The raw value from the spreadsheet cell
+ * @returns {string} The full content
+ */
+function getLargeDataFromCell(cellValue) {
+  if (!cellValue || typeof cellValue !== 'string') return cellValue || '';
+  
+  if (cellValue.startsWith("DRIVE_FILE_ID:")) {
+    const fileId = cellValue.replace("DRIVE_FILE_ID:", "");
+    Logger.log(`[DATA_LOAD] Fetching content from Drive file: ${fileId}`);
+    try {
+      const file = DriveApp.getFileById(fileId);
+      return file.getBlob().getDataAsString();
+    } catch (e) {
+      Logger.log(`[DATA_LOAD] ERROR: Failed to fetch from Drive (${fileId}): ${e.toString()}`);
+      return ''; 
+    }
+  }
+  
+  return cellValue;
 }
 
 /**
@@ -3300,7 +3381,7 @@ function getAudioDataAsBase64(sessionToken, fileId) {
     // Find the student's assessment and get authorized audio file IDs
     for (let i = 1; i < data.length; i++) {
       if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
-        const audioJson = data[i][CONSTANTS.COL.AUDIO_JSON];
+        const audioJson = getLargeDataFromCell(data[i][CONSTANTS.COL.AUDIO_JSON]);
         if (audioJson) {
           try {
             const audioChunks = JSON.parse(audioJson);
@@ -3366,7 +3447,7 @@ function getBulkAudioData(sessionToken, fileIds) {
 
         for (let i = 1; i < data.length; i++) {
             if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
-                const audioJson = data[i][CONSTANTS.COL.AUDIO_JSON];
+                const audioJson = getLargeDataFromCell(data[i][CONSTANTS.COL.AUDIO_JSON]);
                 if (audioJson) {
                   try {
                     const audioData = JSON.parse(audioJson);
@@ -3685,7 +3766,7 @@ function getAssessmentPdf(email, password, assessmentUrl) {
           }
 
           // Password is correct, proceed...
-          const audioDataJson = row[CONSTANTS.COL.AUDIO_JSON];
+          const audioDataJson = getLargeDataFromCell(row[CONSTANTS.COL.AUDIO_JSON]);
           const readAloudEnabled = row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false;
           const accessExpires = row[CONSTANTS.COL.ACCESS_EXPIRES];
 
@@ -3706,7 +3787,7 @@ function getAssessmentPdf(email, password, assessmentUrl) {
           const file = DriveApp.getFileById(fileId);
           const mimeType = file.getMimeType();
           const fileName = file.getName();
-          const audioChunks = audioDataJson ? JSON.parse(audioDataJson) : [];
+          const audioChunks = (audioDataJson && audioDataJson.trim()) ? JSON.parse(audioDataJson) : [];
 
           Logger.log(`Serving assessment: ${fileName} (${mimeType}) to ${email}`);
 
@@ -3884,7 +3965,7 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
 
         // Load stored chunks for validation
         try {
-          const audioDataJson = data[i][CONSTANTS.COL.AUDIO_JSON];
+          const audioDataJson = getLargeDataFromCell(data[i][CONSTANTS.COL.AUDIO_JSON]);
           if (audioDataJson) {
             storedChunks = JSON.parse(audioDataJson);
           }
@@ -3924,51 +4005,81 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     }
 
     // Build the response document as HTML
+    Logger.log('[SUBMIT] Generating HTML content for PDF...');
     const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' });
-    let htmlBody = '<html><body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">';
-    htmlBody += '<h1 style="color: #2d3f89; border-bottom: 2px solid #2d3f89; padding-bottom: 10px;">Assessment Submission</h1>';
-    htmlBody += '<table style="width: 100%; margin-bottom: 20px; font-size: 14px;">';
-    htmlBody += '<tr><td style="padding: 4px 8px;"><strong>Student:</strong></td><td>' + escapeHtmlBackend(studentName) + ' (' + escapeHtmlBackend(studentEmail) + ')</td></tr>';
-    htmlBody += '<tr><td style="padding: 4px 8px;"><strong>Assessment:</strong></td><td>' + escapeHtmlBackend(assessmentName) + '</td></tr>';
-    if (className) htmlBody += '<tr><td style="padding: 4px 8px;"><strong>Class:</strong></td><td>' + escapeHtmlBackend(className) + '</td></tr>';
-    if (instructorName) htmlBody += '<tr><td style="padding: 4px 8px;"><strong>Instructor:</strong></td><td>' + escapeHtmlBackend(instructorName) + '</td></tr>';
-    htmlBody += '<tr><td style="padding: 4px 8px;"><strong>Submitted:</strong></td><td>' + timestamp + '</td></tr>';
+    let htmlBody = '<html><body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333;">';
+    htmlBody += '<div style="text-align: center; margin-bottom: 30px;">';
+    htmlBody += '<h1 style="color: #2d3f89; margin-bottom: 5px;">Assessment Submission</h1>';
+    htmlBody += '<p style="color: #666; font-size: 14px; margin-top: 0;">Spartan Read Aloud Portal</p>';
+    htmlBody += '</div>';
+
+    htmlBody += '<div style="background: #f8f9fc; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #e1e4e8;">';
+    htmlBody += '<table style="width: 100%; border-collapse: collapse;">';
+    htmlBody += '<tr><td style="padding: 5px 0; width: 120px;"><strong>Student:</strong></td><td>' + escapeHtmlBackend(studentName) + ' (' + escapeHtmlBackend(studentEmail) + ')</td></tr>';
+    htmlBody += '<tr><td style="padding: 5px 0;"><strong>Assessment:</strong></td><td>' + escapeHtmlBackend(assessmentName) + '</td></tr>';
+    if (className) htmlBody += '<tr><td style="padding: 5px 0;"><strong>Class:</strong></td><td>' + escapeHtmlBackend(className) + '</td></tr>';
+    if (instructorName) htmlBody += '<tr><td style="padding: 5px 0;"><strong>Instructor:</strong></td><td>' + escapeHtmlBackend(instructorName) + '</td></tr>';
+    htmlBody += '<tr><td style="padding: 5px 0;"><strong>Submitted:</strong></td><td>' + timestamp + '</td></tr>';
     htmlBody += '</table>';
-    htmlBody += '<hr style="border: 1px solid #eee;">';
+    htmlBody += '</div>';
+
+    htmlBody += '<h2 style="color: #2d3f89; border-bottom: 1px solid #e1e4e8; padding-bottom: 10px; margin-bottom: 20px;">Responses</h2>';
 
     // Add each response
     for (let i = 0; i < responses.length; i++) {
       const r = responses[i];
       const answerText = r.answer ? r.answer.toString().trim() : '';
       const answerDisplay = answerText ? escapeHtmlBackend(answerText) : '<em style="color: #999;">No answer provided</em>';
-      htmlBody += '<div style="margin: 16px 0; padding: 12px; background: #f8f9fc; border-radius: 8px; border-left: 3px solid #2d3f89;">';
-      htmlBody += '<p style="margin: 0 0 6px 0; font-weight: bold; color: #2d3f89;">' + escapeHtmlBackend(r.questionLabel) + '</p>';
+      
+      htmlBody += '<div style="margin-bottom: 25px; page-break-inside: avoid;">';
+      htmlBody += '<div style="font-weight: bold; color: #2d3f89; margin-bottom: 8px; font-size: 16px;">' + escapeHtmlBackend(r.questionLabel) + '</div>';
+      
       if (r.questionType === 'mc') {
-        htmlBody += '<p style="margin: 0; font-size: 15px;">Selected: <strong>' + answerDisplay + '</strong></p>';
+        htmlBody += '<div style="padding: 12px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px;">';
+        htmlBody += '<span style="color: #666; margin-right: 10px;">Selected Option:</span>';
+        htmlBody += '<span style="font-weight: bold; font-size: 16px;">' + answerDisplay + '</span>';
+        htmlBody += '</div>';
       } else {
-        htmlBody += '<p style="margin: 0; font-size: 15px; white-space: pre-wrap;">' + answerDisplay + '</p>';
+        htmlBody += '<div style="padding: 15px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; white-space: pre-wrap; min-height: 40px; line-height: 1.5;">' + answerDisplay + '</div>';
       }
       htmlBody += '</div>';
     }
 
+    htmlBody += '<div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">';
+    htmlBody += 'Generated by Spartan Read Aloud Portal on ' + timestamp;
+    htmlBody += '</div>';
     htmlBody += '</body></html>';
 
-    // Create a Google Doc from the HTML content (Drive v3 import/convert)
+    Logger.log('[SUBMIT] Creating temporary Google Doc via Drive API...');
+    // Create a Google Doc from the HTML content
     const htmlBlob = Utilities.newBlob(htmlBody, 'text/html', 'submission.html');
-    const tempDocMeta = Drive.Files.create(
-      { name: 'Submission - ' + assessmentName + ' - ' + studentName, mimeType: 'application/vnd.google-apps.document' },
-      htmlBlob
-    );
+    
+    let tempDocMeta;
+    try {
+      tempDocMeta = Drive.Files.create(
+        { name: 'Submission - ' + assessmentName + ' - ' + studentName, mimeType: 'application/vnd.google-apps.document' },
+        htmlBlob
+      );
+      Logger.log('[SUBMIT] Temp Doc created: ' + tempDocMeta.id);
+    } catch (driveErr) {
+      Logger.log('[SUBMIT] Drive API error: ' + driveErr.toString());
+      throw driveErr;
+    }
 
+    Logger.log('[SUBMIT] Converting Doc to PDF...');
     // Export as PDF
     const pdfBlob = DriveApp.getFileById(tempDocMeta.id).getAs('application/pdf');
     pdfBlob.setName(assessmentName + ' - ' + studentName + ' - Submission.pdf');
+    Logger.log('[SUBMIT] PDF generated successfully.');
 
     // Clean up temp doc
+    Logger.log('[SUBMIT] Trashing temporary Doc...');
     DriveApp.getFileById(tempDocMeta.id).setTrashed(true);
 
     // Find instructor email
+    Logger.log('[SUBMIT] Finding instructor email for: ' + instructorName);
     const instructorEmail = getInstructorEmail(instructorName);
+    Logger.log('[SUBMIT] Instructor email: ' + (instructorEmail || 'NOT FOUND'));
 
     // Build email subject from template
     const subject = CONSTANTS.SUBMISSION_EMAIL_SUBJECT
@@ -3977,48 +4088,53 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
 
     // Send email
     if (instructorEmail) {
+      Logger.log('[SUBMIT] Sending email to instructor: ' + instructorEmail);
       GmailApp.sendEmail(instructorEmail, subject,
         'Please see the attached assessment submission from ' + studentName + '.', {
         attachments: [pdfBlob],
         name: 'Spartan Assessment Portal',
         replyTo: studentEmail
       });
-      Logger.log('Submission email sent to ' + instructorEmail + ' for ' + studentEmail);
+      Logger.log('[SUBMIT] Email sent to instructor.');
     } else {
       // Fallback: send to the script owner / deployer
       const fallbackEmail = Session.getEffectiveUser().getEmail();
+      Logger.log('[SUBMIT] Falling back to script owner email: ' + fallbackEmail);
       GmailApp.sendEmail(fallbackEmail, subject + ' [Instructor Not Found]',
         'Could not find email for instructor "' + instructorName + '". Submission from ' + studentName + ' attached.', {
         attachments: [pdfBlob],
         name: 'Spartan Assessment Portal',
         replyTo: studentEmail
       });
-      Logger.log('Submission email sent to fallback ' + fallbackEmail + ' (instructor "' + instructorName + '" not found)');
+      Logger.log('[SUBMIT] Email sent to fallback.');
     }
 
     // Record submission timestamp
+    Logger.log('[SUBMIT] Recording timestamp in spreadsheet...');
     try {
-      const currentTimestamps = data[assessmentRowIndex][CONSTANTS.COL.SUBMISSION_TIMESTAMPS];
+      const currentTimestampsJson = data[assessmentRowIndex][CONSTANTS.COL.SUBMISSION_TIMESTAMPS];
       let submissionTimestamps = {};
-      if (currentTimestamps) {
+      if (currentTimestampsJson) {
         try {
-          submissionTimestamps = JSON.parse(currentTimestamps);
+          submissionTimestamps = JSON.parse(currentTimestampsJson);
         } catch (e) {
-          Logger.log('Error parsing existing submission timestamps: ' + e.toString());
+          Logger.log('[SUBMIT] Error parsing existing timestamps: ' + e.toString());
         }
       }
       submissionTimestamps[studentEmail] = new Date().toISOString();
       sheet.getRange(assessmentRowIndex + 1, CONSTANTS.COL.SUBMISSION_TIMESTAMPS + 1)
         .setValue(JSON.stringify(submissionTimestamps));
+      Logger.log('[SUBMIT] Timestamp recorded.');
     } catch (e) {
-      Logger.log('Error recording submission timestamp: ' + e.toString());
+      Logger.log('[SUBMIT] Error recording submission timestamp: ' + e.toString());
     }
 
+    Logger.log('[SUBMIT] Submission process completed successfully.');
     return { success: true, sentTo: instructorEmail || 'fallback' };
 
   } catch (e) {
-    Logger.log('Error in submitAssessmentResponses: ' + e.toString());
-    return { error: 'Failed to submit responses. Please try again.' };
+    Logger.log('[SUBMIT] CRITICAL ERROR: ' + e.toString());
+    return { error: 'Submission failed: ' + e.toString() };
   }
 }
 
