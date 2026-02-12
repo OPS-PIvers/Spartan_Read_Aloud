@@ -2411,19 +2411,23 @@ function getAllAssessments(sessionToken) {
 
     // Filter assessments for teachers (only show their own)
     if (tokenData.role === CONSTANTS.ROLE_TOKEN_TEACHER) {
-      const teacherName = tokenData.name || tokenData.email;
-      Logger.log(`Filtering assessments for teacher: ${teacherName}`);
+      const teacherName = (tokenData.name || '').toLowerCase();
+      const teacherEmail = (tokenData.email || '').toLowerCase();
+      Logger.log(`Filtering assessments for teacher: ${teacherName} (${teacherEmail})`);
 
       assessments = assessments.filter(assessment => {
         const instructorField = (assessment.instructor || '').toLowerCase();
-        const teacherLower = teacherName.toLowerCase();
-
-        // Split by comma or slash and check if any part is included in teacher's name/email
+        
+        // Split by comma or slash and check if any part matches teacher's name or email
         const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
         
         if (instructors.length === 0) return false;
         
-        return instructors.some(name => teacherLower.includes(name));
+        return instructors.some(instructorPart => 
+          teacherName.includes(instructorPart) || 
+          teacherEmail.includes(instructorPart) ||
+          instructorPart.includes(teacherEmail)
+        );
       });
 
       Logger.log(`Teacher ${teacherName} has ${assessments.length} assessment(s)`);
@@ -3837,67 +3841,78 @@ function getAssessmentPdf(email, password, assessmentUrl) {
  * @param {string} instructorName The instructor's display name (e.g., "John Smith")
  * @returns {string|null} The instructor's email or null if not found
  */
+/**
+ * Looks up instructor emails from the Teachers sheet by name or returns them directly if they are emails.
+ * Supports multiple comma-separated inputs.
+ * @param {string} instructorName The instructor's display name or email (e.g., "John Smith" or "jsmith@example.com")
+ * @returns {string|null} Comma-separated instructor emails or null if none found
+ */
 function getInstructorEmail(instructorName) {
   if (!instructorName) return null;
 
-  // Support comma-separated instructor names; use the first (primary) instructor
-  const instructorNames = instructorName.toLowerCase().trim().split(',').map(function(s) { return s.trim(); });
-  const primaryName = instructorNames[0];
-  if (!primaryName) return null;
+  // Support comma-separated instructor names/emails or slash-separated
+  const instructorNames = instructorName.toLowerCase().trim().split(/[,\/]/).map(function(s) { return s.trim(); });
+  const results = [];
 
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const teacherSheet = spreadsheet.getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
-  if (!teacherSheet) return null;
+  
+  // Cache teacher data if available
+  let teacherData = null;
+  if (teacherSheet) {
+    teacherData = teacherSheet.getDataRange().getValues();
+  }
 
-  const data = teacherSheet.getDataRange().getValues();
+  instructorNames.forEach(name => {
+    if (!name) return;
 
-  // 1. Exact full name match
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const fullName = (row[0] + ' ' + row[1]).toLowerCase().trim();
-    if (fullName === primaryName) {
-      return row[2] ? row[2].toString().trim() : null;
+    // 0. If the input is already an email, add it directly
+    if (name.includes('@')) {
+      results.push(name);
+      return;
     }
-  }
 
-  // 2. Full name contains the search name (e.g., search "Smith" matches "John Smith")
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const fullName = (row[0] + ' ' + row[1]).toLowerCase().trim();
-    if (fullName.includes(primaryName)) {
-      return row[2] ? row[2].toString().trim() : null;
+    if (!teacherData) return;
+
+    // 1. Exact full name match
+    for (let i = 1; i < teacherData.length; i++) {
+      const row = teacherData[i];
+      const fullName = (row[0] + ' ' + row[1]).toLowerCase().trim();
+      if (fullName === name) {
+        if (row[2]) results.push(row[2].toString().trim());
+        return;
+      }
     }
-  }
 
-  // 3. Last name fallback (with ambiguity handling and logging)
-  const fallbackMatches = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const lastName = row[1] ? row[1].toString().toLowerCase().trim() : '';
-    if (lastName && primaryName.includes(lastName)) {
-      fallbackMatches.push(row);
+    // 2. Full name contains the search name (e.g., search "Smith" matches "John Smith")
+    for (let i = 1; i < teacherData.length; i++) {
+      const row = teacherData[i];
+      const fullName = (row[0] + ' ' + row[1]).toLowerCase().trim();
+      if (fullName.includes(name)) {
+        if (row[2]) results.push(row[2].toString().trim());
+        return;
+      }
     }
-  }
 
-  if (fallbackMatches.length === 1) {
-    const match = fallbackMatches[0];
-    Logger.log(
-      'getInstructorEmail: using last-name fallback for "%s" -> "%s %s" (%s)',
-      primaryName,
-      match[0],
-      match[1],
-      match[2]
-    );
-    return match[2] ? match[2].toString().trim() : null;
-  } else if (fallbackMatches.length > 1) {
-    Logger.log(
-      'getInstructorEmail: ambiguous last-name fallback for "%s"; %s matches found. No email selected.',
-      primaryName,
-      fallbackMatches.length
-    );
-  }
+    // 3. Last name fallback
+    const fallbackMatches = [];
+    for (let i = 1; i < teacherData.length; i++) {
+      const row = teacherData[i];
+      const lastName = row[1] ? row[1].toString().toLowerCase().trim() : '';
+      if (lastName && name.includes(lastName)) {
+        fallbackMatches.push(row);
+      }
+    }
 
-  return null;
+    if (fallbackMatches.length === 1) {
+      const match = fallbackMatches[0];
+      if (match[2]) results.push(match[2].toString().trim());
+    }
+  });
+
+  // Return unique emails as a comma-separated string
+  const uniqueEmails = [...new Set(results)].filter(e => e);
+  return uniqueEmails.length > 0 ? uniqueEmails.join(', ') : null;
 }
 
 /**

@@ -871,10 +871,9 @@
             <input type="text" id="meta-title" class="form-control" placeholder="e.g. Unit 1 Test">
           </div>
           <div class="input-group">
-            <label class="input-label">Instructor Last Name(s)</label>
-            <div id="meta-instructor-container" class="email-chips-container instructor-chips-container" data-row="new" onclick="focusEmailInput(this)" style="background: white; border: 1px solid var(--gray-300); padding: 6px 10px; border-radius: 4px;">
-              <input type="text" id="meta-instructor-input" class="email-chips-input" placeholder="Add teacher..."
-                onkeydown="handleInstructorInput(event, 'new')"
+                      <label class="input-label">Instructor Email(s)</label>
+                      <div id="meta-instructor-container" class="email-chips-container instructor-chips-container" data-row="new" onclick="focusEmailInput(this)" style="background: white; border: 1px solid var(--gray-300); padding: 6px 10px; border-radius: 4px;">
+                        <input type="text" id="meta-instructor-input" class="email-chips-input" placeholder="Add email..."                onkeydown="handleInstructorInput(event, 'new')"
                 onpaste="handleInstructorPaste(event, 'new')"
                 onblur="addInstructorChip(this, 'new')">
             </div>
@@ -1151,12 +1150,12 @@
       const nameDisplay = document.getElementById('admin-name-display');
       if (nameDisplay) nameDisplay.textContent = userData.name;
       currentUserRole = userData.role;
-      window.userLastName = userData.lastName || '';
+      window.userEmail = userData.email || '';
 
       // Pre-populate Instructor
       const instructorInput = document.getElementById('meta-instructor-input');
-      if (instructorInput && userData.lastName) {
-        instructorInput.value = userData.lastName;
+      if (instructorInput && userData.email) {
+        instructorInput.value = userData.email;
         addInstructorChip(instructorInput, 'new');
       }
       
@@ -1487,10 +1486,10 @@
           document.querySelectorAll('#meta-instructor-container .email-chip, #meta-emails-container .email-chip')
             .forEach(chip => chip.remove());
           
-          // Re-populate user's name as a chip
+          // Re-populate user's email as a chip
           const instructorInput = document.getElementById('meta-instructor-input');
-          if (instructorInput && window.userLastName) {
-            instructorInput.value = window.userLastName;
+          if (instructorInput && window.userEmail) {
+            instructorInput.value = window.userEmail;
             addInstructorChip(instructorInput, 'new');
           }
           
