@@ -2405,6 +2405,8 @@ function getAllAssessments(sessionToken) {
         studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || '',
         readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
         submissionEnabled: row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
+        submissionDeliveryMode: row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] || 'email',
+        submissionTimestamps: row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS] || null,
         accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? Utilities.formatDate(new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]), "America/Chicago", "yyyy-MM-dd'T'HH:mm") : ''
       });
     }
@@ -2574,6 +2576,14 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
       
       if (canManageSubmissions) {
         sheet.getRange(actualRow, CONSTANTS.COL.SUBMISSION_ENABLED + 1).setValue(data.submissionEnabled);
+      }
+    }
+    if (data.submissionDeliveryMode !== undefined) {
+      const canManageSubmissions = CONSTANTS.SUBMISSION_FEATURE_ENABLED && 
+        (!CONSTANTS.SUBMISSION_ADMIN_ONLY || CONSTANTS.SUBMISSION_ADMIN_ROLES.includes(tokenData.role));
+      
+      if (canManageSubmissions) {
+        sheet.getRange(actualRow, CONSTANTS.COL.SUBMISSION_DELIVERY_MODE + 1).setValue(data.submissionDeliveryMode);
       }
     }
     if (data.accessExpires !== undefined) {
@@ -2876,7 +2886,7 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     }
 
     // Add new row with file URL and metadata
-    const newRow = new Array(16).fill(''); // 16 columns (0-15)
+    const newRow = new Array(17).fill(''); // 17 columns (0-16)
     newRow[CONSTANTS.COL.PDF_URL] = fileUrl;
     newRow[CONSTANTS.COL.CLASS_NAME] = metadata.className || '';
     newRow[CONSTANTS.COL.INSTRUCTOR] = metadata.instructor || '';
@@ -2888,6 +2898,7 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     const canManageSubmissions = CONSTANTS.SUBMISSION_FEATURE_ENABLED && 
       (!CONSTANTS.SUBMISSION_ADMIN_ONLY || CONSTANTS.SUBMISSION_ADMIN_ROLES.includes(tokenData.role));
     newRow[CONSTANTS.COL.SUBMISSION_ENABLED] = canManageSubmissions && metadata.submissionEnabled === true;
+    newRow[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] = (canManageSubmissions && metadata.submissionDeliveryMode) || 'email';
 
     sheet.appendRow(newRow);
     SpreadsheetApp.flush();
@@ -3950,6 +3961,7 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     let assessmentFound = false;
     let assessmentRowIndex = -1;
     let storedChunks = [];
+    let submissionDeliveryMode = 'email';
 
     for (let i = 1; i < data.length; i++) {
       if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
@@ -3959,6 +3971,8 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
         if (data[i][CONSTANTS.COL.SUBMISSION_ENABLED] !== true) {
           return { error: 'Submissions are not enabled for this assessment.' };
         }
+        
+        submissionDeliveryMode = data[i][CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] || 'email';
 
         // Check for duplicate submission
         const submissionTimestampsJson = data[i][CONSTANTS.COL.SUBMISSION_TIMESTAMPS];
@@ -4019,109 +4033,136 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
       }
     }
 
-    // Build the response document as HTML
-    Logger.log('[SUBMIT] Generating HTML content for PDF...');
-    const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' });
-    let htmlBody = '<html><body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333;">';
-    htmlBody += '<div style="text-align: center; margin-bottom: 30px;">';
-    htmlBody += '<h1 style="color: #2d3f89; margin-bottom: 5px;">Assessment Submission</h1>';
-    htmlBody += '<p style="color: #666; font-size: 14px; margin-top: 0;">Spartan Assessment Portal</p>';
-    htmlBody += '</div>';
-
-    htmlBody += '<div style="background: #f8f9fc; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #e1e4e8;">';
-    htmlBody += '<table style="width: 100%; border-collapse: collapse;">';
-    htmlBody += '<tr><td style="padding: 5px 0; width: 120px;"><strong>Student:</strong></td><td>' + escapeHtmlBackend(studentName) + ' (' + escapeHtmlBackend(studentEmail) + ')</td></tr>';
-    htmlBody += '<tr><td style="padding: 5px 0;"><strong>Assessment:</strong></td><td>' + escapeHtmlBackend(assessmentName) + '</td></tr>';
-    if (className) htmlBody += '<tr><td style="padding: 5px 0;"><strong>Class:</strong></td><td>' + escapeHtmlBackend(className) + '</td></tr>';
-    if (instructorName) htmlBody += '<tr><td style="padding: 5px 0;"><strong>Instructor:</strong></td><td>' + escapeHtmlBackend(instructorName) + '</td></tr>';
-    htmlBody += '<tr><td style="padding: 5px 0;"><strong>Submitted:</strong></td><td>' + timestamp + '</td></tr>';
-    htmlBody += '</table>';
-    htmlBody += '</div>';
-
-    htmlBody += '<h2 style="color: #2d3f89; border-bottom: 1px solid #e1e4e8; padding-bottom: 10px; margin-bottom: 20px;">Responses</h2>';
-
-    // Add each response
-    for (let i = 0; i < responses.length; i++) {
-      const r = responses[i];
-      const answerText = r.answer ? r.answer.toString().trim() : '';
-      const answerDisplay = answerText ? escapeHtmlBackend(answerText) : '<em style="color: #999;">No answer provided</em>';
-      
-      htmlBody += '<div style="margin-bottom: 25px; page-break-inside: avoid;">';
-      htmlBody += '<div style="font-weight: bold; color: #2d3f89; margin-bottom: 8px; font-size: 16px;">' + escapeHtmlBackend(r.questionLabel) + '</div>';
-      
-      if (r.questionType === 'mc') {
-        htmlBody += '<div style="padding: 12px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px;">';
-        htmlBody += '<span style="color: #666; margin-right: 10px;">Selected Option:</span>';
-        htmlBody += '<span style="font-weight: bold; font-size: 16px;">' + answerDisplay + '</span>';
-        htmlBody += '</div>';
-      } else {
-        htmlBody += '<div style="padding: 15px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; white-space: pre-wrap; min-height: 40px; line-height: 1.5;">' + answerDisplay + '</div>';
-      }
-      htmlBody += '</div>';
-    }
-
-    htmlBody += '<div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">';
-    htmlBody += 'Generated by Spartan Assessment Portal on ' + timestamp;
-    htmlBody += '</div>';
-    htmlBody += '</body></html>';
-
-    Logger.log('[SUBMIT] Creating temporary Google Doc via Drive API...');
-    // Create a Google Doc from the HTML content
-    const htmlBlob = Utilities.newBlob(htmlBody, 'text/html', 'submission.html');
-    
-    let tempDocMeta;
+    // --- STEP 1: Save to Submissions Sheet (ALWAYS) ---
     try {
-      tempDocMeta = Drive.Files.create(
-        { name: 'Submission - ' + assessmentName + ' - ' + studentName, mimeType: 'application/vnd.google-apps.document' },
-        htmlBlob
-      );
-      Logger.log('[SUBMIT] Temp Doc created: ' + tempDocMeta.id);
-    } catch (driveErr) {
-      Logger.log('[SUBMIT] Drive API error: ' + driveErr.toString());
-      throw driveErr;
+      Logger.log('[SUBMIT] Saving to Submissions sheet...');
+      const submissionsSheet = getOrCreateSubmissionsSheet();
+      submissionsSheet.appendRow([
+        new Date(),
+        assessmentUrl,
+        assessmentName,
+        studentEmail,
+        studentName,
+        JSON.stringify(responses)
+      ]);
+    } catch (e) {
+      Logger.log('[SUBMIT] Error saving to Submissions sheet: ' + e.toString());
+      // For bulk mode, this is critical
+      if (submissionDeliveryMode === 'bulk') {
+        return { error: 'Failed to save submission. Please try again.' };
+      }
     }
 
-    Logger.log('[SUBMIT] Converting Doc to PDF...');
-    // Export as PDF
-    const pdfBlob = DriveApp.getFileById(tempDocMeta.id).getAs('application/pdf');
-    pdfBlob.setName(assessmentName + ' - ' + studentName + ' - Submission.pdf');
-    Logger.log('[SUBMIT] PDF generated successfully.');
+    const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' });
 
-    // Clean up temp doc
-    Logger.log('[SUBMIT] Trashing temporary Doc...');
-    DriveApp.getFileById(tempDocMeta.id).setTrashed(true);
+    // --- STEP 2: Emailing (CONDITIONAL) ---
+    if (submissionDeliveryMode === 'email') {
+        // Build the response document as HTML
+        Logger.log('[SUBMIT] Generating HTML content for PDF...');
+        
+        let htmlBody = '<html><body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333;">';
+        htmlBody += '<div style="text-align: center; margin-bottom: 30px;">';
+        htmlBody += '<h1 style="color: #2d3f89; margin-bottom: 5px;">Assessment Submission</h1>';
+        htmlBody += '<p style="color: #666; font-size: 14px; margin-top: 0;">Spartan Assessment Portal</p>';
+        htmlBody += '</div>';
 
-    // Find instructor email
-    Logger.log('[SUBMIT] Finding instructor email for: ' + instructorName);
-    const instructorEmail = getInstructorEmail(instructorName);
-    Logger.log('[SUBMIT] Instructor email: ' + (instructorEmail || 'NOT FOUND'));
+        htmlBody += '<div style="background: #f8f9fc; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #e1e4e8;">';
+        htmlBody += '<table style="width: 100%; border-collapse: collapse;">';
+        htmlBody += '<tr><td style="padding: 5px 0; width: 120px;"><strong>Student:</strong></td><td>' + escapeHtmlBackend(studentName) + ' (' + escapeHtmlBackend(studentEmail) + ')</td></tr>';
+        htmlBody += '<tr><td style="padding: 5px 0;"><strong>Assessment:</strong></td><td>' + escapeHtmlBackend(assessmentName) + '</td></tr>';
+        if (className) htmlBody += '<tr><td style="padding: 5px 0;"><strong>Class:</strong></td><td>' + escapeHtmlBackend(className) + '</td></tr>';
+        if (instructorName) htmlBody += '<tr><td style="padding: 5px 0;"><strong>Instructor:</strong></td><td>' + escapeHtmlBackend(instructorName) + '</td></tr>';
+        htmlBody += '<tr><td style="padding: 5px 0;"><strong>Submitted:</strong></td><td>' + timestamp + '</td></tr>';
+        htmlBody += '</table>';
+        htmlBody += '</div>';
 
-    // Build email subject from template
-    const subject = CONSTANTS.SUBMISSION_EMAIL_SUBJECT
-      .replace('{assessmentName}', assessmentName)
-      .replace('{studentName}', studentName);
+        htmlBody += '<h2 style="color: #2d3f89; border-bottom: 1px solid #e1e4e8; padding-bottom: 10px; margin-bottom: 20px;">Responses</h2>';
 
-    // Send email
-    if (instructorEmail) {
-      Logger.log('[SUBMIT] Sending email to instructor: ' + instructorEmail);
-      MailApp.sendEmail(instructorEmail, subject,
-        'Please see the attached assessment submission from ' + studentName + '.', {
-        attachments: [pdfBlob],
-        name: 'Spartan Assessment Portal',
-        replyTo: studentEmail
-      });
-      Logger.log('[SUBMIT] Email sent to instructor.');
+        // Add each response
+        for (let i = 0; i < responses.length; i++) {
+          const r = responses[i];
+          const answerText = r.answer ? r.answer.toString().trim() : '';
+          const answerDisplay = answerText ? escapeHtmlBackend(answerText) : '<em style="color: #999;">No answer provided</em>';
+          
+          htmlBody += '<div style="margin-bottom: 25px; page-break-inside: avoid;">';
+          htmlBody += '<div style="font-weight: bold; color: #2d3f89; margin-bottom: 8px; font-size: 16px;">' + escapeHtmlBackend(r.questionLabel) + '</div>';
+          
+          if (r.questionType === 'mc') {
+            htmlBody += '<div style="padding: 12px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px;">';
+            htmlBody += '<span style="color: #666; margin-right: 10px;">Selected Option:</span>';
+            htmlBody += '<span style="font-weight: bold; font-size: 16px;">' + answerDisplay + '</span>';
+            htmlBody += '</div>';
+          } else {
+            htmlBody += '<div style="padding: 15px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; white-space: pre-wrap; min-height: 40px; line-height: 1.5;">' + answerDisplay + '</div>';
+          }
+          htmlBody += '</div>';
+        }
+
+        htmlBody += '<div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">';
+        htmlBody += 'Generated by Spartan Assessment Portal on ' + timestamp;
+        htmlBody += '</div>';
+        htmlBody += '</body></html>';
+
+        Logger.log('[SUBMIT] Creating temporary Google Doc via Drive API...');
+        // Create a Google Doc from the HTML content
+        const htmlBlob = Utilities.newBlob(htmlBody, 'text/html', 'submission.html');
+        
+        let tempDocMeta;
+        try {
+          tempDocMeta = Drive.Files.create(
+            { name: 'Submission - ' + assessmentName + ' - ' + studentName, mimeType: 'application/vnd.google-apps.document' },
+            htmlBlob
+          );
+          Logger.log('[SUBMIT] Temp Doc created: ' + tempDocMeta.id);
+        } catch (driveErr) {
+          Logger.log('[SUBMIT] Drive API error: ' + driveErr.toString());
+          throw driveErr;
+        }
+
+        Logger.log('[SUBMIT] Converting Doc to PDF...');
+        // Export as PDF
+        const pdfBlob = DriveApp.getFileById(tempDocMeta.id).getAs('application/pdf');
+        pdfBlob.setName(assessmentName + ' - ' + studentName + ' - Submission.pdf');
+        Logger.log('[SUBMIT] PDF generated successfully.');
+
+        // Clean up temp doc
+        Logger.log('[SUBMIT] Trashing temporary Doc...');
+        DriveApp.getFileById(tempDocMeta.id).setTrashed(true);
+
+        // Find instructor email
+        Logger.log('[SUBMIT] Finding instructor email for: ' + instructorName);
+        const instructorEmail = getInstructorEmail(instructorName);
+        Logger.log('[SUBMIT] Instructor email: ' + (instructorEmail || 'NOT FOUND'));
+
+        // Build email subject from template
+        const subject = CONSTANTS.SUBMISSION_EMAIL_SUBJECT
+          .replace('{assessmentName}', assessmentName)
+          .replace('{studentName}', studentName);
+
+        // Send email
+        if (instructorEmail) {
+          Logger.log('[SUBMIT] Sending email to instructor: ' + instructorEmail);
+          MailApp.sendEmail(instructorEmail, subject,
+            'Please see the attached assessment submission from ' + studentName + '.', {
+            attachments: [pdfBlob],
+            name: 'Spartan Assessment Portal',
+            replyTo: studentEmail
+          });
+          Logger.log('[SUBMIT] Email sent to instructor.');
+        } else {
+          // Fallback: send to the script owner / deployer
+          const fallbackEmail = Session.getEffectiveUser().getEmail();
+          Logger.log('[SUBMIT] Falling back to script owner email: ' + fallbackEmail);
+          MailApp.sendEmail(fallbackEmail, subject + ' [Instructor Not Found]',
+            'Could not find email for instructor "' + instructorName + '". Submission from ' + studentName + ' attached.', {
+            attachments: [pdfBlob],
+            name: 'Spartan Assessment Portal',
+            replyTo: studentEmail
+          });
+          Logger.log('[SUBMIT] Email sent to fallback.');
+        }
     } else {
-      // Fallback: send to the script owner / deployer
-      const fallbackEmail = Session.getEffectiveUser().getEmail();
-      Logger.log('[SUBMIT] Falling back to script owner email: ' + fallbackEmail);
-      MailApp.sendEmail(fallbackEmail, subject + ' [Instructor Not Found]',
-        'Could not find email for instructor "' + instructorName + '". Submission from ' + studentName + ' attached.', {
-        attachments: [pdfBlob],
-        name: 'Spartan Assessment Portal',
-        replyTo: studentEmail
-      });
-      Logger.log('[SUBMIT] Email sent to fallback.');
+        Logger.log('[SUBMIT] Delivery mode is BULK. Skipping individual email.');
     }
 
     // Record submission timestamp
@@ -4145,13 +4186,131 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     }
 
     Logger.log('[SUBMIT] Submission process completed successfully.');
-    return { success: true, sentTo: instructorEmail || 'fallback' };
+    return { success: true, sentTo: submissionDeliveryMode === 'email' ? 'instructor' : 'stored' };
 
   } catch (e) {
     Logger.log('[SUBMIT] CRITICAL ERROR: ' + e.toString());
     return { error: 'Submission failed: ' + e.toString() };
   }
 }
+
+/**
+ * Generates a consolidated PDF of all submissions for an assessment.
+ * @param {string} sessionToken - Admin session token
+ * @param {string} assessmentUrl - Assessment URL identifier
+ * @returns {Object} { url: "..." } or { error: "..." }
+ */
+function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
+  try {
+    const tokenData = validateAdminToken(sessionToken);
+    if (!tokenData) return { error: 'Unauthorized.' };
+
+    const sheet = getOrCreateSubmissionsSheet();
+    const data = sheet.getDataRange().getValues();
+    
+    // Filter rows for this assessment
+    // CONSTANTS.COL_SUBMISSIONS: { TIMESTAMP: 0, ASSESSMENT_URL: 1, ASSESSMENT_NAME: 2, STUDENT_EMAIL: 3, STUDENT_NAME: 4, RESPONSES_JSON: 5 }
+    const submissions = [];
+    let assessmentName = 'Assessment';
+    
+    // Start from row 1 (skip header)
+    for (let i = 1; i < data.length; i++) {
+        if (data[i][1] === assessmentUrl) {
+            submissions.push({
+                timestamp: data[i][0],
+                studentName: data[i][4],
+                studentEmail: data[i][3],
+                responses: JSON.parse(data[i][5])
+            });
+            if (data[i][2]) assessmentName = data[i][2];
+        }
+    }
+
+    if (submissions.length === 0) {
+        return { error: 'No submissions found for this assessment.' };
+    }
+
+    // Sort by student name
+    submissions.sort((a, b) => (a.studentName || '').localeCompare(b.studentName || ''));
+
+    // Generate HTML
+    let htmlBody = '<html><body style="font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto;">';
+    
+    // Title Page
+    htmlBody += `<div style="text-align: center; margin-top: 100px; margin-bottom: 100px;">
+        <h1 style="color: #2d3f89; font-size: 32px; margin-bottom: 10px;">Submission Report</h1>
+        <h2 style="color: #666; font-weight: normal; margin-bottom: 40px;">${escapeHtmlBackend(assessmentName)}</h2>
+        <p><strong>Total Submissions:</strong> ${submissions.length}</p>
+        <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+    </div>`;
+    
+    submissions.forEach((sub, index) => {
+        htmlBody += '<div style="page-break-before: always;"></div>';
+        
+        // Student Header
+        htmlBody += `<div style="border-bottom: 2px solid #2d3f89; padding-bottom: 10px; margin-bottom: 30px;">
+            <h2 style="color: #2d3f89; margin: 0;">${escapeHtmlBackend(sub.studentName)}</h2>
+            <div style="display: flex; justify-content: space-between; margin-top: 5px; color: #666; font-size: 14px;">
+                <span>${escapeHtmlBackend(sub.studentEmail)}</span>
+                <span>${new Date(sub.timestamp).toLocaleString()}</span>
+            </div>
+        </div>`;
+        
+        // Responses
+        sub.responses.forEach(r => {
+             const answerText = r.answer ? r.answer.toString().trim() : '';
+             const answerDisplay = answerText ? escapeHtmlBackend(answerText) : '<em style="color: #999;">No answer provided</em>';
+             
+             htmlBody += '<div style="margin-bottom: 20px; page-break-inside: avoid;">';
+             htmlBody += `<div style="font-weight: bold; margin-bottom: 8px; color: #444;">${escapeHtmlBackend(r.questionLabel)}</div>`;
+             
+             if (r.questionType === 'mc') {
+                htmlBody += `<div style="padding: 10px 15px; background: #f5f7fa; border-left: 4px solid #2d3f89; border-radius: 4px; display: inline-block; font-weight: 600;">${answerDisplay}</div>`;
+             } else {
+                htmlBody += `<div style="padding: 15px; border: 1px solid #e1e4e8; border-radius: 6px; background: #fff; line-height: 1.5;">${answerDisplay}</div>`;
+             }
+             htmlBody += '</div>';
+        });
+    });
+    
+    htmlBody += '</body></html>';
+
+    // Generate PDF
+    Logger.log('[REPORT] Creating temporary Doc...');
+    const htmlBlob = Utilities.newBlob(htmlBody, 'text/html', 'report.html');
+    let tempDocMeta;
+    try {
+        tempDocMeta = Drive.Files.create(
+            { name: `Submissions - ${assessmentName}`, mimeType: 'application/vnd.google-apps.document' },
+            htmlBlob
+        );
+    } catch (e) {
+        Logger.log('[REPORT] Drive API error: ' + e.toString());
+        throw e;
+    }
+    
+    Logger.log('[REPORT] Converting to PDF...');
+    const pdfBlob = DriveApp.getFileById(tempDocMeta.id).getAs('application/pdf');
+    pdfBlob.setName(`Submissions - ${assessmentName} (${new Date().toISOString().substring(0,10)}).pdf`);
+    
+    // Trash temp doc
+    DriveApp.getFileById(tempDocMeta.id).setTrashed(true);
+    
+    // Save PDF to Drive and return URL
+    const pdfFile = DriveApp.createFile(pdfBlob);
+    
+    // Set public sharing so the user can download it immediately via the link
+    // Note: This link might be short-lived if we want, but for now we keep it simple.
+    pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    return { url: pdfFile.getDownloadUrl() };
+
+  } catch (e) {
+    Logger.log('Error generating bulk PDF: ' + e.toString());
+    return { error: 'Failed to generate report: ' + e.toString() };
+  }
+}
+
 
 /**
  * Server-side HTML escaping utility for building email/doc HTML.
@@ -4224,4 +4383,32 @@ function runTests(listBasedFileId, tableBasedFileId) {
   testExtractTextFromFile(listBasedFileId);
   testExtractTextFromFile(tableBasedFileId);
   Logger.log('--- FINISHED TEST RUN ---');
+}
+
+/**
+ * Helper: Gets or creates the Submissions sheet.
+ */
+function getOrCreateSubmissionsSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(CONSTANTS.SUBMISSIONS_SHEET_NAME);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet(CONSTANTS.SUBMISSIONS_SHEET_NAME);
+    // Add headers
+    const headers = [
+      'Timestamp',
+      'Assessment URL',
+      'Assessment Name',
+      'Student Email',
+      'Student Name',
+      'Responses JSON'
+    ];
+    // Set headers
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    
+    // Auto-resize columns appropriately
+    sheet.autoResizeColumns(1, headers.length);
+  }
+  return sheet;
 }

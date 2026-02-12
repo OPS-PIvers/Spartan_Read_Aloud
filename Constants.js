@@ -3,6 +3,7 @@ const CONSTANTS = {
   AUDIO_DRIVE_FOLDER_NAME: "Assessment Audio Files",
   PDF_SOURCE_FOLDER_NAME: "Assessment PDFs",
   TEACHERS_SHEET_NAME: "Teachers",
+  SUBMISSIONS_SHEET_NAME: "Submissions", // NEW: Sheet for storing raw submission data
 
   // --- Batch Processing ---
   BATCH_API_ENABLED: false, // KEEP FALSE until Google confirms TTS batch support
@@ -36,7 +37,18 @@ const CONSTANTS = {
     READ_ALOUD_ENABLED: 12,
     ACCESS_EXPIRES: 13,
     SUBMISSION_ENABLED: 14,
-    SUBMISSION_TIMESTAMPS: 15 // JSON object: { studentEmail: timestamp }
+    SUBMISSION_TIMESTAMPS: 15, // JSON object: { studentEmail: timestamp }
+    SUBMISSION_DELIVERY_MODE: 16 // 'email' (default) or 'bulk'
+  },
+
+  // --- Submissions Sheet Column Mapping (0-based) ---
+  COL_SUBMISSIONS: {
+    TIMESTAMP: 0,
+    ASSESSMENT_URL: 1,
+    ASSESSMENT_NAME: 2,
+    STUDENT_EMAIL: 3,
+    STUDENT_NAME: 4,
+    RESPONSES_JSON: 5
   },
 
   // --- File Handling ---

@@ -901,11 +901,25 @@
           <!-- ROW 3 -->
           <div id="meta-submissions-group" class="input-group checkbox-group" style="align-items: flex-start; flex-direction: column; gap: 4px; padding-top: 0; display: none;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" id="meta-submissions" class="checkbox-control">
+              <input type="checkbox" id="meta-submissions" class="checkbox-control" onchange="toggleDeliveryOptions()">
               <label for="meta-submissions" class="input-label" style="margin-bottom: 0; cursor: pointer;">Enable Submissions</label>
             </div>
             <div style="font-size: 11px; color: var(--gray-500); margin-left: 28px; font-weight: 500;">
               Students can submit answers via a sidebar
+            </div>
+            <!-- Delivery Mode Options -->
+            <div id="submission-delivery-options" style="margin-left: 28px; margin-top: 8px; display: none;">
+              <label style="font-size: 11px; font-weight: 600; display: block; margin-bottom: 4px; color: var(--gray-700);">Delivery Mode:</label>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--gray-900);">
+                  <input type="radio" name="delivery-mode" value="email" checked style="accent-color: var(--primary-blue);">
+                  Email immediately (Individual PDFs)
+                </label>
+                <label style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--gray-900);">
+                  <input type="radio" name="delivery-mode" value="bulk" style="accent-color: var(--primary-blue);">
+                  Bulk Report (Downloadable)
+                </label>
+              </div>
             </div>
           </div>
           <div class="input-group checkbox-group" style="align-items: flex-start; flex-direction: column; gap: 4px; padding-top: 0;">
@@ -1350,6 +1364,10 @@
                 <button class="action-btn save-btn" onclick="saveRow(${item.rowIndex})" title="Save">
                   <span class="material-icons" style="font-size:18px;">save</span>
                 </button>
+                ${item.submissionEnabled && item.submissionDeliveryMode === 'bulk' && item.submissionTimestamps ? `
+                <button class="action-btn" onclick="downloadSubmissions('${item.pdfUrl}')" title="Download Submissions">
+                  <span class="material-icons" style="font-size:18px; color: var(--primary-blue);">file_download</span>
+                </button>` : ''}
                 ${['super_admin', 'admin', 'teacher', 'sp_ed'].includes(currentUserRole) ? `
                 <button class="action-btn" onclick="reprocessRow(${item.rowIndex})" title="Reprocess">
                   <span class="material-icons" style="font-size:18px;">autorenew</span>
@@ -1400,6 +1418,12 @@
       document.getElementById('file-name-display').textContent = `${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
     }
 
+    function toggleDeliveryOptions() {
+      const isChecked = document.getElementById('meta-submissions').checked;
+      const optionsDiv = document.getElementById('submission-delivery-options');
+      optionsDiv.style.display = isChecked ? 'block' : 'none';
+    }
+
     function submitAssessment() {
       const isFile = document.getElementById('content-file').classList.contains('active');
       
@@ -1421,6 +1445,7 @@
         studentEmails: emails.join(', '), // Server handles parsing
         readAloudEnabled: document.getElementById('meta-readaloud').checked,
         submissionEnabled: document.getElementById('meta-submissions').checked,
+        submissionDeliveryMode: document.querySelector('input[name="delivery-mode"]:checked')?.value || 'email',
         accessExpires: document.getElementById('meta-expires').value
       };
 
@@ -1497,6 +1522,56 @@
         })
         .withFailureHandler(handleError)
         .addNewAssessment(adminToken, uploadRes.fileUrl, meta);
+    }
+
+    function downloadSubmissions(assessmentUrl) {
+      showModal({
+        title: 'Generating Report',
+        body: `
+          <div style="text-align: center; padding: 20px;">
+            <div class="spinner-ring" style="width: 40px; height: 40px; margin-bottom: 16px;"></div>
+            <p>Compiling student submissions into a single PDF...</p>
+            <p style="font-size: 12px; color: var(--gray-500); margin-top: 8px;">This may take a few moments.</p>
+          </div>
+        `,
+        buttons: [] // No close button while processing
+      });
+
+      google.script.run
+        .withSuccessHandler((result) => {
+          if (result.error) {
+            closeModal();
+            showToast(result.error, 'error');
+            return;
+          }
+          
+          // Close processing modal
+          closeModal();
+          
+          // Show success modal with download link
+          showModal({
+            title: 'Report Ready',
+            body: `
+              <div style="text-align: center; padding: 10px;">
+                <div style="background: var(--success-bg); width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                  <span class="material-icons" style="color: var(--success-green); font-size: 32px;">check</span>
+                </div>
+                <p>The consolidated submissions report has been generated.</p>
+                <div style="margin-top: 20px;">
+                  <a href="${result.url}" target="_blank" class="btn btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                    <span class="material-icons">download</span> Download PDF
+                  </a>
+                </div>
+              </div>
+            `,
+            buttons: [{ text: 'Close', class: 'btn-secondary', onclick: closeModal }]
+          });
+        })
+        .withFailureHandler((err) => {
+          closeModal();
+          showToast('Failed to generate report: ' + err, 'error');
+        })
+        .generateConsolidatedSubmissionsPdf(adminToken, assessmentUrl);
     }
 
     function handleError(err) {
