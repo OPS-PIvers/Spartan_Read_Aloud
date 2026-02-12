@@ -1155,6 +1155,7 @@ function showModal(options) {
   if (options.buttons) {
     options.buttons.forEach(btn => {
       const b = document.createElement('button');
+      if (btn.id) b.id = btn.id;
       b.className = `btn ${btn.class || ''}`;
       b.textContent = btn.text;
       b.onclick = () => {
@@ -1311,10 +1312,14 @@ function loadSpecificAssessment(assessmentUrl, cardElement) {
     body: `
       <p>Please enter the password for this assessment:</p>
       <input type="password" id="assessment-password-input" class="modal-input" placeholder="Password" autofocus>
+      <div style="margin-top: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick="const cb = this.querySelector('input'); cb.checked = !cb.checked; cb.dispatchEvent(new Event('change'));">
+        <input type="checkbox" id="show-password-checkbox" style="cursor: pointer;" onclick="event.stopPropagation();">
+        <label for="show-password-checkbox" style="cursor: pointer; font-size: 14px; color: var(--gray-600); margin-bottom: 0;" onclick="event.stopPropagation();">Show password</label>
+      </div>
     `,
     buttons: [
       { text: 'Cancel', class: 'btn-secondary', onclick: closeModal },
-      { text: 'Start', class: 'btn-primary', onclick: () => {
+      { text: 'Start', class: 'btn-primary', id: 'modal-start-btn', onclick: () => {
         const password = document.getElementById('assessment-password-input').value;
         if (!password) {
           showToast('Password is required', 'warning');
@@ -1325,6 +1330,27 @@ function loadSpecificAssessment(assessmentUrl, cardElement) {
       }, preventClose: true }
     ]
   });
+
+  const passwordInput = document.getElementById('assessment-password-input');
+  const showPasswordCheckbox = document.getElementById('show-password-checkbox');
+
+  if (passwordInput && showPasswordCheckbox) {
+    showPasswordCheckbox.onchange = (e) => {
+      passwordInput.type = e.target.checked ? 'text' : 'password';
+    };
+
+    passwordInput.onkeyup = (e) => {
+      if (e.key === 'Enter') {
+        const password = passwordInput.value;
+        if (!password) {
+          showToast('Password is required', 'warning');
+          return;
+        }
+        closeModal();
+        startAssessment(assessmentUrl, cardElement, password);
+      }
+    };
+  }
 }
 
 function startAssessment(assessmentUrl, cardElement, password) {
