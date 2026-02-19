@@ -1,11 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+window.google = {
+  script: {
+    run: {
+      withSuccessHandler: function() { return this; },
+      withFailureHandler: function() { return this; },
+      getAllAssessments: function() { return this; },
+      deleteAssessmentRow: function() {},
+      saveAssessmentRow: function() {},
+      reprocessAssessment: function() {}
+    }
+  }
+};
+</script>
+
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Teacher Dashboard | Spartan Assessment Portal</title>
-  
+
   <!-- Fonts & Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,20 +35,20 @@
       --primary-dark: #1d2a5d; /* Used for Header */
       --primary-light: #4356a0;
       --primary-lighter: #eaecf5; /* Backgrounds */
-      
+
       --primary-red: #ad2122;
       --red-dark: #7a1718;
       --red-light: #fce8e6;
-      
+
       --gray-900: #1a1a1a;
       --gray-700: #4a4a4a;
       --gray-500: #737373;
       --gray-300: #d4d4d4;
       --gray-100: #f5f5f5;
-      
+
       --bg-app: #f8f9fc; /* Very subtle cool gray/blue */
       --bg-surface: #ffffff;
-      
+
       --success-green: #0f9d58;
       --success-bg: #e6f4ea;
       --warning-orange: #f59e0b;
@@ -46,17 +61,17 @@
       --radius-sm: 6px;
       --radius-md: 10px;
       --radius-lg: 16px;
-      
+
       --shadow-subtle: 0 1px 2px 0 rgba(0,0,0,0.05);
       --shadow-card: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
       --shadow-hover: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
-      
+
       --ease: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     /* --- GLOBAL STYLES --- */
     * { box-sizing: border-box; outline: none; }
-    
+
     body {
       font-family: var(--font-main);
       background-color: var(--bg-app);
@@ -629,7 +644,7 @@
     }
 
     .skeleton-line { height: 16px; background: var(--gray-100); border-radius: 4px; margin-bottom: 8px; animation: pulse 1.5s infinite; }
-    
+
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -733,9 +748,9 @@
     }
 
     .modal-title { font-weight: 600; font-size: 18px; color: var(--primary-dark); }
-    
+
     .modal-body { padding: 24px; }
-    
+
     .modal-footer {
       padding: 16px 24px;
       border-top: 1px solid var(--gray-100);
@@ -801,7 +816,7 @@
 
   <!-- MAIN CONTENT GRID -->
   <div id="main-content" class="main-content" style="display:none;">
-    
+
     <!-- 1. QUICK STATS -->
     <div class="stats-grid">
       <div class="stat-card">
@@ -829,7 +844,7 @@
           New Assessment
         </h2>
       </div>
-      
+
       <div class="card-body">
         <!-- Tabs -->
         <div class="segmented-control">
@@ -953,7 +968,7 @@
           <span class="material-icons">refresh</span>
         </button>
       </div>
-      
+
       <div class="table-responsive">
         <table class="table">
           <thead>
@@ -972,7 +987,7 @@
           </tbody>
         </table>
       </div>
-      
+
       <!-- Empty State -->
       <div id="empty-state" style="display:none; padding:60px; text-align:center; color:var(--gray-500);">
         <span class="material-icons" style="font-size:48px; opacity:0.3; margin-bottom:16px;">inbox</span>
@@ -988,18 +1003,18 @@
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
-      
+
       let icon = 'check_circle';
       if (type === 'error') icon = 'error';
       if (type === 'warning') icon = 'warning';
-      
+
       toast.innerHTML = `
         <span class="material-icons toast-icon">${icon}</span>
         <div class="toast-content">${message}</div>
       `;
-      
+
       container.appendChild(toast);
-      
+
       // Auto-remove after 5 seconds
       setTimeout(() => {
         toast.style.opacity = '0';
@@ -1013,10 +1028,10 @@
       const title = document.getElementById('modal-title');
       const body = document.getElementById('modal-body');
       const footer = document.getElementById('modal-footer');
-      
+
       title.textContent = options.title || 'Notification';
       body.innerHTML = options.body || '';
-      
+
       footer.innerHTML = '';
       if (options.buttons) {
         options.buttons.forEach(btn => {
@@ -1036,7 +1051,7 @@
         closeBtn.onclick = closeModal;
         footer.appendChild(closeBtn);
       }
-      
+
       modal.style.display = 'flex';
     }
 
@@ -1153,14 +1168,14 @@
       // Safe parsing of server data
       let userData = { name: 'Admin', role: 'teacher' };
       try {
-        const rawUser = '<?!= JSON.stringify(user) ?>';
+        const rawUser = '{"email": "admin@example.com", "name": "Admin User", "userType": "super_admin"}';
         // Only parse if the template tag was actually replaced (not raw string)
         if (rawUser && rawUser.trim().startsWith('{')) userData = JSON.parse(rawUser);
       } catch (e) { console.warn('User parse error', e); }
 
-      adminToken = '<?!= sessionToken ?>';
-      window.scriptUrl = '<?!= ScriptApp.getService().getUrl() ?>';
-      
+      adminToken = '"mock-session-token"';
+      window.scriptUrl = '';
+
       // Init UI
       const nameDisplay = document.getElementById('admin-name-display');
       if (nameDisplay) nameDisplay.textContent = userData.name;
@@ -1173,10 +1188,10 @@
         instructorInput.value = userData.email;
         addInstructorChip(instructorInput, 'new');
       }
-      
+
       // Setup Drag & Drop
       initDragDrop();
-      
+
       // Load Constants then Data
       google.script.run
         .withSuccessHandler(constants => {
@@ -1203,7 +1218,7 @@
     // --- DATA HANDLING ---
     function refreshData() {
       const tbody = document.getElementById('table-body');
-      
+
       // Show Skeleton Rows
       const skeletonRow = `
         <tr>
@@ -1234,7 +1249,7 @@
 
       assessmentList = response.assessments || [];
       currentUserRole = response.userRole || currentUserRole;
-      
+
       updateStats();
       renderTable();
     }
@@ -1258,12 +1273,12 @@
       addSection.style.display = ['super_admin', 'admin', 'teacher', 'sp_ed'].includes(currentUserRole) ? 'block' : 'none';
 
       // Submission feature visibility
-      const canSeeSubmissions = appConstants.SUBMISSION_FEATURE_ENABLED && 
+      const canSeeSubmissions = appConstants.SUBMISSION_FEATURE_ENABLED &&
         (!appConstants.SUBMISSION_ADMIN_ONLY || appConstants.SUBMISSION_ADMIN_ROLES.includes(currentUserRole));
-      
+
       const metaSubmissionsGroup = document.getElementById('meta-submissions-group');
       if (metaSubmissionsGroup) metaSubmissionsGroup.style.display = canSeeSubmissions ? 'block' : 'none';
-      
+
       const thSubmissions = document.getElementById('th-submissions');
       if (thSubmissions) thSubmissions.style.display = canSeeSubmissions ? 'table-cell' : 'none';
 
@@ -1274,7 +1289,7 @@
       }
 
       emptyState.style.display = 'none';
-      
+
       tbody.innerHTML = assessmentList.map(item => {
         let statusBadge = '';
         if (item.isComplete) {
@@ -1298,12 +1313,12 @@
           <tr data-id="${item.rowIndex}">
             <td>
               <div style="display: flex; align-items: flex-start; gap: 4px; margin-bottom: 8px; flex-wrap: wrap;">
-                <textarea class="table-edit-input title-edit-input" data-field="assessmentTitle" 
+                <textarea class="table-edit-input title-edit-input" data-field="assessmentTitle"
                   rows="1" oninput="autoResize(this)" placeholder="Assessment Title">${escapeHtml(item.fileName.replace(/\.pdf$/i, ''))}</textarea>
                 <span style="color: var(--gray-300); padding-top: 6px;">-</span>
-                <textarea class="table-edit-input class-edit-input" data-field="className" 
+                <textarea class="table-edit-input class-edit-input" data-field="className"
                   rows="1" oninput="autoResize(this)" placeholder="Class Name">${escapeHtml(item.className)}</textarea>
-                
+
                 <button class="more-trigger" onclick="showMoreMenu(${item.rowIndex})" title="Show hidden columns" style="margin-left: auto; padding-top: 6px;">
                   <span class="material-icons">more_vert</span>
                 </button>
@@ -1331,7 +1346,7 @@
                 </div>
                 <div style="display:flex; align-items:center; gap:6px;">
                   <span class="material-icons" style="font-size:16px; color:var(--gray-500)">event_busy</span>
-                  <input type="datetime-local" class="table-edit-input" style="font-size: 11px;" data-field="accessExpires" 
+                  <input type="datetime-local" class="table-edit-input" style="font-size: 11px;" data-field="accessExpires"
                     value="${item.accessExpires ? item.accessExpires.substring(0, 16) : ''}">
                 </div>
               </div>
@@ -1392,7 +1407,7 @@
     function switchTab(tabName) {
       document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      
+
       document.getElementById(`tab-${tabName}`).classList.add('active');
       document.getElementById(`content-${tabName}`).classList.add('active');
     }
@@ -1400,7 +1415,7 @@
     function initDragDrop() {
       const zone = document.getElementById('file-drop-zone');
       const input = document.getElementById('file-input');
-      
+
       zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('dragover'); };
       zone.ondragleave = () => zone.classList.remove('dragover');
       zone.ondrop = (e) => {
@@ -1411,7 +1426,7 @@
           updateFileName(input.files[0]);
         }
       };
-      
+
       input.onchange = () => { if(input.files.length) updateFileName(input.files[0]); };
     }
 
@@ -1427,7 +1442,7 @@
 
     function submitAssessment() {
       const isFile = document.getElementById('content-file').classList.contains('active');
-      
+
       // Collect instructors from chips
       const instructorContainer = document.getElementById('meta-instructor-container');
       const instructors = Array.from(instructorContainer.querySelectorAll('.email-chip span:first-child'))
@@ -1452,18 +1467,18 @@
 
       const overlay = document.getElementById('conversion-overlay');
       const statusTitle = document.getElementById('conversion-title');
-      
+
       if(isFile) {
         const fileInput = document.getElementById('file-input');
         if(!fileInput.files.length) return showToast('Please select a file.', 'warning');
-        
+
         const file = fileInput.files[0];
         // If assessmentTitle is empty, use filename
         if (!meta.assessmentTitle) meta.assessmentTitle = file.name;
-        
+
         overlay.style.display = 'flex';
         statusTitle.textContent = "Uploading File...";
-        
+
         const reader = new FileReader();
         reader.onload = (e) => {
           const base64 = e.target.result.split(',')[1];
@@ -1476,10 +1491,10 @@
       } else {
         const url = document.getElementById('gdoc-input').value.trim();
         if(!url) return showToast('Please enter a Google Doc URL.', 'warning');
-        
+
         overlay.style.display = 'flex';
         statusTitle.textContent = "Linking Google Doc...";
-        
+
         google.script.run
           .withSuccessHandler((res) => finalizeSubmission(res, meta))
           .withFailureHandler(handleError)
@@ -1489,36 +1504,36 @@
 
     function finalizeSubmission(uploadRes, meta) {
       if(uploadRes.error) return handleError(uploadRes.error);
-      
+
       document.getElementById('conversion-title').textContent = "Saving to Database...";
-      
+
       google.script.run
         .withSuccessHandler((res) => {
           document.getElementById('conversion-overlay').style.display = 'none';
           if(res.error) return showToast(res.error, 'error');
-          
+
           showToast('Assessment successfully added!', 'success');
-          
+
           // Clear form
           document.getElementById('file-input').value = '';
           document.getElementById('file-name-display').textContent = '';
           document.getElementById('gdoc-input').value = '';
           document.getElementById('meta-class').value = '';
           document.getElementById('meta-title').value = '';
-          
+
           document.getElementById('meta-submissions').checked = false;
 
           // Clear chips
           document.querySelectorAll('#meta-instructor-container .email-chip, #meta-emails-container .email-chip')
             .forEach(chip => chip.remove());
-          
+
           // Re-populate user's email as a chip
           const instructorInput = document.getElementById('meta-instructor-input');
           if (instructorInput && window.userEmail) {
             instructorInput.value = window.userEmail;
             addInstructorChip(instructorInput, 'new');
           }
-          
+
           refreshData();
         })
         .withFailureHandler(handleError)
@@ -1545,10 +1560,10 @@
             showToast(result.error, 'error');
             return;
           }
-          
+
           // Close processing modal
           closeModal();
-          
+
           // Show success modal with download link
           showModal({
             title: 'Report Ready',
@@ -1588,7 +1603,7 @@
       const readAloudStatus = item.readAloudEnabled !== false ? 'Enabled' : 'Disabled';
       const submissionStatus = item.submissionEnabled ? 'Enabled' : 'Disabled';
 
-      const canSeeSubmissions = appConstants.SUBMISSION_FEATURE_ENABLED && 
+      const canSeeSubmissions = appConstants.SUBMISSION_FEATURE_ENABLED &&
         (!appConstants.SUBMISSION_ADMIN_ONLY || appConstants.SUBMISSION_ADMIN_ROLES.includes(currentUserRole));
 
       showModal({
@@ -1643,8 +1658,8 @@
                 </div>
                 <p>You've enabled <strong>Read Aloud</strong> for an assessment that was previously processed without audio.</p>
                 <p style="margin-top: 12px; font-size: 14px; color: var(--gray-700);">
-                  To generate the audio files now, please click the <strong>Reprocess</strong> icon 
-                  <span class="material-icons" style="font-size: 18px; vertical-align: middle; color: var(--gray-500);">autorenew</span> 
+                  To generate the audio files now, please click the <strong>Reprocess</strong> icon
+                  <span class="material-icons" style="font-size: 18px; vertical-align: middle; color: var(--gray-500);">autorenew</span>
                   in the Actions column after saving your changes.
                 </p>
               </div>
@@ -1674,10 +1689,10 @@
         console.error('Save button not found in row');
         return;
       }
-      
+
       const originalIcon = btn.innerHTML;
       btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite; font-size:18px">refresh</span>';
-      
+
       try {
         // Collect emails from chips
         const emailContainer = row.querySelector('.email-chips-container:not(.instructor-chips-container)');
@@ -1712,7 +1727,7 @@
             }
             console.log('Save successful');
             showToast('Changes saved successfully', 'success');
-            
+
             // Update local state to ensure persistence in UI
             const item = assessmentList.find(a => a.rowIndex === rowIndex);
             if (item) {
@@ -1761,17 +1776,17 @@
       event.preventDefault();
       const pasteData = (event.clipboardData || window.clipboardData).getData('text');
       if (!pasteData) return;
-      
+
       // Split by common delimiters
       const names = pasteData.split(/[,\/\n\r\t]+/).map(n => n.trim()).filter(n => n);
-      
+
       if (names.length > 0) {
         const input = event.target;
         const container = input.closest('.instructor-chips-container');
-        
+
         const existingNames = new Set(Array.from(container.querySelectorAll('.email-chip span:first-child'))
           .map(span => span.textContent.trim().toLowerCase()));
-        
+
         names.forEach(name => {
           const cleanName = name.trim();
           if (cleanName && !existingNames.has(cleanName.toLowerCase())) {
@@ -1787,7 +1802,7 @@
             existingNames.add(cleanName.toLowerCase());
           }
         });
-        
+
         updateInstructorsForRow(rowIndex);
       }
     }
@@ -1864,9 +1879,9 @@
           { text: 'Cancel', class: 'btn-secondary', onclick: closeModal },
           { text: 'Regenerate', class: 'btn-primary', onclick: () => {
             google.script.run
-              .withSuccessHandler(() => { 
-                showToast('Reprocessing started', 'success'); 
-                refreshData(); 
+              .withSuccessHandler(() => {
+                showToast('Reprocessing started', 'success');
+                refreshData();
               })
               .reprocessAssessment(adminToken, rowIndex);
           }}
@@ -1900,19 +1915,19 @@
       event.preventDefault();
       const pasteData = (event.clipboardData || window.clipboardData).getData('text');
       if (!pasteData) return;
-      
+
       // Extract all emails from pasted text using regex
       const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
       const emails = pasteData.match(emailRegex);
-      
+
       if (emails && emails.length > 0) {
         const input = event.target;
         const container = input.closest('.email-chips-container');
-        
+
         // Get existing emails to avoid duplicates
         const existingEmails = new Set(Array.from(container.querySelectorAll('.email-chip span:first-child'))
           .map(span => span.textContent.trim().toLowerCase()));
-        
+
         emails.forEach(email => {
           const cleanEmail = email.toLowerCase().trim();
           if (cleanEmail && !existingEmails.has(cleanEmail)) {
@@ -1926,7 +1941,7 @@
             existingEmails.add(cleanEmail);
           }
         });
-        
+
         updateEmailsForRow(rowIndex);
       }
     }
@@ -1938,7 +1953,7 @@
       // Extract all emails from input (handles if they pasted multiple and then blurred)
       const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
       const emails = value.match(emailRegex);
-      
+
       if (!emails || emails.length === 0) {
         // Only show toast if user actually typed something that's not an email
         if (value.length > 0 && !value.includes('@')) {
@@ -1997,7 +2012,7 @@
     }
 
     function updateEmailsForRow(rowIndex) {
-      const container = document.querySelector(`.email-chips-container[data-row="${rowIndex}"]:not(.instructor-chips-container)`) || 
+      const container = document.querySelector(`.email-chips-container[data-row="${rowIndex}"]:not(.instructor-chips-container)`) ||
                         document.querySelector(`.email-chips-container[data-row="${rowIndex}"]`);
       const emails = Array.from(container.querySelectorAll('.email-chip span:first-child'))
         .map(span => span.textContent.trim());
@@ -2015,5 +2030,40 @@
       return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
   </script>
+
+<script>
+window.addEventListener('load', () => {
+  const mainContent = document.getElementById('main-content');
+  if (mainContent) mainContent.style.display = 'block';
+
+  currentUserRole = 'super_admin';
+  appConstants = {
+    SUBMISSION_ADMIN_ONLY: false,
+    SUBMISSION_ADMIN_ROLES: ['super_admin', 'admin']
+  };
+
+  assessmentList = [
+    {
+      rowIndex: 1,
+      fileName: 'Test Assessment.pdf',
+      className: 'Admin Class',
+      instructor: 'Dr. Admin',
+      password: 'admin-pass',
+      accessExpires: '2025-12-31T23:59',
+      readAloudEnabled: true,
+      submissionEnabled: true,
+      submissionDeliveryMode: 'bulk',
+      submissionTimestamps: '2023-01-01',
+      studentEmails: 'student1@example.com, student2@example.com',
+      pdfUrl: 'https://example.com/test.pdf',
+      status: 'ready'
+    }
+  ];
+
+  if (typeof renderTable === 'function') {
+    renderTable();
+  }
+});
+</script>
 </body>
 </html>
