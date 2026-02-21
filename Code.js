@@ -276,11 +276,17 @@ function createBatchJobForFile(rowIndex, rowData) {
   const fileId = getFileIdFromUrl(fileUrl);
   if (!fileId) return null;
 
-  const file = DriveApp.getFileById(fileId);
+  let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
   const fileName = file.getName();
 
   // Use extractTextFromFile for multi-file type support (PDFs, Docs, Word)
-  const textChunks = extractTextFromFile(fileId);
+  const textChunks = extractTextFromFile(file);
   if (!textChunks || textChunks.length !== totalChunks) {
     Logger.log(`ERROR: Mismatch in chunk count for '${fileName}'. Expected ${totalChunks}, found ${textChunks ? textChunks.length : 0}`);
     return null;
@@ -544,7 +550,13 @@ function checkGeminiBatchJobStatus(jobName) {
 function processBatchJobResults(rowIndex, rowData, jobStatus) {
   const fileUrl = rowData[CONSTANTS.COL.PDF_URL];
   const fileId = getFileIdFromUrl(fileUrl);
-  const file = DriveApp.getFileById(fileId);
+  let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
   const fileName = file.getName();
 
   // Remove any file extension for subfolder name
@@ -579,7 +591,7 @@ function processBatchJobResults(rowIndex, rowData, jobStatus) {
       .map(line => JSON.parse(line));
 
     const audioFileObjects = [];
-    const textChunks = extractTextFromFile(fileId);
+    const textChunks = extractTextFromFile(file);
 
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
@@ -1059,7 +1071,7 @@ function step1_AnalyzePdfsAndCountChunks() {
       const fileName = DriveApp.getFileById(fileId).getName();
       Logger.log(`-> Analyzing '${fileName}'...`);
 
-      const textChunks = extractTextFromFile(fileId);
+      const textChunks = extractTextFromFile(file);
       if (textChunks && textChunks.length > 0) {
         sheet.getRange(i + 1, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(textChunks.length);
         sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(false);
@@ -1090,6 +1102,7 @@ function step2_GenerateMissingAudioAndFinalize() {
 
   const data = sheet.getDataRange().getValues();
   Logger.log('Starting Step 2: Generating missing audio...');
+  const fileCache = {};
 
   for (let i = 1; i < data.length; i++) {
     const elapsedTime = new Date() - SCRIPT_START_TIME;
@@ -1106,7 +1119,13 @@ function step2_GenerateMissingAudioAndFinalize() {
       const fileId = getFileIdFromUrl(pdfUrl);
       if (!fileId) continue;
 
-      const file = DriveApp.getFileById(fileId);
+      let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
       const fileName = file.getName(); 
       
       const baseName = fileName.replace(/\.pdf$/i, '').trim();
@@ -1115,7 +1134,7 @@ function step2_GenerateMissingAudioAndFinalize() {
 
       Logger.log(`Processing '${fileName}' (Row ${i + 1}). Total chunks: ${totalChunks}`);
 
-      const textChunks = extractTextFromFile(fileId);
+      const textChunks = extractTextFromFile(file);
       if (!textChunks || textChunks.length !== totalChunks) {
           Logger.log(`--> ERROR: Mismatch in chunk count for '${fileName}'. Expected ${totalChunks}, found ${textChunks ? textChunks.length : 0}. Skipping.`);
           continue;
@@ -1236,9 +1255,16 @@ function generateSafeFilenameFromText(text, chunkIndex) {
  * @param {string} fileId The Drive file ID
  * @returns {Object} { html: string, mimeType: string, fileName: string } or { error: string }
  */
-function convertFileToHtml(fileId) {
+function convertFileToHtml(fileOrId) {
   try {
-    const file = DriveApp.getFileById(fileId);
+    let file, fileId;
+    if (typeof fileOrId === "object" && fileOrId !== null && typeof fileOrId.getId === "function") {
+      file = fileOrId;
+      fileId = file.getId();
+    } else {
+      fileId = fileOrId;
+      file = DriveApp.getFileById(fileId);
+    }
     const mimeType = file.getMimeType();
     const fileSize = file.getSize();
 
@@ -2218,9 +2244,16 @@ function getFileIdFromUrl(url) {
  * @param {string} fileId The Drive file ID
  * @returns {string[]|null} Array of text chunks or null on failure
  */
-function extractTextFromFile(fileId) {
+function extractTextFromFile(fileOrId) {
   try {
-    const file = DriveApp.getFileById(fileId);
+    let file, fileId;
+    if (typeof fileOrId === "object" && fileOrId !== null && typeof fileOrId.getId === "function") {
+      file = fileOrId;
+      fileId = file.getId();
+    } else {
+      fileId = fileOrId;
+      file = DriveApp.getFileById(fileId);
+    }
     const mimeType = file.getMimeType();
     Logger.log(`Extracting text from: ${file.getName()} (${mimeType})`);
 
@@ -2231,7 +2264,7 @@ function extractTextFromFile(fileId) {
 
     // --- Google Docs / Word / PDF Handling ---
     Logger.log('→ Using HTML conversion for text extraction');
-    const conversionResult = convertFileToHtml(fileId);
+    const conversionResult = convertFileToHtml(file);
     if (conversionResult.error) {
       Logger.log(`✗ Failed to convert file: ${conversionResult.error}`);
       return null;
@@ -2538,7 +2571,13 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
       try {
         const fileId = getFileIdFromUrl(rowData[CONSTANTS.COL.PDF_URL]);
         if (fileId) {
-          const file = DriveApp.getFileById(fileId);
+          let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
           let newName = data.assessmentTitle;
           // Maintain extension if it's a PDF
           if (file.getMimeType() === MimeType.PDF && !newName.toLowerCase().endsWith('.pdf')) {
@@ -2873,7 +2912,13 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     // Rename file in Drive if title provided
     if (metadata.assessmentTitle) {
       try {
-        const file = DriveApp.getFileById(fileId);
+        let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
         // Ensure it keeps its extension if it's a PDF
         let newName = metadata.assessmentTitle;
         if (file.getMimeType() === MimeType.PDF && !newName.toLowerCase().endsWith('.pdf')) {
@@ -2953,7 +2998,7 @@ function processNewAssessment(fileUrl) {
       }
 
       // Step 1: Extract text and count chunks
-      const textChunks = extractTextFromFile(fileId);
+      const textChunks = extractTextFromFile(file);
       if (textChunks && textChunks.length > 0) {
         sheet.getRange(i + 1, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(textChunks.length);
         sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(false);
@@ -3069,7 +3114,13 @@ function reprocessAssessment(sessionToken, rowIndex) {
     // Force regeneration: Delete existing audio folder
     try {
       const fileId = getFileIdFromUrl(pdfUrl);
-      const file = DriveApp.getFileById(fileId);
+      let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
       const fileName = file.getName();
       // Remove extension to get folder name
       // Matches logic in step2_GenerateMissingAudioAndFinalize
@@ -3186,7 +3237,13 @@ function getLargeDataFromCell(cellValue) {
     const fileId = cellValue.replace("DRIVE_FILE_ID:", "");
     Logger.log(`[DATA_LOAD] Fetching content from Drive file: ${fileId}`);
     try {
-      const file = DriveApp.getFileById(fileId);
+      let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
       return file.getBlob().getDataAsString();
     } catch (e) {
       Logger.log(`[DATA_LOAD] ERROR: Failed to fetch from Drive (${fileId}): ${e.toString()}`);
@@ -3377,7 +3434,13 @@ function getAudioDataAsBase64(sessionToken, fileId) {
     // For staff roles, allow access to any audio file
     if (CONSTANTS.STAFF_ROLES.includes(tokenData.role)) {
       Logger.log(`Staff user ${tokenData.email} accessing audio file ${fileId}`);
-      const file = DriveApp.getFileById(fileId);
+      let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
       const blob = file.getBlob();
       return Utilities.base64Encode(blob.getBytes());
     }
@@ -3417,7 +3480,13 @@ function getAudioDataAsBase64(sessionToken, fileId) {
     }
 
     // Access granted
-    const file = DriveApp.getFileById(fileId);
+    let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
     const blob = file.getBlob();
     return Utilities.base64Encode(blob.getBytes());
 
@@ -3499,7 +3568,13 @@ function getBulkAudioData(sessionToken, fileIds) {
     for (let i = 0; i < fileIds.length; i++) {
       const fileId = fileIds[i];
       try {
-        const file = DriveApp.getFileById(fileId);
+        let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
         const blob = file.getBlob();
         const base64Data = Utilities.base64Encode(blob.getBytes());
 
@@ -3709,7 +3784,13 @@ function getStudentAssessmentsForEmail(email) {
         try {
           const fileId = getFileIdFromUrl(pdfUrl);
           if (fileId) {
-            const file = DriveApp.getFileById(fileId);
+            let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
             const fileName = file.getName();
 
             matchingAssessments.push({
@@ -3799,7 +3880,13 @@ function getAssessmentPdf(email, password, assessmentUrl) {
           const fileId = getFileIdFromUrl(pdfUrl);
           if (!fileId) return { error: "Invalid Google Drive URL in sheet." };
 
-          const file = DriveApp.getFileById(fileId);
+          let file;
+      if (fileCache[fileId]) {
+        file = fileCache[fileId];
+      } else {
+        file = DriveApp.getFileById(fileId);
+        fileCache[fileId] = file;
+      }
           const mimeType = file.getMimeType();
           const fileName = file.getName();
           const audioChunks = (audioDataJson && audioDataJson.trim()) ? JSON.parse(audioDataJson) : [];
@@ -3813,7 +3900,7 @@ function getAssessmentPdf(email, password, assessmentUrl) {
 
           // Convert all files to HTML
           Logger.log('→ Converting to HTML for native rendering');
-          const conversionResult = convertFileToHtml(fileId);
+          const conversionResult = convertFileToHtml(file);
           if (conversionResult.error) {
             Logger.log(`✗ Conversion error: ${conversionResult.error}`);
             return { error: `Could not load assessment: ${conversionResult.error}` };
