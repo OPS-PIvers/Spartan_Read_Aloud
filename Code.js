@@ -12,6 +12,24 @@
  * @param {string} input - Raw input string containing email addresses
  * @returns {string} - Comma-separated, deduplicated, normalized email list
  */
+
+/**
+ * Retrieves a file from Drive, using a local cache if provided to avoid redundant API calls.
+ * @param {string} fileId - The ID of the file to retrieve.
+ * @param {Object} [cache] - Optional cache object { fileId: File }.
+ * @returns {GoogleAppsScript.Drive.File} The Drive file object.
+ */
+function getFileOrCache(fileId, cache) {
+  if (cache && cache[fileId]) {
+    return cache[fileId];
+  }
+  const file = DriveApp.getFileById(fileId);
+  if (cache) {
+    cache[fileId] = file;
+  }
+  return file;
+}
+
 function parseStudentEmails(input) {
   if (!input || typeof input !== 'string') {
     return '';
@@ -276,13 +294,7 @@ function createBatchJobForFile(rowIndex, rowData) {
   const fileId = getFileIdFromUrl(fileUrl);
   if (!fileId) return null;
 
-  let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+  const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
   const fileName = file.getName();
 
   // Use extractTextFromFile for multi-file type support (PDFs, Docs, Word)
@@ -550,13 +562,7 @@ function checkGeminiBatchJobStatus(jobName) {
 function processBatchJobResults(rowIndex, rowData, jobStatus) {
   const fileUrl = rowData[CONSTANTS.COL.PDF_URL];
   const fileId = getFileIdFromUrl(fileUrl);
-  let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+  const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
   const fileName = file.getName();
 
   // Remove any file extension for subfolder name
@@ -1068,7 +1074,8 @@ function step1_AnalyzePdfsAndCountChunks() {
         Logger.log(`Invalid Drive URL in row ${i + 1}. Skipping.`);
         continue;
       }
-      const fileName = DriveApp.getFileById(fileId).getName();
+      const file = DriveApp.getFileById(fileId);
+      const fileName = file.getName();
       Logger.log(`-> Analyzing '${fileName}'...`);
 
       const textChunks = extractTextFromFile(file);
@@ -1119,13 +1126,7 @@ function step2_GenerateMissingAudioAndFinalize() {
       const fileId = getFileIdFromUrl(pdfUrl);
       if (!fileId) continue;
 
-      let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+      const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
       const fileName = file.getName(); 
       
       const baseName = fileName.replace(/\.pdf$/i, '').trim();
@@ -2571,13 +2572,7 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
       try {
         const fileId = getFileIdFromUrl(rowData[CONSTANTS.COL.PDF_URL]);
         if (fileId) {
-          let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+          const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
           let newName = data.assessmentTitle;
           // Maintain extension if it's a PDF
           if (file.getMimeType() === MimeType.PDF && !newName.toLowerCase().endsWith('.pdf')) {
@@ -2912,13 +2907,7 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     // Rename file in Drive if title provided
     if (metadata.assessmentTitle) {
       try {
-        let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+        const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
         // Ensure it keeps its extension if it's a PDF
         let newName = metadata.assessmentTitle;
         if (file.getMimeType() === MimeType.PDF && !newName.toLowerCase().endsWith('.pdf')) {
@@ -2998,6 +2987,7 @@ function processNewAssessment(fileUrl) {
       }
 
       // Step 1: Extract text and count chunks
+      const file = DriveApp.getFileById(fileId);
       const textChunks = extractTextFromFile(file);
       if (textChunks && textChunks.length > 0) {
         sheet.getRange(i + 1, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(textChunks.length);
@@ -3114,13 +3104,7 @@ function reprocessAssessment(sessionToken, rowIndex) {
     // Force regeneration: Delete existing audio folder
     try {
       const fileId = getFileIdFromUrl(pdfUrl);
-      let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+      const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
       const fileName = file.getName();
       // Remove extension to get folder name
       // Matches logic in step2_GenerateMissingAudioAndFinalize
@@ -3237,13 +3221,7 @@ function getLargeDataFromCell(cellValue) {
     const fileId = cellValue.replace("DRIVE_FILE_ID:", "");
     Logger.log(`[DATA_LOAD] Fetching content from Drive file: ${fileId}`);
     try {
-      let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+      const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
       return file.getBlob().getDataAsString();
     } catch (e) {
       Logger.log(`[DATA_LOAD] ERROR: Failed to fetch from Drive (${fileId}): ${e.toString()}`);
@@ -3434,13 +3412,7 @@ function getAudioDataAsBase64(sessionToken, fileId) {
     // For staff roles, allow access to any audio file
     if (CONSTANTS.STAFF_ROLES.includes(tokenData.role)) {
       Logger.log(`Staff user ${tokenData.email} accessing audio file ${fileId}`);
-      let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+      const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
       const blob = file.getBlob();
       return Utilities.base64Encode(blob.getBytes());
     }
@@ -3480,13 +3452,7 @@ function getAudioDataAsBase64(sessionToken, fileId) {
     }
 
     // Access granted
-    let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+    const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
     const blob = file.getBlob();
     return Utilities.base64Encode(blob.getBytes());
 
@@ -3568,13 +3534,7 @@ function getBulkAudioData(sessionToken, fileIds) {
     for (let i = 0; i < fileIds.length; i++) {
       const fileId = fileIds[i];
       try {
-        let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+        const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
         const blob = file.getBlob();
         const base64Data = Utilities.base64Encode(blob.getBytes());
 
@@ -3784,13 +3744,7 @@ function getStudentAssessmentsForEmail(email) {
         try {
           const fileId = getFileIdFromUrl(pdfUrl);
           if (fileId) {
-            let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+            const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
             const fileName = file.getName();
 
             matchingAssessments.push({
@@ -3880,13 +3834,7 @@ function getAssessmentPdf(email, password, assessmentUrl) {
           const fileId = getFileIdFromUrl(pdfUrl);
           if (!fileId) return { error: "Invalid Google Drive URL in sheet." };
 
-          let file;
-      if (fileCache[fileId]) {
-        file = fileCache[fileId];
-      } else {
-        file = DriveApp.getFileById(fileId);
-        fileCache[fileId] = file;
-      }
+          const file = getFileOrCache(fileId, (typeof fileCache !== 'undefined') ? fileCache : null);
           const mimeType = file.getMimeType();
           const fileName = file.getName();
           const audioChunks = (audioDataJson && audioDataJson.trim()) ? JSON.parse(audioDataJson) : [];
