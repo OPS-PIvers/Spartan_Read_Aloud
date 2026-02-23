@@ -575,13 +575,14 @@
       display: flex;
       justify-content: flex-end;
       gap: 4px;
-      min-width: 140px;
+      min-width: 180px;
       transition: opacity 0.2s;
     }
     .table tr .action-group { opacity: 1; }
 
     .action-btn {
       width: 32px;
+      flex-shrink: 0;
       height: 32px;
       border-radius: 6px;
       border: none;
@@ -963,7 +964,7 @@
               <th style="width: 6%; text-align:center;" class="col-hide-md">Read Aloud</th>
               <th id="th-submissions" style="width: 6%; text-align:center; display: none;" class="col-hide-md">Submissions</th>
               <th style="width: 27%;" class="col-hide-sm">Students</th>
-              <th style="width: 10%; text-align:right; min-width: 130px;">Actions</th>
+              <th style="width: 10%; text-align:right; min-width: 180px;">Actions</th>
             </tr>
           </thead>
           <tbody id="table-body">
@@ -1357,7 +1358,7 @@
               </div>
             </td>
             <td>
-              <div class="action-group" style="display: flex; justify-content: flex-end; gap: 4px;">
+              <div class="action-group">
                 <button onclick="openPreview('${item.pdfUrl}')" class="action-btn" title="Preview as Student">
                   <span class="material-icons" style="font-size:18px;">visibility</span>
                 </button>
