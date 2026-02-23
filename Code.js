@@ -2037,8 +2037,8 @@ function sanitizeHtml(html) {
   // Fixes "text b." and "text28. Which" issues
   sanitized = sanitized.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, (match, attrs, content) => {
     // 1. Split on answer options in the middle of text: "text b. more text"
-    // Matches a space, then an option marker like b. c. d. e.
-    let splitContent = content.replace(/(\s)([b-e][.)]\s+)/g, '</p><p$1>$2');
+    // Matches a space, then an option marker like a. b. c. d. e.
+    let splitContent = content.replace(/(\s)([a-e][.)]\s+)/g, '</p><p$1>$2');
     
     // 2. Split on question numbers merged with text: "text28. Which" or "text 28. Which"
     // Matches text followed by optional space, then a number and period/parenthesis
@@ -2150,8 +2150,9 @@ function parseHtmlToChunks(html) {
     // 1. Question Start: "1.", "1)", "Q1", "(1)"
     const isQuestionStart = /^(?:\(?\d+|Q\d+)[.)\]]/.test(block.text);
     
-    // 2. Answer Option: "a.", "b.", "A)", "(a)"
-    const isAnswerOption = /^(?:\(?[a-zA-Z][.)]|[a-zA-Z]\.)(?:\s|$)/.test(block.text);
+    // 2. Answer Option: "a.", "b.", "A)", "(a)", "A. ", etc.
+    // Improved regex: handles optional leading space, optional parentheses, single letter, period or closing paren, and trailing space or end of string
+    const isAnswerOption = /^\s*\(?[a-zA-Z][.)]\s*(?:\s|$)/.test(block.text);
     
     // 3. Header
     const isHeader = /^h[1-6]/.test(block.tag);
