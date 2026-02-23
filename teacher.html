@@ -481,25 +481,19 @@
     }
     .email-chips-container:hover { border-color: var(--gray-400); }
     .email-chips-container:focus-within { border-color: var(--primary-blue); box-shadow: 0 0 0 2px rgba(45, 63, 137, 0.1); }
-    /* Specific styles for instructor chips container to prevent wrapping */
+    /* Specific styles for instructor chips container to allow wrapping */
     .email-chips-container.instructor-chips-container {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      overflow-y: hidden;
-      white-space: nowrap;
+      flex-wrap: wrap;
+      overflow-x: hidden;
+      overflow-y: visible;
       padding-bottom: 2px;
       align-items: center;
       min-height: 36px;
+      max-width: 100%;
     }
     .email-chips-container.instructor-chips-container .email-chip {
-      flex-shrink: 0;
-    }
-    .email-chips-container.instructor-chips-container::-webkit-scrollbar {
-      height: 4px;
-    }
-    .email-chips-container.instructor-chips-container::-webkit-scrollbar-thumb {
-      background: var(--gray-300);
-      border-radius: 4px;
+      flex-shrink: 1;
+      margin-bottom: 4px;
     }
 
     /* Individual email chip */
@@ -872,9 +866,9 @@
             <input type="text" id="meta-title" class="form-control" placeholder="e.g. Unit 1 Test">
           </div>
           <div class="input-group">
-                      <label class="input-label">Instructor Email(s)</label>
-                      <div id="meta-instructor-container" class="email-chips-container instructor-chips-container" data-row="new" onclick="focusEmailInput(this)" style="background: white; border: 1px solid var(--gray-300); padding: 6px 10px; border-radius: 4px;">
-                        <input type="text" id="meta-instructor-input" class="email-chips-input" placeholder="Add email..."                onkeydown="handleInstructorInput(event, 'new')"
+                                <label class="input-label">Instructor Email(s)</label>
+                                <div id="meta-instructor-container" class="email-chips-container instructor-chips-container" data-row="new" onclick="focusEmailInput(this)" style="background: white; border: 1px solid var(--gray-300); padding: 6px 10px; border-radius: 4px; max-width: 300px;">
+                                  <input type="text" id="meta-instructor-input" class="email-chips-input" placeholder="Add email..."                onkeydown="handleInstructorInput(event, 'new')"
                 onpaste="handleInstructorPaste(event, 'new')"
                 onblur="addInstructorChip(this, 'new')">
             </div>
@@ -1191,13 +1185,49 @@
     }
 
     function openPreview(assessmentUrl = null) {
+      if (!assessmentUrl) {
+        navigateToStudentPreview();
+        return;
+      }
+
+      showModal({
+        title: 'Preview Options',
+        body: '<div style="padding: 10px 0;"><p style="margin-bottom: 20px; color: var(--gray-700);">Select how you would like to preview this assessment:</p></div>',
+        buttons: [
+          { 
+            text: 'View PDF Only', 
+            class: 'btn-secondary', 
+            onclick: () => window.open(assessmentUrl, '_blank') 
+          },
+          { 
+            text: 'Preview as Student', 
+            class: 'btn-primary', 
+            onclick: () => navigateToStudentPreview(assessmentUrl) 
+          }
+        ]
+      });
+    }
+
+    function navigateToStudentPreview(assessmentUrl = null) {
+      // Show loading indicator
+      const loader = document.getElementById('page-loader');
+      if (loader) {
+        const title = loader.querySelector('h3');
+        if (title) title.textContent = 'Loading Student View...';
+        loader.style.display = 'flex';
+      }
+
       let url = window.scriptUrl + '?preview=true';
       if (assessmentUrl) url += '&assessmentUrl=' + encodeURIComponent(assessmentUrl);
-      if (window.top) {
-        window.top.location.href = url;
-      } else {
-        window.location.href = url;
-      }
+      
+      // Small delay to allow UI to render the loader before the browser navigates
+      setTimeout(() => {
+        if (window.top) {
+          window.top.location.href = url;
+        } else {
+          window.location.href = url;
+        }
+      }, 50);
     }
 
     // --- DATA HANDLING ---
@@ -1309,7 +1339,7 @@
                 </button>
               </div>
               <div style="font-size: 10px; color: var(--gray-500); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Instructors</div>
-              <div class="email-chips-container instructor-chips-container" data-row="${item.rowIndex}" onclick="focusEmailInput(this)" >
+              <div class="email-chips-container instructor-chips-container" data-row="${item.rowIndex}" onclick="focusEmailInput(this)" style="max-width: 300px;">
                 ${(item.instructor ? item.instructor.split(/[,\/]/).map(n => n.trim()).filter(n => n) : []).map(name => `
                   <div class="email-chip" style="background: var(--gray-100); color: var(--gray-700);">
                     <span>${escapeHtml(name)}</span>

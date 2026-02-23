@@ -38,7 +38,8 @@ const CONSTANTS = {
     ACCESS_EXPIRES: 13,
     SUBMISSION_ENABLED: 14,
     SUBMISSION_TIMESTAMPS: 15, // JSON object: { studentEmail: timestamp }
-    SUBMISSION_DELIVERY_MODE: 16 // 'email' (default) or 'bulk'
+    SUBMISSION_DELIVERY_MODE: 16, // 'email' (default) or 'bulk'
+    ASSESSMENT_HTML: 17
   },
 
   // --- Submissions Sheet Column Mapping (0-based) ---

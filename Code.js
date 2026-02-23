@@ -1063,7 +1063,9 @@ function step1_AnalyzePdfsAndCountChunks() {
       if (textChunks && textChunks.length > 0) {
         sheet.getRange(i + 1, CONSTANTS.COL.CHUNK_COUNT + 1).setValue(textChunks.length);
         sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(false);
-        Logger.log(`--> Found ${textChunks.length} chunks. Updated sheet.`);
+        // Clear cached HTML to force regeneration if chunking changed
+        setLargeDataInCell(sheet.getRange(i + 1, CONSTANTS.COL.ASSESSMENT_HTML + 1), '');
+        Logger.log(`--> Found ${textChunks.length} chunks. Updated sheet and cleared HTML cache.`);
       } else {
         Logger.log(`--> No text chunks found for '${fileName}'.`);
       }
@@ -1158,6 +1160,17 @@ function step2_GenerateMissingAudioAndFinalize() {
       
       if (allChunksProcessed && audioFileObjects.length === totalChunks) {
         Logger.log(`--> All ${totalChunks} audio chunks accounted for. Finalizing...`);
+        
+        // Generate and cache HTML for fast student loading
+        Logger.log(`--> Generating and caching HTML for '${fileName}'...`);
+        const conversionResult = convertFileToHtml(fileId);
+        if (!conversionResult.error) {
+          const sanitizedHtml = sanitizeHtml(conversionResult.html);
+          setLargeDataInCell(sheet.getRange(i + 1, CONSTANTS.COL.ASSESSMENT_HTML + 1), sanitizedHtml, fileName + "_html");
+        } else {
+          Logger.log(`--> WARNING: Failed to cache HTML: ${conversionResult.error}`);
+        }
+
         const audioDataForSheet = [];
         for(let j = 0; j < totalChunks; j++) {
            const chunkText = textChunks[j].text;
@@ -1178,7 +1191,8 @@ function step2_GenerateMissingAudioAndFinalize() {
         }
         setLargeDataInCell(sheet.getRange(i + 1, CONSTANTS.COL.AUDIO_JSON + 1), JSON.stringify(audioDataForSheet, null, 2), fileName);
         sheet.getRange(i + 1, CONSTANTS.COL.IS_COMPLETE + 1).setValue(true);
-        Logger.log(`--> Successfully created JSON and marked as complete.`);
+        sheet.getRange(i + 1, CONSTANTS.COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
+        Logger.log(`--> Successfully created JSON, cached HTML, and marked as complete.`);
       } else {
         Logger.log(`--> Process for '${fileName}' partially complete. Will resume on next run.`);
       }
@@ -2435,15 +2449,27 @@ function getAllAssessments(sessionToken) {
       Logger.log(`Teacher ${teacherName} has ${assessments.length} assessment(s)`);
     }
 
-    // NEW: Filter assessments for Sp.Ed. users (show assessments with their caseload students)
+    // NEW: Filter assessments for Sp.Ed. users (show assessments with their caseload students OR where they are the instructor)
     if (tokenData.role === CONSTANTS.ROLE_TOKEN_SPED) {
+      const teacherName = (tokenData.name || '').toLowerCase();
+      const teacherEmail = (tokenData.email || '').toLowerCase();
       const caseloadStudents = getStudentsByCaseManager(tokenData.email);
-      Logger.log(`Filtering assessments for Sp.Ed. (${tokenData.email}) with ${caseloadStudents.length} caseload students`);
+      Logger.log(`Filtering assessments for Sp.Ed. (${tokenData.email})`);
 
       assessments = assessments.filter(assessment => {
-        const studentEmailsField = (assessment.studentEmails || '').toLowerCase();
+        // 1. Check if they are the instructor
+        const instructorField = (assessment.instructor || '').toLowerCase();
+        const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
+        const isInstructor = instructors.some(inst => 
+          teacherName.includes(inst) || 
+          teacherEmail.includes(inst) ||
+          inst.includes(teacherEmail)
+        );
         
-        // Check if any student in the assessment is on the Sp.Ed. caseload
+        if (isInstructor) return true;
+
+        // 2. Check if any student in the assessment is on the Sp.Ed. caseload
+        const studentEmailsField = (assessment.studentEmails || '').toLowerCase();
         return caseloadStudents.some(studentEmail => studentEmailsField.includes(studentEmail));
       });
 
@@ -2477,23 +2503,42 @@ function isAuthorizedForAssessment(tokenData, rowData) {
   }
   
   if (tokenData.role === CONSTANTS.ROLE_TOKEN_TEACHER) {
-    const teacherName = tokenData.name || tokenData.email;
     const instructorField = (rowData[CONSTANTS.COL.INSTRUCTOR] || '').toLowerCase();
-    const teacherLower = teacherName.toLowerCase();
+    const teacherName = (tokenData.name || '').toLowerCase();
+    const teacherEmail = (tokenData.email || '').toLowerCase();
     
-    // Split by comma or slash and check if any part is included in teacher's name/email
+    // Split by comma or slash
     const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
     
     if (instructors.length === 0) return false;
     
-    return instructors.some(name => teacherLower.includes(name));
+    // Authorized if instructor field contains teacher's name or email
+    return instructors.some(inst => 
+      (teacherName && inst.includes(teacherName)) || 
+      (teacherEmail && inst.includes(teacherEmail)) ||
+      (teacherName && teacherName.includes(inst))
+    );
   }
 
   if (tokenData.role === CONSTANTS.ROLE_TOKEN_SPED) {
+    // 1. Check if they are the instructor
+    const instructorField = (rowData[CONSTANTS.COL.INSTRUCTOR] || '').toLowerCase();
+    const teacherName = (tokenData.name || '').toLowerCase();
+    const teacherEmail = (tokenData.email || '').toLowerCase();
+    const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
+    
+    if (instructors.some(inst => 
+      (teacherName && inst.includes(teacherName)) || 
+      (teacherEmail && inst.includes(teacherEmail)) ||
+      (teacherName && teacherName.includes(inst))
+    )) {
+      return true;
+    }
+
+    // 2. Check caseload (original Sp.Ed. logic)
     const caseloadStudents = getStudentsByCaseManager(tokenData.email);
     const studentEmailsField = (rowData[CONSTANTS.COL.STUDENT_EMAILS] || '').toLowerCase();
     
-    // Sp.Ed. is authorized if any student in the assessment is on their caseload
     return caseloadStudents.some(studentEmail => studentEmailsField.includes(studentEmail));
   }
   
@@ -2886,7 +2931,7 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     }
 
     // Add new row with file URL and metadata
-    const newRow = new Array(17).fill(''); // 17 columns (0-16)
+    const newRow = new Array(18).fill(''); // 18 columns (0-17)
     newRow[CONSTANTS.COL.PDF_URL] = fileUrl;
     newRow[CONSTANTS.COL.CLASS_NAME] = metadata.className || '';
     newRow[CONSTANTS.COL.INSTRUCTOR] = metadata.instructor || '';
@@ -3141,6 +3186,18 @@ function getOrCreateSubfolder(parentFolder, subfolderName) {
  * @param {string} fileName Optional filename prefix for the Drive file
  */
 function setLargeDataInCell(range, content, fileName) {
+  // Check if current value is a Drive pointer and clean it up if so
+  const currentValue = range.getValue();
+  if (typeof currentValue === 'string' && currentValue.startsWith("DRIVE_FILE_ID:")) {
+    const oldFileId = currentValue.replace("DRIVE_FILE_ID:", "");
+    try {
+      DriveApp.getFileById(oldFileId).setTrashed(true);
+      Logger.log(`[DATA_OFFLOAD] Deleted old Drive file: ${oldFileId}`);
+    } catch (e) {
+      Logger.log(`[DATA_OFFLOAD] Warning: Could not delete old file ${oldFileId}: ${e.toString()}`);
+    }
+  }
+
   if (!content) {
     range.setValue('');
     return;
@@ -3266,11 +3323,26 @@ function doGet(e) {
  * @returns {Object|null} User object or null if not found.
  */
 function getUserByEmail(email) {
+  if (!email) return null;
   const cleanEmail = email.toLowerCase().trim();
+  
+  // Try CacheService first
+  const cache = CacheService.getUserCache();
+  const cachedUser = cache.get('user_info_' + cleanEmail);
+  if (cachedUser) {
+    try {
+      return JSON.parse(cachedUser);
+    } catch (e) {
+      // If parsing fails, proceed to re-fetch
+    }
+  }
+
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
 
   // 1. Check Teachers sheet for staff members.
   const adminSheet = spreadsheet.getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
+  let userResult = null;
+
   if (adminSheet) {
     const adminData = adminSheet.getDataRange().getValues();
     for (let i = 1; i < adminData.length; i++) {
@@ -3287,7 +3359,7 @@ function getUserByEmail(email) {
           userType = CONSTANTS.ROLE_TOKEN_SPED;
         }
         
-        return {
+        userResult = {
           userType: userType,
           role: userType, // Use token role consistently for frontend logic
           displayName: teacherRole, // Keep display name separately if needed
@@ -3295,25 +3367,33 @@ function getUserByEmail(email) {
           lastName: row[1] ? row[1].toString().trim() : '',
           email: cleanEmail
         };
+        break;
       }
     }
   }
 
-  // 2. Check Assessment Database for students.
-  const studentSheet = spreadsheet.getSheetByName('Assessment Database');
-  if (studentSheet) {
-      const studentData = studentSheet.getDataRange().getValues();
-      for (let i = 1; i < studentData.length; i++) {
-          const studentEmailsRaw = studentData[i][CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
-          if (studentEmailsRaw.includes(cleanEmail)) {
-              // Found the user in at least one assessment, classify as student.
-              return { userType: CONSTANTS.ROLE_TOKEN_STUDENT, email: cleanEmail };
-          }
-      }
+  if (!userResult) {
+    // 2. Check Assessment Database for students.
+    const studentSheet = spreadsheet.getSheetByName('Assessment Database');
+    if (studentSheet) {
+        const studentData = studentSheet.getDataRange().getValues();
+        for (let i = 1; i < studentData.length; i++) {
+            const studentEmailsRaw = studentData[i][CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
+            if (studentEmailsRaw.includes(cleanEmail)) {
+                // Found the user in at least one assessment, classify as student.
+                userResult = { userType: CONSTANTS.ROLE_TOKEN_STUDENT, email: cleanEmail };
+                break;
+            }
+        }
+    }
   }
 
-  // 3. User not found in any list.
-  return null;
+  // Cache the result for 30 minutes (1800 seconds) if found
+  if (userResult) {
+    cache.put('user_info_' + cleanEmail, JSON.stringify(userResult), 1800);
+  }
+
+  return userResult;
 }
 
 /**
@@ -3323,6 +3403,20 @@ function getUserByEmail(email) {
  * @returns {string[]} Array of student emails
  */
 function getStudentsByCaseManager(caseManagerEmail) {
+  if (!caseManagerEmail) return [];
+  const cleanCMEmail = caseManagerEmail.toLowerCase().trim();
+  
+  // Try CacheService
+  const cache = CacheService.getUserCache();
+  const cachedStudents = cache.get('caseload_' + cleanCMEmail);
+  if (cachedStudents) {
+    try {
+      return JSON.parse(cachedStudents);
+    } catch (e) {
+      // Proceed to fetch
+    }
+  }
+
   try {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const directorySheet = spreadsheet.getSheetByName('Student Directory');
@@ -3333,7 +3427,6 @@ function getStudentsByCaseManager(caseManagerEmail) {
 
     const data = directorySheet.getDataRange().getValues();
     const students = [];
-    const cleanCMEmail = caseManagerEmail.toLowerCase().trim();
 
     // Directory Structure: A) First, B) Last, C) Student Email, D) Case Manager Email
     for (let i = 1; i < data.length; i++) {
@@ -3346,6 +3439,8 @@ function getStudentsByCaseManager(caseManagerEmail) {
       }
     }
 
+    // Cache for 1 hour (3600 seconds)
+    cache.put('caseload_' + cleanCMEmail, JSON.stringify(students), 3600);
     return students;
   } catch (e) {
     Logger.log(`Error in getStudentsByCaseManager: ${e.toString()}`);
@@ -3448,35 +3543,42 @@ function getBulkAudioData(sessionToken, fileIds) {
 
     // For students, validate all fileIds belong to their assessment
     if (tokenData.role === CONSTANTS.ROLE_TOKEN_STUDENT) {
-        const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
-        if (!sheet) {
-          return {
-            success: false,
-            error: 'Assessment Database not found.'
-          };
-        }
-
-        const data = sheet.getDataRange().getValues();
         const assessmentUrl = tokenData.url;
+        const cache = CacheService.getUserCache();
+        // Use hash of URL for a safe and unique cache key
+        const urlHash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, assessmentUrl));
+        const cacheKey = 'audio_ids_' + urlHash;
         let audioFileIds = [];
+        
+        const cachedIds = cache.get(cacheKey);
+        if (cachedIds) {
+          audioFileIds = JSON.parse(cachedIds);
+        } else {
+          const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+          if (!sheet) {
+            return {
+              success: false,
+              error: 'Assessment Database not found.'
+            };
+          }
 
-        for (let i = 1; i < data.length; i++) {
-            if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
-                const audioJson = getLargeDataFromCell(data[i][CONSTANTS.COL.AUDIO_JSON]);
-                if (audioJson) {
-                  try {
-                    const audioData = JSON.parse(audioJson);
-                    audioFileIds = audioData.map(chunk => getFileIdFromUrl(chunk.audioUrl)).filter(id => id);
-                    break;
-                  } catch (e) {
-                    Logger.log(`Error parsing audio JSON: ${e.toString()}`);
-                    return {
-                      success: false,
-                      error: 'Error loading audio data.'
-                    };
+          const data = sheet.getDataRange().getValues();
+          for (let i = 1; i < data.length; i++) {
+              if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
+                  const audioJson = getLargeDataFromCell(data[i][CONSTANTS.COL.AUDIO_JSON]);
+                  if (audioJson) {
+                    try {
+                      const audioData = JSON.parse(audioJson);
+                      audioFileIds = audioData.map(chunk => getFileIdFromUrl(chunk.audioUrl)).filter(id => id);
+                      // Cache for 30 minutes
+                      cache.put(cacheKey, JSON.stringify(audioFileIds), 1800);
+                      break;
+                    } catch (e) {
+                      Logger.log(`Error parsing audio JSON: ${e.toString()}`);
+                    }
                   }
-                }
-            }
+              }
+          }
         }
 
         const unauthorizedFiles = fileIds.filter(id => !audioFileIds.includes(id));
@@ -3586,6 +3688,20 @@ function generateSessionToken(email, assessmentUrlOrRole, expiryMinutes, name) {
  * @returns {Object|null} Token data if valid, null if invalid/expired
  */
 function validateSessionToken(token) {
+  if (!token) return null;
+
+  // Try CacheService first
+  const cache = CacheService.getUserCache();
+  const tokenHash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, token));
+  const cachedData = cache.get('session_valid_' + tokenHash);
+  if (cachedData) {
+    try {
+      return JSON.parse(cachedData);
+    } catch (e) {
+      // Proceed to full validation
+    }
+  }
+
   try {
     // Decode token
     const tokenString = Utilities.newBlob(Utilities.base64Decode(token)).getDataAsString();
@@ -3608,7 +3724,8 @@ function validateSessionToken(token) {
     // For staff tokens (admin/super_admin/teacher), skip assessment-specific validation
     if (CONSTANTS.STAFF_ROLES.includes(tokenData.role)) {
       Logger.log(`Valid staff token for ${tokenData.email} (role: ${tokenData.role})`);
-      return tokenData; // Staff tokens are valid if not expired and in PropertiesService
+      cache.put('session_valid_' + token, JSON.stringify(tokenData), 600); // Cache for 10 minutes
+      return tokenData;
     }
 
     // Additional check for student tokens: verify email still has access to this assessment
@@ -3618,6 +3735,7 @@ function validateSessionToken(token) {
     const data = sheet.getDataRange().getValues();
     const email = tokenData.email;
     const assessmentUrl = tokenData.url;
+    let hasAccess = false;
 
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
@@ -3626,18 +3744,21 @@ function validateSessionToken(token) {
 
       if (pdfUrl === assessmentUrl) {
         const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
-        if (!studentEmails.includes(email)) {
-          Logger.log(`Email ${email} no longer has access to ${assessmentUrl}`);
-          return null; // Email was removed from Column H
+        if (studentEmails.includes(email)) {
+          hasAccess = true;
+          break;
         }
-
-        // Valid token and still has access
-        return tokenData;
       }
     }
 
-    Logger.log('Assessment not found for token');
-    return null;
+    if (hasAccess) {
+      // Valid token and still has access
+      cache.put('session_valid_' + tokenHash, JSON.stringify(tokenData), 600); // Cache for 10 minutes
+      return tokenData;
+    } else {
+      Logger.log(`Email ${email} no longer has access to ${assessmentUrl}`);
+      return null;
+    }
 
   } catch (e) {
     Logger.log(`Token validation error: ${e.toString()}`);
@@ -3811,19 +3932,39 @@ function getAssessmentPdf(email, password, assessmentUrl) {
             generateSessionToken(cleanEmail, user.userType) : 
             generateSessionToken(cleanEmail, pdfUrl);
 
-          // Convert all files to HTML
-          Logger.log('→ Converting to HTML for native rendering');
-          const conversionResult = convertFileToHtml(fileId);
-          if (conversionResult.error) {
-            Logger.log(`✗ Conversion error: ${conversionResult.error}`);
-            return { error: `Could not load assessment: ${conversionResult.error}` };
+          // Get cached HTML if available, otherwise fall back to real-time conversion
+          let assessmentHtml = getLargeDataFromCell(row[CONSTANTS.COL.ASSESSMENT_HTML]);
+          const lastProcessed = row[CONSTANTS.COL.LAST_PROCESSED_TIME];
+          const fileLastUpdated = file.getLastUpdated();
+          
+          // Smart Refresh: If file was updated in Drive AFTER we last processed it, force re-conversion
+          let forceReconversion = false;
+          if (assessmentHtml && lastProcessed instanceof Date && fileLastUpdated > lastProcessed) {
+            Logger.log(`→ Smart Refresh: Drive file is newer than cache (${fileLastUpdated} > ${lastProcessed}). Forcing re-conversion.`);
+            forceReconversion = true;
+          }
+
+          if (!assessmentHtml || forceReconversion) {
+            Logger.log(forceReconversion ? '→ Re-converting HTML...' : '→ No cached HTML found. Converting in real-time...');
+            const conversionResult = convertFileToHtml(fileId);
+            if (conversionResult.error) {
+              Logger.log(`✗ Conversion error: ${conversionResult.error}`);
+              return { error: `Could not load assessment: ${conversionResult.error}` };
+            }
+            assessmentHtml = sanitizeHtml(conversionResult.html);
+            
+            // Update the cache and the last processed time
+            setLargeDataInCell(sheet.getRange(i + 1, CONSTANTS.COL.ASSESSMENT_HTML + 1), assessmentHtml, fileName + "_html");
+            sheet.getRange(i + 1, CONSTANTS.COL.LAST_PROCESSED_TIME + 1).setValue(new Date());
+          } else {
+            Logger.log('→ Using cached HTML from spreadsheet');
           }
 
           const submissionEnabled = CONSTANTS.SUBMISSION_FEATURE_ENABLED && row[CONSTANTS.COL.SUBMISSION_ENABLED] === true;
 
           return {
             fileType: "html",
-            assessmentHtml: sanitizeHtml(conversionResult.html),
+            assessmentHtml: assessmentHtml,
             fileName: fileName,
             audioChunks: audioChunks,
             sessionToken: sessionToken,

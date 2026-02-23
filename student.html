@@ -1412,16 +1412,49 @@ function onAssessmentLoadedForPreload(result, autoLoader = null) {
   };
 
   if (isReadAloudEnabled && serverChunks.length > 0) {
-    if (currentLoadingOverlay) currentLoadingOverlay.updateMessage('Loading audio...');
-    bulkPreloadAudioWithProgress((progress) => {
-      if (currentLoadingOverlay) currentLoadingOverlay.updateProgress(progress);
-    }, () => {
+    if (currentLoadingOverlay) currentLoadingOverlay.updateMessage('Preparing audio...');
+    // Optimization: Only preload the first 5 chunks to get the student started quickly.
+    // The rest will load in the background once the assessment is displayed.
+    preloadInitialChunks(5, () => {
       cleanupAndBegin();
     });
   } else {
     // Skip audio preloading
     cleanupAndBegin();
   }
+}
+
+/**
+ * Preloads a specific number of initial audio chunks to reduce initial wait time.
+ * @param {number} count Number of chunks to preload.
+ * @param {function} onComplete Callback when preloading is done (or fails).
+ */
+function preloadInitialChunks(count, onComplete) {
+  const initialChunks = serverChunks.slice(0, count);
+  const fileIds = initialChunks.map(c => getFileIdFromAudioUrl(c.audioUrl));
+  
+  if (fileIds.length === 0) {
+    onComplete();
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(result => {
+      if (result.success) {
+        result.results.forEach(item => {
+          if (item.success) {
+            audioCache.set(item.fileId, item.data);
+            chunksLoaded++;
+          }
+        });
+      }
+      onComplete();
+    })
+    .withFailureHandler((err) => {
+      console.error('Initial preload failed:', err);
+      onComplete();
+    })
+    .getBulkAudioData(sessionToken, fileIds);
 }
 
 function beginAssessment() {
