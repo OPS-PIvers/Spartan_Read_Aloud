@@ -1,58 +1,9 @@
-const fs = require('fs');
-
-// Mock Logger
-const Logger = {
+// Mock global Logger for GAS environment
+global.Logger = {
   log: (msg) => console.log('[Logger]', msg)
 };
 
-// Mock Utilities
-const Utilities = {
-  getUuid: () => 'mock-uuid',
-  base64Encode: (str) => Buffer.from(str).toString('base64'),
-  base64Decode: (str) => Buffer.from(str, 'base64'),
-  newBlob: (data) => ({ getDataAsString: () => data })
-};
-
-// Read Code.js
-let code = '';
-try {
-  code = fs.readFileSync('Code.js', 'utf8');
-} catch (e) {
-  console.error('Code.js not found. Make sure you are in the correct directory.');
-  process.exit(1);
-}
-
-// Extract parseHtmlToChunks function
-function extractFunction(source, funcName) {
-  const startMarker = `function ${funcName}`;
-  const startIndex = source.indexOf(startMarker);
-  if (startIndex === -1) throw new Error(`Function ${funcName} not found`);
-
-  let braceCount = 0;
-  let endIndex = -1;
-  let foundStart = false;
-
-  for (let i = startIndex; i < source.length; i++) {
-    if (source[i] === '{') {
-      braceCount++;
-      foundStart = true;
-    } else if (source[i] === '}') {
-      braceCount--;
-      if (foundStart && braceCount === 0) {
-        endIndex = i + 1;
-        break;
-      }
-    }
-  }
-
-  if (endIndex === -1) throw new Error(`Could not find end of function ${funcName}`);
-  return source.substring(startIndex, endIndex);
-}
-
-const parseHtmlToChunksSource = extractFunction(code, 'parseHtmlToChunks');
-
-// Eval the function in the current scope
-eval(parseHtmlToChunksSource);
+const { parseHtmlToChunks } = require('./TextProcessing.js');
 
 // --- Tests ---
 
@@ -76,10 +27,9 @@ function assertEqual(actual, expected, message) {
   }
 }
 
-console.log('--- Running Tests for parseHtmlToChunks ---');
+console.log('--- Running Tests for parseHtmlToChunks (Refactored) ---');
 
 // Test Case 1: Short Paragraphs (Should Merge)
-// Code merges short paragraphs (<150 chars) even if they end with a period.
 const html1 = `
   <p id="sra-block-1">First paragraph.</p>
   <p id="sra-block-2">Second paragraph.</p>
@@ -110,7 +60,6 @@ assertEqual(chunks3.length, 1, 'Should merge flowing text into 1 chunk');
 assertEqual(chunks3[0].text, 'This is a sentence that continues in the next paragraph.', 'Merged text match');
 
 // Test Case 4: Long Separate Thoughts (Should Split)
-// Needs > 150 chars to split
 const longText = 'This is a very long paragraph that should be treated as a complete thought because it ends with a period and is sufficiently long to warrant a separate chunk in the text-to-speech generation process. '.repeat(2);
 const html4 = `
   <p id="sra-block-9">${longText}</p>
