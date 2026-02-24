@@ -1284,8 +1284,8 @@ function initializePasswordlessStudentView(user, targetUrl) {
 }
 
 function onAssessmentsLoaded(result) {
-  if (result.error) {
-    onAssessmentLoadError(result.error);
+  if (!result || result.error) {
+    onAssessmentLoadError(result ? result.error : 'Failed to load assessments. Please refresh the page.');
     return;
   }
   availableAssessments = result.assessments;
@@ -1450,9 +1450,9 @@ function startAssessment(assessmentUrl, cardElement, password) {
 }
 
 function onAssessmentLoadedForPreload(result, autoLoader = null) {
-  if (result.error) {
+  if (!result || result.error) {
     if (autoLoader) autoLoader.remove();
-    onPdfLoadError(result.error);
+    onPdfLoadError(result ? result.error : 'Failed to load assessment. Please refresh the page.');
     return;
   }
 
