@@ -1257,8 +1257,8 @@
       document.getElementById('page-loader').style.display = 'none';
       document.getElementById('main-content').style.display = 'grid';
 
-      if (response.error) {
-        alert(response.error);
+      if (!response || response.error) {
+        alert(response ? response.error : 'Failed to load assessments. Please refresh the page.');
         return;
       }
 

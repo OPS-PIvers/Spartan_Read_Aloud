@@ -2412,7 +2412,7 @@ function getAllAssessments(sessionToken) {
         fileName: fileName,
         pdfUrl: pdfUrl,
         chunkCount: row[CONSTANTS.COL.CHUNK_COUNT] || 0,
-        audioJson: getLargeDataFromCell(row[CONSTANTS.COL.AUDIO_JSON]),
+        audioJson: row[CONSTANTS.COL.AUDIO_JSON] || '',
         isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
         className: row[CONSTANTS.COL.CLASS_NAME] || '',
         instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
