@@ -2412,7 +2412,7 @@ function getAllAssessments(sessionToken) {
         fileName: fileName,
         pdfUrl: pdfUrl,
         chunkCount: row[CONSTANTS.COL.CHUNK_COUNT] || 0,
-        audioJson: row[CONSTANTS.COL.AUDIO_JSON] || '',
+        hasAudio: !!row[CONSTANTS.COL.AUDIO_JSON],
         isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
         className: row[CONSTANTS.COL.CLASS_NAME] || '',
         instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
@@ -2421,7 +2421,7 @@ function getAllAssessments(sessionToken) {
         readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
         submissionEnabled: row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
         submissionDeliveryMode: row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] || 'email',
-        submissionTimestamps: row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS] || null,
+        hasSubmissions: !!row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS],
         accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? Utilities.formatDate(new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]), "America/Chicago", "yyyy-MM-dd'T'HH:mm") : ''
       });
     }
