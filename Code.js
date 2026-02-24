@@ -2386,7 +2386,13 @@ function getAllAssessments(sessionToken) {
       return { error: 'Assessment Database sheet not found.' };
     }
 
-    const data = sheet.getDataRange().getValues();
+    // Read only columns 0–16, explicitly excluding col 17 (ASSESSMENT_HTML).
+    // That column can hold large cached HTML strings (up to 45 KB each) which
+    // inflates GAS memory and causes google.script.run to return null even
+    // when the function itself succeeds.
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 1) return { success: true, assessments: [], userRole: tokenData.role };
+    const data = sheet.getRange(1, 1, lastRow, CONSTANTS.COL.ASSESSMENT_HTML).getValues();
     let assessments = [];
 
     // Skip header row
@@ -2412,16 +2418,16 @@ function getAllAssessments(sessionToken) {
         fileName: fileName,
         pdfUrl: pdfUrl,
         chunkCount: row[CONSTANTS.COL.CHUNK_COUNT] || 0,
-        audioJson: !!(row[CONSTANTS.COL.AUDIO_JSON]),
+        audioJson: getLargeDataFromCell(row[CONSTANTS.COL.AUDIO_JSON]),
         isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
-        className: row[CONSTANTS.COL.CLASS_NAME] ? row[CONSTANTS.COL.CLASS_NAME].toString() : '',
-        instructor: row[CONSTANTS.COL.INSTRUCTOR] ? row[CONSTANTS.COL.INSTRUCTOR].toString() : '',
-        password: row[CONSTANTS.COL.PASSWORD] ? row[CONSTANTS.COL.PASSWORD].toString() : '',
-        studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] ? row[CONSTANTS.COL.STUDENT_EMAILS].toString() : '',
+        className: row[CONSTANTS.COL.CLASS_NAME] || '',
+        instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
+        password: row[CONSTANTS.COL.PASSWORD] || '',
+        studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || '',
         readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
         submissionEnabled: row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
-        submissionDeliveryMode: row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] ? row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE].toString() : 'email',
-        submissionTimestamps: !!(row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS]),
+        submissionDeliveryMode: row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] || 'email',
+        submissionTimestamps: row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS] || null,
         accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? Utilities.formatDate(new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]), "America/Chicago", "yyyy-MM-dd'T'HH:mm") : ''
       });
     }
@@ -3781,7 +3787,9 @@ function getStudentAssessmentsForEmail(email) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
     if (!sheet) return { error: 'Backend Error: "Assessment Database" sheet not found.' };
 
-    const data = sheet.getDataRange().getValues();
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 1) return { success: true, assessments: [] };
+    const data = sheet.getRange(1, 1, lastRow, CONSTANTS.COL.ASSESSMENT_HTML).getValues();
     const cleanEmail = email.toLowerCase().trim();
     const matchingAssessments = [];
 
