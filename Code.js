@@ -2421,7 +2421,7 @@ function getAllAssessments(sessionToken) {
         readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
         submissionEnabled: row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
         submissionDeliveryMode: row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] || 'email',
-        hasSubmissions: !!row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS],
+        hasSubmissions: !!(row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS] && row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS].length > 2),
         accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? Utilities.formatDate(new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]), "America/Chicago", "yyyy-MM-dd'T'HH:mm") : ''
       });
     }
