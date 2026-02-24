@@ -1394,7 +1394,7 @@
                 <button class="action-btn save-btn" onclick="saveRow(${item.rowIndex})" title="Save">
                   <span class="material-icons" style="font-size:18px;">save</span>
                 </button>
-                ${item.submissionEnabled && item.submissionDeliveryMode === 'bulk' && item.submissionTimestamps ? `
+                ${canSeeSubmissions && item.submissionEnabled && item.submissionDeliveryMode === 'bulk' && item.hasSubmissions ? `
                 <button class="action-btn" onclick="downloadSubmissions('${item.pdfUrl}')" title="Download Submissions">
                   <span class="material-icons" style="font-size:18px; color: var(--primary-blue);">file_download</span>
                 </button>` : ''}
@@ -1662,7 +1662,7 @@
       if (checkbox.checked) {
         const item = assessmentList.find(a => a.rowIndex === rowIndex);
         // Check if it was previously disabled or has no audio but is marked complete
-        if (item && (item.readAloudEnabled === false || (item.isComplete && !item.audioJson))) {
+        if (item && (item.readAloudEnabled === false || (item.isComplete && !item.hasAudio))) {
           showModal({
             title: 'Action Required',
             body: `
