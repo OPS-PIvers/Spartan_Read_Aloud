@@ -1229,20 +1229,51 @@ function initializePasswordlessStudentView(user, targetUrl) {
   if (autoLoadAssessmentUrl) {
     currentAssessmentUrl = autoLoadAssessmentUrl;
     console.log('Auto-loading assessment:', autoLoadAssessmentUrl);
-    const loader = document.createElement('div');
-    loader.id = 'auto-load-overlay';
-    loader.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:white;display:flex;justify-content:center;align-items:center;z-index:2000;flex-direction:column;gap:10px;"><span class="material-icons animate-spin" style="font-size:40px;color:var(--primary-blue)">refresh</span><div>Preparing assessment...</div></div>';
-    document.body.appendChild(loader);
     
+    // Show initial loader immediately while we fetch the list
+    const initialLoader = document.createElement('div');
+    initialLoader.id = 'auto-load-overlay';
+    initialLoader.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:white;display:flex;justify-content:center;align-items:center;z-index:2000;flex-direction:column;gap:10px;"><span class="material-icons animate-spin" style="font-size:40px;color:var(--primary-blue)">refresh</span><div>Preparing assessment...</div></div>';
+    document.body.appendChild(initialLoader);
+
+    // First, fetch assessments to check if this specific one requires a password
     google.script.run
       .withSuccessHandler((result) => {
-        onAssessmentLoadedForPreload(result, loader);
+        if (result.success) {
+          availableAssessments = result.assessments;
+          
+          // Pre-render the selection grid so it's ready if they cancel or exit
+          showAssessmentSelection();
+          
+          const assessment = availableAssessments.find(a => a.assessmentUrl === autoLoadAssessmentUrl);
+          
+          if (assessment && assessment.requiresPassword) {
+            // Assessment exists and requires a password - prompt the user
+            initialLoader.remove();
+            loadSpecificAssessment(assessment, null);
+          } else {
+            // No password required or assessment not found in list (might be direct link by staff)
+            // Proceed with auto-load using the existing loader
+            google.script.run
+              .withSuccessHandler((pdfResult) => {
+                onAssessmentLoadedForPreload(pdfResult, initialLoader);
+              })
+              .withFailureHandler((error) => {
+                initialLoader.remove();
+                onPdfLoadError(error);
+              })
+              .getAssessmentPdf(storedEmail, "preview-bypass", autoLoadAssessmentUrl);
+          }
+        } else {
+          initialLoader.remove();
+          onAssessmentLoadError(result.error || 'Failed to fetch assessment list.');
+        }
       })
       .withFailureHandler((error) => {
-        loader.remove();
-        onPdfLoadError(error);
+        initialLoader.remove();
+        onAssessmentLoadError(error);
       })
-      .getAssessmentPdf(storedEmail, "preview-bypass", autoLoadAssessmentUrl);
+      .getStudentAssessmentsForEmail(storedEmail);
       
   } else {
     google.script.run
@@ -1277,7 +1308,7 @@ function showAssessmentSelection() {
   availableAssessments.forEach((assessment, index) => {
     const card = document.createElement('div');
     card.className = 'assessment-card';
-    card.onclick = () => loadSpecificAssessment(assessment.assessmentUrl, card);
+    card.onclick = () => loadSpecificAssessment(assessment, card);
 
     // New Card Design
     card.innerHTML = `
@@ -1306,7 +1337,25 @@ function showAssessmentSelection() {
   });
 }
 
-function loadSpecificAssessment(assessmentUrl, cardElement) {
+function loadSpecificAssessment(assessmentOrUrl, cardElement) {
+  let assessmentUrl, requiresPassword;
+  
+  if (typeof assessmentOrUrl === 'string') {
+    assessmentUrl = assessmentOrUrl;
+    // Try to find in availableAssessments to see if it requires a password
+    const found = (availableAssessments || []).find(a => a.assessmentUrl === assessmentUrl);
+    requiresPassword = found ? found.requiresPassword : true; // Default to true if not found in list
+  } else {
+    assessmentUrl = assessmentOrUrl.assessmentUrl;
+    requiresPassword = assessmentOrUrl.requiresPassword;
+  }
+
+  // If no password is required, bypass the modal and start immediately
+  if (!requiresPassword) {
+    startAssessment(assessmentUrl, cardElement, '');
+    return;
+  }
+
   showModal({
     title: 'Enter Password',
     body: `
@@ -1356,19 +1405,32 @@ function loadSpecificAssessment(assessmentUrl, cardElement) {
 function startAssessment(assessmentUrl, cardElement, password) {
   currentAssessmentUrl = assessmentUrl;
   currentLoadingCard = cardElement;
-  // Disable interaction
-  cardElement.style.opacity = '0.7';
-  cardElement.style.pointerEvents = 'none';
+  
+  let container = document.body;
+  let overlayClass = 'auto-load-overlay-styled';
+  let isFullscreen = true;
+
+  if (cardElement) {
+    // Disable interaction
+    cardElement.style.opacity = '0.7';
+    cardElement.style.pointerEvents = 'none';
+    container = cardElement;
+    overlayClass = 'assessment-card-loading-overlay';
+    isFullscreen = false;
+  }
   
   // Add loader overlay
   const overlay = document.createElement('div');
-  overlay.className = 'assessment-card-loading-overlay';
+  overlay.className = overlayClass;
+  if (isFullscreen) {
+    overlay.style = "position:fixed;top:0;left:0;right:0;bottom:0;background:white;display:flex;justify-content:center;align-items:center;z-index:2000;flex-direction:column;gap:10px;";
+  }
   overlay.innerHTML = `
     <span class="material-icons animate-spin" style="font-size:32px; color:var(--primary-blue)">refresh</span>
     <div class="progress-meter-container"><div class="progress-meter-fill"></div></div>
     <div id="overlay-msg" style="font-size:12px; margin-top:8px; color:var(--gray-500)">Fetching assessment...</div>
   `;
-  cardElement.appendChild(overlay);
+  container.appendChild(overlay);
   
   currentLoadingOverlay = {
       element: overlay,

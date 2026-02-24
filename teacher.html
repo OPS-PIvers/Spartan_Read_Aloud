@@ -877,7 +877,7 @@
           <!-- ROW 2 -->
           <div class="input-group">
             <label class="input-label">Student Password</label>
-            <input type="text" id="meta-password" class="form-control" placeholder="Required for access">
+            <input type="text" id="meta-password" class="form-control" placeholder="Optional - Leave blank for no password">
           </div>
           <div class="input-group">
             <label class="input-label">Access Expires (Optional)</label>
@@ -1357,8 +1357,7 @@
               <div style="display:flex; flex-direction:column; gap:6px;">
                 <div style="display:flex; align-items:center; gap:6px;">
                   <span class="material-icons" style="font-size:16px; color:var(--gray-500)">lock</span>
-                  <input class="table-edit-input" data-field="password" value="${escapeHtml(item.password)}" placeholder="Password">
-                </div>
+                                     <input class="table-edit-input" data-field="password" value="${escapeHtml(item.password)}" placeholder="No Password">                </div>
                 <div style="display:flex; align-items:center; gap:6px;">
                   <span class="material-icons" style="font-size:16px; color:var(--gray-500)">event_busy</span>
                   <input type="datetime-local" class="table-edit-input" style="font-size: 11px;" data-field="accessExpires" 

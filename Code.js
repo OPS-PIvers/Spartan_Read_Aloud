@@ -3841,6 +3841,7 @@ function getStudentAssessmentsForEmail(email) {
               assessmentUrl: pdfUrl,
               readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
               submissionEnabled: CONSTANTS.SUBMISSION_FEATURE_ENABLED && row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
+              requiresPassword: !!(row[CONSTANTS.COL.PASSWORD] && row[CONSTANTS.COL.PASSWORD].toString().trim()),
               rowIndex: i
             });
           }
@@ -3897,8 +3898,8 @@ function getAssessmentPdf(email, password, assessmentUrl) {
 
         // Verify this authenticated user's email is in the list for this assessment (or is staff)
         if (isStaff || studentEmails.includes(cleanEmail)) {
-          // NEW: Validate the provided password against the one in the sheet (skip for staff)
-          if (!isStaff && password !== sheetPassword) {
+          // NEW: Validate the provided password against the one in the sheet (skip for staff or if no password is set)
+          if (!isStaff && sheetPassword && password !== sheetPassword) {
             return { error: 'Incorrect password for this assessment.' };
           }
 
