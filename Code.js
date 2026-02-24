@@ -2412,16 +2412,16 @@ function getAllAssessments(sessionToken) {
         fileName: fileName,
         pdfUrl: pdfUrl,
         chunkCount: row[CONSTANTS.COL.CHUNK_COUNT] || 0,
-        audioJson: row[CONSTANTS.COL.AUDIO_JSON] || '',
+        audioJson: !!(row[CONSTANTS.COL.AUDIO_JSON]),
         isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
-        className: row[CONSTANTS.COL.CLASS_NAME] || '',
-        instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
-        password: row[CONSTANTS.COL.PASSWORD] || '',
-        studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || '',
+        className: row[CONSTANTS.COL.CLASS_NAME] ? row[CONSTANTS.COL.CLASS_NAME].toString() : '',
+        instructor: row[CONSTANTS.COL.INSTRUCTOR] ? row[CONSTANTS.COL.INSTRUCTOR].toString() : '',
+        password: row[CONSTANTS.COL.PASSWORD] ? row[CONSTANTS.COL.PASSWORD].toString() : '',
+        studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] ? row[CONSTANTS.COL.STUDENT_EMAILS].toString() : '',
         readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
         submissionEnabled: row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
-        submissionDeliveryMode: row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] || 'email',
-        submissionTimestamps: row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS] || null,
+        submissionDeliveryMode: row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] ? row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE].toString() : 'email',
+        submissionTimestamps: !!(row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS]),
         accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? Utilities.formatDate(new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]), "America/Chicago", "yyyy-MM-dd'T'HH:mm") : ''
       });
     }
