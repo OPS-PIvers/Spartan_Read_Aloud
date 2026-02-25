@@ -2611,6 +2611,9 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
       sheet.getRange(actualRow, CONSTANTS.COL.PASSWORD + 1).setValue(data.password);
     }
     if (data.studentEmails !== undefined) {
+      if (!data.studentEmails || data.studentEmails.toString().trim() === '') {
+        return { error: 'At least one student email is required.' };
+      }
       sheet.getRange(actualRow, CONSTANTS.COL.STUDENT_EMAILS + 1).setValue(parseStudentEmails(data.studentEmails));
     }
     if (data.readAloudEnabled !== undefined) {
@@ -2906,6 +2909,11 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     const fileId = getFileIdFromUrl(fileUrl);
     if (!fileId) {
       return { error: 'Invalid file URL.' };
+    }
+
+    // NEW: Validate student emails (now required)
+    if (!metadata.studentEmails || metadata.studentEmails.toString().trim() === '') {
+      return { error: 'At least one student email is required to process an assessment.' };
     }
 
     // Check if URL already exists

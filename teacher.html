@@ -884,7 +884,7 @@
             <input type="datetime-local" id="meta-expires" class="form-control">
           </div>
           <div class="input-group">
-            <label class="input-label">Student Emails (Paste list or comma separated)</label>
+            <label class="input-label">Student Emails (Paste list or comma separated) <span style="color: var(--primary-red);">*</span></label>
             <div id="meta-emails-container" class="email-chips-container" data-row="new" onclick="focusEmailInput(this)" style="background: white; border: 1px solid var(--gray-300); padding: 6px 10px; border-radius: 4px; min-height: 42px; max-height: 120px; overflow-y: auto;">
               <input type="text" id="meta-emails-input" class="email-chips-input" placeholder="Add email..."
                 onkeydown="handleEmailInput(event, 'new')"
@@ -957,7 +957,7 @@
               <th style="width: 18%;" class="col-hide-md">Access Control (Pass / Expiry)</th>
               <th style="width: 6%; text-align:center;" class="col-hide-md">Read Aloud</th>
               <th id="th-submissions" style="width: 6%; text-align:center; display: none;" class="col-hide-md">Submissions</th>
-              <th style="width: 27%;" class="col-hide-sm">Students</th>
+              <th style="width: 27%;" class="col-hide-sm">Students <span style="color: var(--primary-red);">*</span></th>
               <th style="width: 10%; text-align:right; min-width: 180px;">Actions</th>
             </tr>
           </thead>
@@ -1467,6 +1467,10 @@
       const emails = Array.from(emailContainer.querySelectorAll('.email-chip span:first-child'))
         .map(span => span.textContent.trim());
 
+      if (emails.length === 0) {
+        return showToast('At least one student email is required.', 'warning');
+      }
+
       const meta = {
         className: document.getElementById('meta-class').value.trim(),
         assessmentTitle: document.getElementById('meta-title').value.trim(),
@@ -1712,6 +1716,12 @@
         const emailContainer = row.querySelector('.email-chips-container:not(.instructor-chips-container)');
         const emails = Array.from(emailContainer.querySelectorAll('.email-chip span:first-child'))
           .map(span => span.textContent.trim());
+
+        if (emails.length === 0) {
+          showToast('At least one student email is required.', 'warning');
+          btn.innerHTML = originalIcon;
+          return;
+        }
 
         // Collect instructors from chips
         const instructorContainer = row.querySelector('.instructor-chips-container');
