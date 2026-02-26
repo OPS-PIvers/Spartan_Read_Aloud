@@ -974,9 +974,16 @@ function step0_addNewPdfs() {
   }
   const pdfFolder = pdfFolders.next();
 
-  // Get existing URLs to prevent duplicates
+  // Get existing IDs to prevent duplicates
   const data = sheet.getDataRange().getValues();
-  const existingUrls = new Set(data.map(row => row[CONSTANTS.COL.PDF_URL]));
+  const existingIds = new Set();
+  for (let i = 1; i < data.length; i++) {
+    const url = data[i][CONSTANTS.COL.PDF_URL];
+    if (url) {
+      const id = getFileIdFromUrl(url);
+      if (id) existingIds.add(id);
+    }
+  }
 
   let addedCount = 0;
   const pdfFolderId = pdfFolder.getId();
@@ -1003,13 +1010,15 @@ function step0_addNewPdfs() {
     for (let i = 0; i < searchResults.files.length; i++) {
       const file = searchResults.files[i];
       const fileUrl = file.webViewLink; // Use webViewLink for the web URL
+      const fileId = file.id;
       const mimeType = file.mimeType;
       const fileName = file.name;
 
-      if (!existingUrls.has(fileUrl)) {
+      if (!existingIds.has(fileId)) {
         sheet.appendRow([fileUrl]);
         Logger.log(`Added new file: ${fileName} (${mimeType})`);
         addedCount++;
+        existingIds.add(fileId); // Prevent adding same file twice in one run
       }
     }
   } else {
@@ -2218,6 +2227,7 @@ function parseHtmlToChunks(html) {
 
 
 function getFileIdFromUrl(url) {
+    if (!url) return null;
     // Try document URL format first: /d/FILE_ID/
     let match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (match) return match[1];
@@ -2225,6 +2235,20 @@ function getFileIdFromUrl(url) {
     // Try audio URL format: id=FILE_ID
     match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     return match ? match[1] : null;
+}
+
+/**
+ * Checks if two Drive URLs point to the same file.
+ * @param {string} url1 First URL
+ * @param {string} url2 Second URL
+ * @returns {boolean} True if they have the same ID
+ */
+function areUrlsSameFile(url1, url2) {
+  if (url1 === url2) return true;
+  if (!url1 || !url2) return false;
+  const id1 = getFileIdFromUrl(url1);
+  const id2 = getFileIdFromUrl(url2);
+  return id1 !== null && id2 !== null && id1 === id2;
 }
 
 /**
@@ -2911,15 +2935,10 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
       return { error: 'Invalid file URL.' };
     }
 
-    // NEW: Validate student emails (now required)
-    if (!metadata.studentEmails || metadata.studentEmails.toString().trim() === '') {
-      return { error: 'At least one student email is required to process an assessment.' };
-    }
-
-    // Check if URL already exists
+    // Check if file already exists in the database
     const data = sheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
-      if (data[i][CONSTANTS.COL.PDF_URL] === fileUrl) {
+      if (areUrlsSameFile(data[i][CONSTANTS.COL.PDF_URL], fileUrl)) {
         return { error: 'This file is already in the database.' };
       }
     }
@@ -2993,7 +3012,7 @@ function processNewAssessment(fileUrl) {
     const chunkCount = data[i][CONSTANTS.COL.CHUNK_COUNT];
     const processingStatus = data[i][CONSTANTS.COL.PROCESSING_STATUS];
 
-    if (data[i][CONSTANTS.COL.PDF_URL] === fileUrl && chunkCount === '' && !processingStatus) {
+    if (areUrlsSameFile(data[i][CONSTANTS.COL.PDF_URL], fileUrl) && chunkCount === '' && !processingStatus) {
       // Found the new row - analyze it
       const fileId = getFileIdFromUrl(fileUrl);
       if (!fileId) continue;
@@ -3499,7 +3518,7 @@ function getAudioDataAsBase64(sessionToken, fileId) {
 
     // Find the student's assessment and get authorized audio file IDs
     for (let i = 1; i < data.length; i++) {
-      if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
+      if (areUrlsSameFile(data[i][CONSTANTS.COL.PDF_URL], assessmentUrl)) {
         const audioJson = getLargeDataFromCell(data[i][CONSTANTS.COL.AUDIO_JSON]);
         if (audioJson) {
           try {
@@ -3573,7 +3592,7 @@ function getBulkAudioData(sessionToken, fileIds) {
 
           const data = sheet.getDataRange().getValues();
           for (let i = 1; i < data.length; i++) {
-              if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
+              if (areUrlsSameFile(data[i][CONSTANTS.COL.PDF_URL], assessmentUrl)) {
                   const audioJson = getLargeDataFromCell(data[i][CONSTANTS.COL.AUDIO_JSON]);
                   if (audioJson) {
                     try {
@@ -3751,7 +3770,7 @@ function validateSessionToken(token) {
       const pdfUrl = row[CONSTANTS.COL.PDF_URL];
       const studentEmailsRaw = row[CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
 
-      if (pdfUrl === assessmentUrl) {
+      if (areUrlsSameFile(pdfUrl, assessmentUrl)) {
         const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
         if (studentEmails.includes(email)) {
           hasAccess = true;
@@ -3892,7 +3911,7 @@ function getAssessmentPdf(email, password, assessmentUrl) {
       const pdfUrl = row[CONSTANTS.COL.PDF_URL];
 
       // Find the correct assessment row using the URL
-      if (pdfUrl === assessmentUrl) {
+      if (areUrlsSameFile(pdfUrl, assessmentUrl)) {
         const studentEmailsRaw = row[CONSTANTS.COL.STUDENT_EMAILS].toString().toLowerCase();
         const studentEmails = studentEmailsRaw.split(',').map(e => e.trim());
         const sheetPassword = row[CONSTANTS.COL.PASSWORD].toString().trim();
@@ -4094,7 +4113,7 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     }
 
     // Ensure student tokens are only used for their authorized assessment
-    if (tokenData.role === CONSTANTS.ROLE_TOKEN_STUDENT && tokenData.url !== assessmentUrl) {
+    if (tokenData.role === CONSTANTS.ROLE_TOKEN_STUDENT && !areUrlsSameFile(tokenData.url, assessmentUrl)) {
       return { error: 'Unauthorized for this assessment.' };
     }
 
@@ -4115,7 +4134,7 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     let submissionDeliveryMode = 'email';
 
     for (let i = 1; i < data.length; i++) {
-      if (data[i][CONSTANTS.COL.PDF_URL] === assessmentUrl) {
+      if (areUrlsSameFile(data[i][CONSTANTS.COL.PDF_URL], assessmentUrl)) {
         assessmentFound = true;
         assessmentRowIndex = i;
         // Verify submissions are enabled for this assessment
@@ -4366,7 +4385,7 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     
     // Start from row 1 (skip header)
     for (let i = 1; i < data.length; i++) {
-        if (data[i][1] === assessmentUrl) {
+        if (areUrlsSameFile(data[i][1], assessmentUrl)) {
             submissions.push({
                 timestamp: data[i][0],
                 studentName: data[i][4],

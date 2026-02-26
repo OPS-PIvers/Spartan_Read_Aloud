@@ -1468,7 +1468,9 @@
         .map(span => span.textContent.trim());
 
       if (emails.length === 0) {
-        return showToast('At least one student email is required.', 'warning');
+        if (!confirm('Warning: No student emails provided. If you are not providing student emails, you must ensure the case manager is added to the instructor field. Continue?')) {
+          return;
+        }
       }
 
       const meta = {

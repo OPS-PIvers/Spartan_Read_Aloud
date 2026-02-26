@@ -1117,6 +1117,23 @@
   </div>
 
 <script>
+// --- UTILITIES ---
+function getFileIdFromUrl(url) {
+    if (!url) return null;
+    let match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    return match ? match[1] : null;
+}
+
+function areUrlsSameFile(url1, url2) {
+  if (url1 === url2) return true;
+  if (!url1 || !url2) return false;
+  const id1 = getFileIdFromUrl(url1);
+  const id2 = getFileIdFromUrl(url2);
+  return id1 !== null && id2 !== null && id1 === id2;
+}
+
 // --- UI UTILITIES (Toast & Modal) ---
 function showToast(message, type = 'success') {
   const container = document.getElementById('toast-container');
@@ -1245,7 +1262,7 @@ function initializePasswordlessStudentView(user, targetUrl) {
           // Pre-render the selection grid so it's ready if they cancel or exit
           showAssessmentSelection();
           
-          const assessment = availableAssessments.find(a => a.assessmentUrl === autoLoadAssessmentUrl);
+          const assessment = availableAssessments.find(a => areUrlsSameFile(a.assessmentUrl, autoLoadAssessmentUrl));
           
           if (assessment && assessment.requiresPassword) {
             // Assessment exists and requires a password - prompt the user
@@ -1343,7 +1360,7 @@ function loadSpecificAssessment(assessmentOrUrl, cardElement) {
   if (typeof assessmentOrUrl === 'string') {
     assessmentUrl = assessmentOrUrl;
     // Try to find in availableAssessments to see if it requires a password
-    const found = (availableAssessments || []).find(a => a.assessmentUrl === assessmentUrl);
+    const found = (availableAssessments || []).find(a => areUrlsSameFile(a.assessmentUrl, assessmentUrl));
     requiresPassword = found ? found.requiresPassword : true; // Default to true if not found in list
   } else {
     assessmentUrl = assessmentOrUrl.assessmentUrl;
