@@ -1196,6 +1196,132 @@ function closeModal() {
   document.getElementById('custom-modal').style.display = 'none';
 }
 
+/**
+ * Saves current student answers to localStorage to prevent data loss.
+ */
+function saveDraftAnswers() {
+  if (!currentAssessmentUrl || !storedEmail) return;
+  
+  const draftKey = 'draft_' + btoa(storedEmail + '_' + currentAssessmentUrl);
+  const draftData = {
+    responses: submissionFields.map(f => ({
+      chunkIndex: f.chunkIndex,
+      answer: f.answer
+    })),
+    timestamp: Date.now()
+  };
+  
+  localStorage.setItem(draftKey, JSON.stringify(draftData));
+  console.log('Draft answers saved to localStorage');
+}
+
+/**
+ * Loads draft answers from localStorage if they exist.
+ */
+function loadDraftAnswers() {
+  if (!currentAssessmentUrl || !storedEmail) return;
+  
+  const draftKey = 'draft_' + btoa(storedEmail + '_' + currentAssessmentUrl);
+  const saved = localStorage.getItem(draftKey);
+  
+  if (!saved) return;
+  
+  try {
+    const draftData = JSON.parse(saved);
+    // Only load if draft is less than 24 hours old
+    if (Date.now() - draftData.timestamp > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(draftKey);
+      return;
+    }
+    
+    console.log('Found draft answers, restoring...');
+    
+    draftData.responses.forEach(draft => {
+      const fieldIdx = submissionFields.findIndex(f => f.chunkIndex === draft.chunkIndex);
+      if (fieldIdx !== -1) {
+        submissionFields[fieldIdx].answer = draft.answer;
+        
+        // Update UI
+        const chunkIdx = draft.chunkIndex;
+        if (submissionFields[fieldIdx].questionType === 'mc') {
+          const radio = document.querySelector(`.mc-option-label[data-chunk="${chunkIdx}"][data-option="${draft.answer}"] input`);
+          if (radio) {
+            radio.checked = true;
+            radio.closest('.mc-option-label').classList.add('selected');
+          }
+        } else {
+          const textarea = document.querySelector(`.sidebar-text-input[data-chunk="${chunkIdx}"]`);
+          if (textarea) textarea.value = draft.answer;
+        }
+      }
+    });
+    
+    updateAnswerCount();
+    showToast('Restored your previous answers.', 'success');
+  } catch (e) {
+    console.error('Error loading draft answers:', e);
+  }
+}
+
+/**
+ * Clears draft answers after successful submission.
+ */
+function clearDraftAnswers() {
+  if (!currentAssessmentUrl || !storedEmail) return;
+  const draftKey = 'draft_' + btoa(storedEmail + '_' + currentAssessmentUrl);
+  localStorage.removeItem(draftKey);
+}
+
+/**
+ * Periodically checks the session token for upcoming expiry and warns the user.
+ */
+function startSessionExpiryTimer() {
+  if (!sessionToken) return;
+
+  try {
+    // Decode the base64 token (it's JSON)
+    // Using a more robust way to handle Unicode characters in base64
+    const jsonStr = decodeURIComponent(atob(sessionToken).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    const tokenData = JSON.parse(jsonStr);
+    
+    if (!tokenData.exp) return;
+    
+    const expiryTime = tokenData.exp;
+    const checkInterval = 60000; // Check every minute
+    
+    const timerId = setInterval(() => {
+      const now = Date.now();
+      const timeLeftMs = expiryTime - now;
+      
+      if (timeLeftMs <= 0) {
+        clearInterval(timerId);
+        showModal({
+          title: 'Session Expired',
+          body: '<p>Your session has expired for security. Please refresh the page to log in again.</p>',
+          buttons: [{ text: 'Refresh', class: 'btn-primary', onclick: () => window.location.reload() }]
+        });
+      } else if (timeLeftMs < 10 * 60 * 1000) { // Less than 10 minutes left
+        const minsLeft = Math.ceil(timeLeftMs / 60000);
+        showToast(`Warning: Your session will expire in ${minsLeft} minutes. Please submit your work soon.`, 'warning');
+        
+        // If less than 2 minutes, show a more prominent warning if not already shown
+        if (timeLeftMs < 2 * 60 * 1000 && !window.expiryWarningShown) {
+          window.expiryWarningShown = true;
+          showModal({
+            title: 'Session Expiring Soon',
+            body: `<p>Your session will expire in less than 2 minutes. Please submit your assessment now to avoid losing your work.</p>`,
+            buttons: [{ text: 'Got it', class: 'btn-primary' }]
+          });
+        }
+      }
+    }, checkInterval);
+  } catch (e) {
+    console.error('Error starting expiry timer:', e);
+  }
+}
+
 // --- CORE LOGIC ---
 
 // Global variables
@@ -1604,6 +1730,9 @@ function onAssessmentLoaded(result) {
     toolbarInner.style.justifyItems = 'center';
     toolbar.querySelector('.toolbar-tools').style.justifyContent = 'center';
   }
+
+  // Start the expiry timer
+  startSessionExpiryTimer();
 }
 
 function renderHtmlAssessment(htmlContent) {
@@ -2107,11 +2236,25 @@ let sidebarResizeHandlers = null; // Store event handlers for cleanup
  * Returns the extracted letters if MC, or null if free response.
  */
 function detectQuestionType(chunkText) {
-  // Look for patterns like "A.", "A )", "(a)", "B.", etc. globally
-  // This helps catch options even if they are on the same line
-  const mcPattern = /(?:^|\s|\()([a-eA-E])\s*[.)](?:\s+|$)/g;
+  // Refined MC Pattern:
+  // Requires the marker (A., a), etc) to be either at the start of the string
+  // or immediately preceded by a newline/significant whitespace to avoid 
+  // catching mid-sentence references like "(a) some text (b) more text".
+  const mcPattern = /(?:^|[\n\r])\s*\(?([a-eA-E])\s*[.)](?:\s+|$)/g;
   const matches = [...chunkText.matchAll(mcPattern)];
   
+  // Also check for horizontal layout: "A. [text]  B. [text]" 
+  // where there are at least two spaces before the next marker
+  if (matches.length < 2) {
+    const horizontalPattern = /\s{2,}\(?([b-eB-E])\s*[.)](?:\s+|$)/g;
+    const hMatches = [...chunkText.matchAll(horizontalPattern)];
+    if (hMatches.length > 0 && /^\s*\(?[aA]\s*[.)]/.test(chunkText)) {
+      // It starts with A and has other markers preceded by spaces
+      const allLetters = ['A', ...hMatches.map(m => m[1].toUpperCase())];
+      return [...new Set(allLetters)].sort().map(l => ({ letter: l }));
+    }
+  }
+
   if (matches.length >= 2) {
     // Extract unique letters and sort them
     const letters = [...new Set(matches.map(m => m[1].toUpperCase()))].sort();
@@ -2124,8 +2267,20 @@ function detectQuestionType(chunkText) {
  * Extracts a short question label from chunk text (e.g., "Question 3").
  */
 function getQuestionLabel(chunkText, index) {
-  const numMatch = chunkText.match(/^(\d+)[.)\]]/);
+  // 1. Check for standard numeric start: "1.", "1)", "(1)"
+  const numMatch = chunkText.match(/^\s*\(?(\d+)[.)\]]/);
   if (numMatch) return 'Question ' + numMatch[1];
+  
+  // 2. Check for Roman numerals: "I.", "ii)", "(III)"
+  const romanMatch = chunkText.match(/^\s*\(?([ivxIVX]+)[.)\]]/);
+  if (romanMatch) return 'Part ' + romanMatch[1].toUpperCase();
+
+  // 3. Check for Lettered parts (if not already MC): "A.", "b)"
+  // Only if it's the very start of the chunk and looks like a heading
+  const letterMatch = chunkText.match(/^\s*([A-E])[.)]\s+[A-Z]/);
+  if (letterMatch) return 'Part ' + letterMatch[1];
+
+  // 4. Default fallback
   return 'Part ' + (index + 1);
 }
 
@@ -2146,10 +2301,10 @@ function getQuestionPreview(chunkText) {
 const URL_PATTERN = /https?:\/\/[^\s]+|\bwww\.[^\s]+|\b(?:[a-zA-Z0-9-]+\.)+(?:com|org|net|edu|gov|io|co|us|uk|ca|au|de|fr|jp|mil)\b(?:\/[^\s]*)?/gi;
 
 /**
- * Strips URLs from text and returns cleaned text.
+ * Detects URLs in text.
  */
-function stripUrls(text) {
-  return text.replace(URL_PATTERN, '').replace(/[^\S\n]{2,}/g, ' ');
+function containsUrls(text) {
+  return URL_PATTERN.test(text);
 }
 
 /**
@@ -2160,8 +2315,25 @@ function buildSidebarFields() {
   container.innerHTML = '';
   submissionFields = [];
 
+  // Question markers regex: "1.", "1)", "(1)", "A.", "a)", "(a)", "I.", "i)"
+  const questionMarkerPattern = /^\s*(?:\(?\d+[.)\]]|\(?[a-eA-E][.)\]]|\(?[ivxIVX]+[.)\]])/;
+  
+  // Instruction/Metadata markers: "Directions:", "Instructions:", "Read:", "Note:", "Part 1:"
+  const instructionPattern = /^\s*(?:directions|instructions|read|note|part\s*\d+):/i;
+
   serverChunks.forEach((chunk, index) => {
     const mcOptions = detectQuestionType(chunk.text);
+    const hasQuestionMarker = questionMarkerPattern.test(chunk.text);
+    const isInstruction = instructionPattern.test(chunk.text);
+    
+    // SMART FILTER: Only create fields for chunks that look like questions
+    // Criteria: (detected as MC OR starts with a typical question marker) 
+    // AND NOT (looks like an instruction header)
+    if ((!mcOptions && !hasQuestionMarker) || isInstruction) {
+      console.log(`Skipping non-question chunk ${index}: ${chunk.text.substring(0, 30)}...`);
+      return;
+    }
+
     const questionLabel = getQuestionLabel(chunk.text, index);
     const preview = getQuestionPreview(chunk.text);
     const questionType = mcOptions ? 'mc' : 'text';
@@ -2205,52 +2377,59 @@ function buildSidebarFields() {
   container.querySelectorAll('.mc-option-label input[type="radio"]').forEach(radio => {
     radio.addEventListener('change', function() {
       const chunkIdx = parseInt(this.closest('.mc-option-label').dataset.chunk);
-      submissionFields[chunkIdx].answer = this.value;
+      const field = submissionFields.find(f => f.chunkIndex === chunkIdx);
+      if (field) field.answer = this.value;
+      
       // Update selected styling
       this.closest('.mc-options-grid').querySelectorAll('.mc-option-label').forEach(l => l.classList.remove('selected'));
       this.closest('.mc-option-label').classList.add('selected');
+      
       updateAnswerCount();
+      saveDraftAnswers(); // Auto-save
     });
   });
 
-  // Attach event listeners for text inputs with URL stripping
+  // Attach event listeners for text inputs with URL warning
   container.querySelectorAll('.sidebar-text-input').forEach(textarea => {
     const chunkIdx = parseInt(textarea.dataset.chunk);
 
     textarea.addEventListener('input', function() {
-      const original = this.value;
-      const cleaned = stripUrls(original);
-      if (cleaned !== original) {
-        this.value = cleaned;
-        const warn = document.getElementById('url-warn-' + chunkIdx);
-        if (warn) {
+      const hasUrl = containsUrls(this.value);
+      const warn = document.getElementById('url-warn-' + chunkIdx);
+      if (warn) {
+        if (hasUrl) {
+          warn.textContent = 'Note: Links are permitted but may be monitored.';
+          warn.style.color = 'var(--gray-500)';
           warn.classList.add('visible');
-          setTimeout(() => warn.classList.remove('visible'), 3000);
+        } else {
+          warn.classList.remove('visible');
         }
       }
-      submissionFields[chunkIdx].answer = this.value;
+      const field = submissionFields.find(f => f.chunkIndex === chunkIdx);
+      if (field) field.answer = this.value;
+      
       updateAnswerCount();
+      saveDraftAnswers(); // Auto-save
     });
 
-    // Block paste of HTML/rich text - only allow plain text
+    // Handle paste
     textarea.addEventListener('paste', function(e) {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
-      const cleaned = stripUrls(text);
-      if (cleaned !== text) {
+      // Allow paste but check for URLs after a short delay
+      setTimeout(() => {
+        const hasUrl = containsUrls(this.value);
         const warn = document.getElementById('url-warn-' + chunkIdx);
-        if (warn) {
+        if (warn && hasUrl) {
+          warn.textContent = 'Note: Links are permitted but may be monitored.';
+          warn.style.color = 'var(--gray-500)';
           warn.classList.add('visible');
-          setTimeout(() => warn.classList.remove('visible'), 3000);
         }
-      }
-      // Insert at cursor position
-      const start = this.selectionStart;
-      const end = this.selectionEnd;
-      this.value = this.value.substring(0, start) + cleaned + this.value.substring(end);
-      this.selectionStart = this.selectionEnd = start + cleaned.length;
-      submissionFields[chunkIdx].answer = this.value;
-      updateAnswerCount();
+        
+        const field = submissionFields.find(f => f.chunkIndex === chunkIdx);
+        if (field) field.answer = this.value;
+        
+        updateAnswerCount();
+        saveDraftAnswers();
+      }, 10);
     });
 
     // Block drag-and-drop of links
@@ -2300,6 +2479,10 @@ function initSubmissionSidebar() {
 
   // Build the answer fields
   buildSidebarFields();
+  
+  // Restore any draft answers
+  loadDraftAnswers();
+  
   updateAnswerCount();
   setupSidebarResize();
 
@@ -2465,6 +2648,9 @@ function doSubmit() {
         submitBtn.style.background = 'var(--success-green)';
         progress.textContent = 'Your responses have been submitted successfully.';
         showToast('Assessment submitted successfully!', 'success');
+        
+        // Clear local draft after successful submission
+        clearDraftAnswers();
 
         // Disable all input fields
         document.querySelectorAll('.sidebar-text-input').forEach(el => { el.disabled = true; });

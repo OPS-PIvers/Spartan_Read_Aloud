@@ -3705,8 +3705,44 @@ function generateSessionToken(email, assessmentUrlOrRole, expiryMinutes, name) {
   const props = PropertiesService.getUserProperties();
   props.setProperty('session_' + token, tokenString);
 
+  // Periodic cleanup of expired tokens to prevent UserProperties storage exhaustion (500KB limit)
+  // Run approximately 10% of the time to minimize overhead
+  if (Math.random() < 0.1) {
+    cleanupExpiredTokens();
+  }
+
   Logger.log(`Generated session token for ${email} (${tokenData.role}), expires: ${new Date(expiryTime)}`);
   return token;
+}
+
+/**
+ * Purges expired session tokens from UserProperties to free up storage.
+ */
+function cleanupExpiredTokens() {
+  const props = PropertiesService.getUserProperties();
+  const allProps = props.getProperties();
+  let deletedCount = 0;
+  const now = Date.now();
+
+  for (const key in allProps) {
+    if (key.startsWith('session_')) {
+      try {
+        const tokenData = JSON.parse(allProps[key]);
+        if (tokenData.exp && now > tokenData.exp) {
+          props.deleteProperty(key);
+          deletedCount++;
+        }
+      } catch (e) {
+        // If it's not valid JSON, it's likely corrupt or old, so delete it
+        props.deleteProperty(key);
+        deletedCount++;
+      }
+    }
+  }
+
+  if (deletedCount > 0) {
+    Logger.log(`[CLEANUP] Purged ${deletedCount} expired session tokens from UserProperties.`);
+  }
 }
 
 /**
@@ -3752,7 +3788,7 @@ function validateSessionToken(token) {
     // For staff tokens (admin/super_admin/teacher), skip assessment-specific validation
     if (CONSTANTS.STAFF_ROLES.includes(tokenData.role)) {
       Logger.log(`Valid staff token for ${tokenData.email} (role: ${tokenData.role})`);
-      cache.put('session_valid_' + token, JSON.stringify(tokenData), 600); // Cache for 10 minutes
+      cache.put('session_valid_' + tokenHash, JSON.stringify(tokenData), 600); // Cache for 10 minutes
       return tokenData;
     }
 
@@ -4105,7 +4141,11 @@ function getInstructorEmail(instructorName) {
  * @returns {Object} { success: true } or { error: "..." }
  */
 function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
+  const lock = LockService.getScriptLock();
   try {
+    // Wait for up to 30 seconds for the lock to handle high concurrency
+    lock.waitLock(30000);
+
     // Validate session
     const tokenData = validateSessionToken(sessionToken);
     if (!tokenData) {
@@ -4144,9 +4184,11 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
         
         submissionDeliveryMode = data[i][CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] || 'email';
 
-        // Check for duplicate submission
-        const submissionTimestampsJson = data[i][CONSTANTS.COL.SUBMISSION_TIMESTAMPS];
-        if (submissionTimestampsJson) {
+        // Check for duplicate submission using getLargeDataFromCell to handle Drive-offloaded pointers
+        const rawTimestamps = data[i][CONSTANTS.COL.SUBMISSION_TIMESTAMPS];
+        const submissionTimestampsJson = getLargeDataFromCell(rawTimestamps);
+        
+        if (submissionTimestampsJson && submissionTimestampsJson.trim()) {
           try {
             const submissionTimestamps = JSON.parse(submissionTimestampsJson);
             if (submissionTimestamps[studentEmail]) {
@@ -4194,32 +4236,66 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
       return { error: 'Cannot submit an empty assessment. Please answer at least one question.' };
     }
 
-    // Validate response indices against stored chunks to prevent manipulation
+    // Server-side validation: overwrite client-provided labels and types with stored metadata
+    // This prevents students from spoofing question labels or types
     for (let i = 0; i < responses.length; i++) {
       const response = responses[i];
       if (response.chunkIndex < 0 || response.chunkIndex >= storedChunks.length) {
         Logger.log('Warning: Invalid chunk index ' + response.chunkIndex + ' in submission from ' + studentEmail);
         return { error: 'Invalid response data. Please refresh and try again.' };
       }
+
+      const chunkMetadata = storedChunks[response.chunkIndex];
+      // Use the server-side searchWords as the label if not provided, or regenerate it
+      // Actually, buildSidebarFields uses getQuestionLabel(chunk.text, index)
+      // We should replicate that logic here for consistency
+      const numMatch = chunkMetadata.text.match(/^(\d+)[.)\]]/);
+      const serverLabel = numMatch ? 'Question ' + numMatch[1] : 'Part ' + (response.chunkIndex + 1);
+      
+      // Determine type based on the text (same as detectQuestionType in student.html)
+      // This is a duplicate of the logic, maybe should be a shared utility
+      const mcPattern = /(?:^|[\n\r])\s*\(?([a-eA-E])\s*[.)](?:\s+|$)/g;
+      const matches = [...chunkMetadata.text.matchAll(mcPattern)];
+      let serverType = (matches.length >= 2) ? 'mc' : 'text';
+
+      // Check for horizontal layout as well
+      if (serverType === 'text') {
+        const horizontalPattern = /\s{2,}\(?([b-eB-E])\s*[.)](?:\s+|$)/g;
+        const hMatches = [...chunkMetadata.text.matchAll(horizontalPattern)];
+        if (hMatches.length > 0 && /^\s*\(?[aA]\s*[.)]/.test(chunkMetadata.text)) {
+          serverType = 'mc';
+        }
+      }
+
+      response.questionLabel = serverLabel;
+      response.questionType = serverType;
     }
 
     // --- STEP 1: Save to Submissions Sheet (ALWAYS) ---
     try {
       Logger.log('[SUBMIT] Saving to Submissions sheet...');
       const submissionsSheet = getOrCreateSubmissionsSheet();
-      submissionsSheet.appendRow([
+      const responsesJson = JSON.stringify(responses);
+      const rowData = [
         new Date(),
         assessmentUrl,
         assessmentName,
         studentEmail,
         studentName,
-        JSON.stringify(responses)
-      ]);
+        '' // Placeholder for responses
+      ];
+      submissionsSheet.appendRow(rowData);
+      
+      // Use setLargeDataInCell for the responses JSON to handle potential 50k char limit
+      const lastRow = submissionsSheet.getLastRow();
+      const responsesRange = submissionsSheet.getRange(lastRow, CONSTANTS.COL_SUBMISSIONS.RESPONSES_JSON + 1);
+      setLargeDataInCell(responsesRange, responsesJson, `Submission_${assessmentName}_${studentName}`);
+      
     } catch (e) {
       Logger.log('[SUBMIT] Error saving to Submissions sheet: ' + e.toString());
       // For bulk mode, this is critical
       if (submissionDeliveryMode === 'bulk') {
-        return { error: 'Failed to save submission. Please try again.' };
+        throw e; // Rethrow to be caught by main catch block
       }
     }
 
@@ -4227,50 +4303,61 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
 
     // --- STEP 2: Emailing (CONDITIONAL) ---
     if (submissionDeliveryMode === 'email') {
-        // Build the response document as HTML
         Logger.log('[SUBMIT] Generating HTML content for PDF...');
         
-        let htmlBody = '<html><body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333;">';
-        htmlBody += '<div style="text-align: center; margin-bottom: 30px;">';
-        htmlBody += '<h1 style="color: #2d3f89; margin-bottom: 5px;">Assessment Submission</h1>';
-        htmlBody += '<p style="color: #666; font-size: 14px; margin-top: 0;">Spartan Assessment Portal</p>';
-        htmlBody += '</div>';
+        let htmlBody = '<html><head><style>';
+        htmlBody += 'body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }';
+        htmlBody += '.header { text-align: center; border-bottom: 2px solid #2d3f89; padding-bottom: 20px; margin-bottom: 30px; }';
+        htmlBody += '.header h1 { color: #2d3f89; margin: 0; font-size: 24px; }';
+        htmlBody += '.header p { color: #666; font-size: 14px; margin: 5px 0 0; }';
+        htmlBody += '.metadata { background: #f8f9fc; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #e1e4e8; }';
+        htmlBody += '.metadata-table { width: 100%; border-collapse: collapse; }';
+        htmlBody += '.metadata-table td { padding: 8px 0; vertical-align: top; border-bottom: 1px solid #edf0f2; }';
+        htmlBody += '.metadata-table td:first-child { width: 140px; font-weight: bold; color: #555; }';
+        htmlBody += '.responses-title { color: #2d3f89; font-size: 20px; border-bottom: 1px solid #e1e4e8; padding-bottom: 10px; margin: 40px 0 20px; }';
+        htmlBody += '.question-block { margin-bottom: 30px; page-break-inside: avoid; border-left: 3px solid #eaecf5; padding-left: 20px; }';
+        htmlBody += '.question-label { font-weight: bold; color: #2d3f89; margin-bottom: 10px; font-size: 16px; }';
+        htmlBody += '.answer-container { padding: 15px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; min-height: 40px; }';
+        htmlBody += '.answer-mc { background: #f5f7fa; border-left: 4px solid #2d3f89; font-weight: bold; font-size: 17px; }';
+        htmlBody += '.answer-text { white-space: pre-wrap; line-height: 1.6; font-size: 15px; }';
+        htmlBody += '.empty-answer { color: #999; font-style: italic; }';
+        htmlBody += '.footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 11px; }';
+        htmlBody += '</style></head><body>';
 
-        htmlBody += '<div style="background: #f8f9fc; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #e1e4e8;">';
-        htmlBody += '<table style="width: 100%; border-collapse: collapse;">';
-        htmlBody += '<tr><td style="padding: 5px 0; width: 120px;"><strong>Student:</strong></td><td>' + escapeHtmlBackend(studentName) + ' (' + escapeHtmlBackend(studentEmail) + ')</td></tr>';
-        htmlBody += '<tr><td style="padding: 5px 0;"><strong>Assessment:</strong></td><td>' + escapeHtmlBackend(assessmentName) + '</td></tr>';
-        if (className) htmlBody += '<tr><td style="padding: 5px 0;"><strong>Class:</strong></td><td>' + escapeHtmlBackend(className) + '</td></tr>';
-        if (instructorName) htmlBody += '<tr><td style="padding: 5px 0;"><strong>Instructor:</strong></td><td>' + escapeHtmlBackend(instructorName) + '</td></tr>';
-        htmlBody += '<tr><td style="padding: 5px 0;"><strong>Submitted:</strong></td><td>' + timestamp + '</td></tr>';
-        htmlBody += '</table>';
-        htmlBody += '</div>';
+        htmlBody += '<div class="header"><h1>Assessment Submission</h1><p>Spartan Assessment Portal</p></div>';
 
-        htmlBody += '<h2 style="color: #2d3f89; border-bottom: 1px solid #e1e4e8; padding-bottom: 10px; margin-bottom: 20px;">Responses</h2>';
+        htmlBody += '<div class="metadata"><table class="metadata-table">';
+        htmlBody += '<tr><td>Student</td><td>' + escapeHtmlBackend(studentName) + ' (' + escapeHtmlBackend(studentEmail) + ')</td></tr>';
+        htmlBody += '<tr><td>Assessment</td><td>' + escapeHtmlBackend(assessmentName) + '</td></tr>';
+        if (className) htmlBody += '<tr><td>Class</td><td>' + escapeHtmlBackend(className) + '</td></tr>';
+        if (instructorName) htmlBody += '<tr><td>Instructor</td><td>' + escapeHtmlBackend(instructorName) + '</td></tr>';
+        htmlBody += '<tr><td>Submitted At</td><td>' + timestamp + '</td></tr>';
+        htmlBody += '</table></div>';
+
+        htmlBody += '<h2 class="responses-title">Student Responses</h2>';
 
         // Add each response
         for (let i = 0; i < responses.length; i++) {
           const r = responses[i];
           const answerText = r.answer ? r.answer.toString().trim() : '';
-          const answerDisplay = answerText ? escapeHtmlBackend(answerText) : '<em style="color: #999;">No answer provided</em>';
+          const hasAnswer = answerText.length > 0;
           
-          htmlBody += '<div style="margin-bottom: 25px; page-break-inside: avoid;">';
-          htmlBody += '<div style="font-weight: bold; color: #2d3f89; margin-bottom: 8px; font-size: 16px;">' + escapeHtmlBackend(r.questionLabel) + '</div>';
+          htmlBody += '<div class="question-block">';
+          htmlBody += '<div class="question-label">' + escapeHtmlBackend(r.questionLabel) + '</div>';
           
           if (r.questionType === 'mc') {
-            htmlBody += '<div style="padding: 12px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px;">';
-            htmlBody += '<span style="color: #666; margin-right: 10px;">Selected Option:</span>';
-            htmlBody += '<span style="font-weight: bold; font-size: 16px;">' + answerDisplay + '</span>';
+            htmlBody += '<div class="answer-container answer-mc">';
+            htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No answer selected</span>';
             htmlBody += '</div>';
           } else {
-            htmlBody += '<div style="padding: 15px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; white-space: pre-wrap; min-height: 40px; line-height: 1.5;">' + answerDisplay + '</div>';
+            htmlBody += '<div class="answer-container answer-text">';
+            htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No response provided</span>';
+            htmlBody += '</div>';
           }
           htmlBody += '</div>';
         }
 
-        htmlBody += '<div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">';
-        htmlBody += 'Generated by Spartan Assessment Portal on ' + timestamp;
-        htmlBody += '</div>';
+        htmlBody += '<div class="footer">Generated by Spartan Assessment Portal on ' + timestamp + '</div>';
         htmlBody += '</body></html>';
 
         Logger.log('[SUBMIT] Creating temporary Google Doc via Drive API...');
@@ -4338,9 +4425,10 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     // Record submission timestamp
     Logger.log('[SUBMIT] Recording timestamp in spreadsheet...');
     try {
-      const currentTimestampsJson = data[assessmentRowIndex][CONSTANTS.COL.SUBMISSION_TIMESTAMPS];
+      const rawTimestamps = data[assessmentRowIndex][CONSTANTS.COL.SUBMISSION_TIMESTAMPS];
+      const currentTimestampsJson = getLargeDataFromCell(rawTimestamps);
       let submissionTimestamps = {};
-      if (currentTimestampsJson) {
+      if (currentTimestampsJson && currentTimestampsJson.trim()) {
         try {
           submissionTimestamps = JSON.parse(currentTimestampsJson);
         } catch (e) {
@@ -4348,8 +4436,10 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
         }
       }
       submissionTimestamps[studentEmail] = new Date().toISOString();
-      sheet.getRange(assessmentRowIndex + 1, CONSTANTS.COL.SUBMISSION_TIMESTAMPS + 1)
-        .setValue(JSON.stringify(submissionTimestamps));
+      
+      const timestampsRange = sheet.getRange(assessmentRowIndex + 1, CONSTANTS.COL.SUBMISSION_TIMESTAMPS + 1);
+      setLargeDataInCell(timestampsRange, JSON.stringify(submissionTimestamps), `Timestamps_${assessmentName}`);
+      
       Logger.log('[SUBMIT] Timestamp recorded.');
     } catch (e) {
       Logger.log('[SUBMIT] Error recording submission timestamp: ' + e.toString());
@@ -4361,6 +4451,8 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
   } catch (e) {
     Logger.log('[SUBMIT] CRITICAL ERROR: ' + e.toString());
     return { error: 'Submission failed: ' + e.toString() };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -4404,43 +4496,69 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     submissions.sort((a, b) => (a.studentName || '').localeCompare(b.studentName || ''));
 
     // Generate HTML
-    let htmlBody = '<html><body style="font-family: Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto;">';
+    let htmlBody = '<html><head><style>';
+    htmlBody += 'body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 0; }';
+    htmlBody += '.title-page { text-align: center; margin-top: 150px; margin-bottom: 100px; border-bottom: 3px solid #2d3f89; padding-bottom: 40px; }';
+    htmlBody += '.title-page h1 { color: #2d3f89; font-size: 36px; margin-bottom: 10px; }';
+    htmlBody += '.title-page h2 { color: #666; font-weight: normal; margin-bottom: 30px; }';
+    htmlBody += '.stats { font-size: 18px; color: #444; }';
+    
+    htmlBody += '.student-section { page-break-before: always; border-top: 15px solid #eaecf5; padding-top: 30px; }';
+    htmlBody += '.student-header { border-bottom: 2px solid #2d3f89; padding-bottom: 10px; margin-bottom: 30px; }';
+    htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 22px; }';
+    htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 8px; color: #666; font-size: 14px; }';
+    
+    htmlBody += '.question-block { margin-bottom: 25px; page-break-inside: avoid; border-left: 3px solid #f0f2f5; padding-left: 20px; }';
+    htmlBody += '.question-label { font-weight: bold; margin-bottom: 8px; color: #555; font-size: 15px; }';
+    htmlBody += '.answer-container { padding: 12px; border: 1px solid #e1e4e8; border-radius: 6px; background: #fff; }';
+    htmlBody += '.answer-mc { background: #f8f9fb; border-left: 4px solid #2d3f89; font-weight: bold; display: inline-block; padding: 10px 20px; }';
+    htmlBody += '.answer-text { line-height: 1.5; font-size: 14px; white-space: pre-wrap; }';
+    htmlBody += '.empty-answer { color: #999; font-style: italic; }';
+    htmlBody += '</style></head><body>';
     
     // Title Page
-    htmlBody += `<div style="text-align: center; margin-top: 100px; margin-bottom: 100px;">
-        <h1 style="color: #2d3f89; font-size: 32px; margin-bottom: 10px;">Submission Report</h1>
-        <h2 style="color: #666; font-weight: normal; margin-bottom: 40px;">${escapeHtmlBackend(assessmentName)}</h2>
-        <p><strong>Total Submissions:</strong> ${submissions.length}</p>
-        <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+    htmlBody += `<div class="title-page">
+        <h1>Submission Report</h1>
+        <h2>${escapeHtmlBackend(assessmentName)}</h2>
+        <div class="stats">
+            <p><strong>Total Submissions:</strong> ${submissions.length}</p>
+            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+        </div>
     </div>`;
     
     submissions.forEach((sub, index) => {
-        htmlBody += '<div style="page-break-before: always;"></div>';
+        htmlBody += '<div class="student-section">';
         
         // Student Header
-        htmlBody += `<div style="border-bottom: 2px solid #2d3f89; padding-bottom: 10px; margin-bottom: 30px;">
-            <h2 style="color: #2d3f89; margin: 0;">${escapeHtmlBackend(sub.studentName)}</h2>
-            <div style="display: flex; justify-content: space-between; margin-top: 5px; color: #666; font-size: 14px;">
+        htmlBody += `<div class="student-header">
+            <h2>${escapeHtmlBackend(sub.studentName)}</h2>
+            <div class="student-meta">
                 <span>${escapeHtmlBackend(sub.studentEmail)}</span>
-                <span>${new Date(sub.timestamp).toLocaleString()}</span>
+                <span style="float: right;">Submitted: ${new Date(sub.timestamp).toLocaleString()}</span>
             </div>
+            <div style="clear: both;"></div>
         </div>`;
         
         // Responses
         sub.responses.forEach(r => {
              const answerText = r.answer ? r.answer.toString().trim() : '';
-             const answerDisplay = answerText ? escapeHtmlBackend(answerText) : '<em style="color: #999;">No answer provided</em>';
+             const hasAnswer = answerText.length > 0;
              
-             htmlBody += '<div style="margin-bottom: 20px; page-break-inside: avoid;">';
-             htmlBody += `<div style="font-weight: bold; margin-bottom: 8px; color: #444;">${escapeHtmlBackend(r.questionLabel)}</div>`;
+             htmlBody += '<div class="question-block">';
+             htmlBody += `<div class="question-label">${escapeHtmlBackend(r.questionLabel)}</div>`;
              
              if (r.questionType === 'mc') {
-                htmlBody += `<div style="padding: 10px 15px; background: #f5f7fa; border-left: 4px solid #2d3f89; border-radius: 4px; display: inline-block; font-weight: 600;">${answerDisplay}</div>`;
+                htmlBody += '<div class="answer-container answer-mc">';
+                htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No answer</span>';
+                htmlBody += '</div>';
              } else {
-                htmlBody += `<div style="padding: 15px; border: 1px solid #e1e4e8; border-radius: 6px; background: #fff; line-height: 1.5;">${answerDisplay}</div>`;
+                htmlBody += '<div class="answer-container answer-text">';
+                htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No response provided</span>';
+                htmlBody += '</div>';
              }
              htmlBody += '</div>';
         });
+        htmlBody += '</div>';
     });
     
     htmlBody += '</body></html>';
@@ -4559,26 +4677,37 @@ function runTests(listBasedFileId, tableBasedFileId) {
  * Helper: Gets or creates the Submissions sheet.
  */
 function getOrCreateSubmissionsSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(CONSTANTS.SUBMISSIONS_SHEET_NAME);
-  
-  if (!sheet) {
-    sheet = ss.insertSheet(CONSTANTS.SUBMISSIONS_SHEET_NAME);
-    // Add headers
-    const headers = [
-      'Timestamp',
-      'Assessment URL',
-      'Assessment Name',
-      'Student Email',
-      'Student Name',
-      'Responses JSON'
-    ];
-    // Set headers
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-    sheet.setFrozenRows(1);
+  const lock = LockService.getScriptLock();
+  try {
+    // Wait for up to 30 seconds for the lock
+    lock.waitLock(30000);
     
-    // Auto-resize columns appropriately
-    sheet.autoResizeColumns(1, headers.length);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(CONSTANTS.SUBMISSIONS_SHEET_NAME);
+    
+    if (!sheet) {
+      sheet = ss.insertSheet(CONSTANTS.SUBMISSIONS_SHEET_NAME);
+      // Add headers
+      const headers = [
+        'Timestamp',
+        'Assessment URL',
+        'Assessment Name',
+        'Student Email',
+        'Student Name',
+        'Responses JSON'
+      ];
+      // Set headers
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+      sheet.setFrozenRows(1);
+      
+      // Auto-resize columns appropriately
+      sheet.autoResizeColumns(1, headers.length);
+    }
+    return sheet;
+  } catch (e) {
+    Logger.log('Error in getOrCreateSubmissionsSheet: ' + e.toString());
+    throw e;
+  } finally {
+    lock.releaseLock();
   }
-  return sheet;
 }
