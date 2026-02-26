@@ -14,19 +14,4 @@ The main components are:
 
 This is a Google Apps Script project, so there are no traditional build or run commands. The project is deployed and run on Google's servers.
 
-To work with the project locally, you would use `clasp`, the command-line interface for Google Apps Script.
-
-*   **Pushing changes:** `clasp push`
-*   **Pulling changes:** `clasp pull`
-*   **Opening the project in the Apps Script editor:** `clasp open`
-
 The web app is accessed via a URL provided by the Google Apps Script deployment.
-
-## Development Conventions
-
-*   The backend is written in JavaScript (Google Apps Script is based on JavaScript).
-*   The frontend is a single HTML file with embedded CSS and JavaScript.
-*   The project uses the Gemini API for text-to-speech. The API key is stored as a script property.
-*   The project uses several Google Workspace APIs, including Drive, Sheets, and Documents. The required OAuth scopes are defined in `appsscript.json`.
-*   The backend code is organized into two main files: `Code.js` for the main application logic and `Gemini.js` for the Gemini API interaction.
-*   The code includes error handling and logging using `Logger.log()`.
