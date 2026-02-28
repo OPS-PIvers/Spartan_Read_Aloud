@@ -3340,7 +3340,7 @@ function doGet(e) {
 
   } else {
     // If the user's email is not found in either the teacher or student lists.
-    return HtmlService.createHtmlOutput(`<h1>Access Denied</h1><p>Your email (${userEmail}) is not authorized to use this application.</p>`);
+    return HtmlService.createHtmlOutput(`<h1>Access Denied</h1><p>Your email (${escapeHtmlBackend(userEmail)}) is not authorized to use this application.</p>`);
   }
 }
 
