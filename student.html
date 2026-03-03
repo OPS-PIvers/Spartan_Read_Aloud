@@ -304,9 +304,15 @@
 
     /* Question Separation */
     .question-start {
-      margin-top: 3.5em !important;
-      border-top: 1px solid var(--gray-100);
-      padding-top: 2.5em;
+      margin-top: 4.5em !important;
+      border-top: 2px solid var(--gray-100);
+      padding-top: 3em;
+      font-weight: 700;
+    }
+
+    .question-text {
+      margin-top: 2.5em !important;
+      font-weight: 700;
     }
 
     .question-marker {
@@ -1011,9 +1017,21 @@
       <div class="selection-header">
         <h2>Select Your Assessment</h2>
         <p class="selection-subtitle">Choose which assessment you'd like to take</p>
+        
+        <!-- Search/Filter Input -->
+        <div class="search-container" style="max-width: 400px; margin: 24px auto 0; position: relative;">
+          <span class="material-icons" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--gray-500); font-size: 20px;">search</span>
+          <input type="text" id="assessment-search" placeholder="Filter by teacher, class, or test name..." 
+            style="width: 100%; padding: 12px 12px 12px 44px; border-radius: var(--radius-md); border: 1px solid var(--gray-200); font-family: inherit; font-size: 15px; box-shadow: var(--shadow-subtle); transition: all 0.2s;"
+            oninput="handleSearch(this.value)">
+        </div>
       </div>
       <div id="assessment-grid" class="assessment-grid">
         <!-- Cards injected via JS -->
+      </div>
+      <div id="no-results-message" style="display: none; text-align: center; padding: 40px; color: var(--gray-500);">
+        <span class="material-icons" style="font-size: 48px; opacity: 0.3; margin-bottom: 16px;">search_off</span>
+        <p>No assessments matching your search were found.</p>
       </div>
     </div>
 
@@ -1439,45 +1457,77 @@ function onAssessmentsLoaded(result) {
   }
 }
 
-function showAssessmentSelection() {
+/**
+ * Handles the search/filter input field input event.
+ * @param {string} filterText The text to filter by
+ */
+function handleSearch(filterText) {
+  showAssessmentSelection(filterText);
+}
+
+function showAssessmentSelection(filterText = '') {
   assessmentSelectionContainer.style.display = 'block';
   viewerContainer.style.display = 'none';
   document.getElementById('audio-toolbar').style.display = 'none';
   document.getElementById('back-to-menu-btn').style.display = 'none';
 
   const assessmentGrid = document.getElementById('assessment-grid');
+  const noResultsMessage = document.getElementById('no-results-message');
   assessmentGrid.innerHTML = '';
 
-  availableAssessments.forEach((assessment, index) => {
-    const card = document.createElement('div');
-    card.className = 'assessment-card';
-    card.onclick = () => loadSpecificAssessment(assessment, card);
-
-    // New Card Design
-    card.innerHTML = `
-      <div class="card-icon-wrapper">
-        <span class="material-icons logo-document" style="color: var(--primary-blue); font-size: 28px;">description</span>
-        ${assessment.readAloudEnabled !== false ? `
-          <div class="logo-badge" style="position: absolute; bottom: -2px; right: -2px; width: 16px; height: 16px; background: var(--primary-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white;">
-            <span class="material-icons" style="font-size: 10px; color: white;">volume_up</span>
-          </div>
-        ` : ''}
-      </div>
-      <div class="card-title">${escapeHtml(assessment.assessmentName)}</div>
-      <div class="card-meta-row">
-        ${assessment.instructor ? `<div class="meta-item"><span class="material-icons" style="font-size:14px">person</span> ${escapeHtml(assessment.instructor)}</div>` : ''}
-      </div>
-      <div class="card-meta-row">
-        ${assessment.className ? `<div class="meta-item"><span class="material-icons" style="font-size:14px">school</span> ${escapeHtml(assessment.className)}</div>` : ''}
-      </div>
-      <div class="card-footer">
-        <span class="status-badge">Ready</span>
-        <button class="start-btn">Start Assessment <span class="material-icons" style="font-size:14px">arrow_forward</span></button>
-      </div>
-    `;
-
-    assessmentGrid.appendChild(card);
+  const searchTerms = filterText.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
+  
+  const filtered = availableAssessments.filter(assessment => {
+    if (searchTerms.length === 0) return true;
+    
+    const searchStr = [
+      assessment.assessmentName || '',
+      assessment.instructor || '',
+      assessment.className || ''
+    ].join(' ').toLowerCase();
+    
+    // Every search term must be found in the search string
+    return searchTerms.every(term => searchStr.includes(term));
   });
+
+  if (filtered.length === 0) {
+    noResultsMessage.style.display = 'block';
+    assessmentGrid.style.display = 'none';
+  } else {
+    noResultsMessage.style.display = 'none';
+    assessmentGrid.style.display = 'grid';
+    
+    filtered.forEach((assessment, index) => {
+      const card = document.createElement('div');
+      card.className = 'assessment-card';
+      card.onclick = () => loadSpecificAssessment(assessment, card);
+
+      // New Card Design
+      card.innerHTML = `
+        <div class="card-icon-wrapper">
+          <span class="material-icons logo-document" style="color: var(--primary-blue); font-size: 28px;">description</span>
+          ${assessment.readAloudEnabled !== false ? `
+            <div class="logo-badge" style="position: absolute; bottom: -2px; right: -2px; width: 16px; height: 16px; background: var(--primary-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white;">
+              <span class="material-icons" style="font-size: 10px; color: white;">volume_up</span>
+            </div>
+          ` : ''}
+        </div>
+        <div class="card-title">${escapeHtml(assessment.assessmentName)}</div>
+        <div class="card-meta-row">
+          ${assessment.instructor ? `<div class="meta-item"><span class="material-icons" style="font-size:14px">person</span> ${escapeHtml(assessment.instructor)}</div>` : ''}
+        </div>
+        <div class="card-meta-row">
+          ${assessment.className ? `<div class="meta-item"><span class="material-icons" style="font-size:14px">school</span> ${escapeHtml(assessment.className)}</div>` : ''}
+        </div>
+        <div class="card-footer">
+          <span class="status-badge">Ready</span>
+          <button class="start-btn">Start Assessment <span class="material-icons" style="font-size:14px">arrow_forward</span></button>
+        </div>
+      `;
+
+      assessmentGrid.appendChild(card);
+    });
+  }
 }
 
 function loadSpecificAssessment(assessmentOrUrl, cardElement) {

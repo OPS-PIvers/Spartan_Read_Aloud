@@ -2095,9 +2095,30 @@ function sanitizeHtml(html) {
   });
 
   // 13. Add question-start class for visual separation
-  // Matches: <p id="..." > 1.  or <p id="..." > 1) 
-  sanitized = sanitized.replace(/(<p[^>]*>)(?:\s|&nbsp;)*(\d+[.)\]]\s+)/gi, '$1<span class="question-marker">$2</span>');
+  // Matches: <p id="..." > 1.  or <p id="..." > 1) or <p id="..." > Question 1.
+  // Enhanced to match "Question 1.", "Q1.", "Section 1.", etc.
+  sanitized = sanitized.replace(/(<p[^>]*>)(?:\s|&nbsp;)*((?:(?:Question|Q|Section|Part)\s*)?\d+[.)\]]\s+)/gi, '$1<span class="question-marker">$2</span>');
   sanitized = sanitized.replace(/<p([^>]*id="sra-block-[^"]*"[^>]*)>(?:\s|&nbsp;)*(?=<span class="question-marker">)/gi, '<p$1 class="question-start">');
+
+  // 14. Add question-text class to paragraphs that end in a question mark
+  // This catches questions that don't start with a number (e.g. "What is the capital of France?")
+  // but we explicitly exclude answer patterns (e.g. "a) Answer?")
+  sanitized = sanitized.replace(/<p([^>]*id="sra-block-[^"]*"[^>]*)>([\s\S]*?\?\s*)<\/p>/gi, (match, attrs, content) => {
+    // If it's already a question start, don't double up (though CSS would handle it)
+    if (attrs.includes('question-start')) return match;
+    
+    // Check if the content (stripped of HTML tags) starts with an answer choice pattern
+    const plainText = content.replace(/<[^>]+>/g, '').trim();
+    const answerPattern = /^\s*(?:\([a-dA-D]\)|[a-dA-D][.)])\s+/i;
+    
+    if (answerPattern.test(plainText)) {
+      return match; // It's an answer option that happens to end in a question mark
+    }
+    
+    // It's likely a question without a number
+    const space = attrs.trim() ? ' ' : '';
+    return `<p${attrs}${space}class="question-text">${content}</p>`;
+  });
 
   Logger.log(`Sanitized & normalized HTML: ${html.length} chars → ${sanitized.length} chars (Added ${blockCounter} IDs)`);
   return sanitized;
@@ -2342,7 +2363,11 @@ function addPausesToText(text) {
 
     // Step 5: Add pauses after answer choices (A., B., C., D. or a), b), c), d))
     // Matches: "A." or "A)" (uppercase or lowercase, periods or parentheses), with optional whitespace
-    ssmlText = ssmlText.replace(/(\b[A-Da-d][.)])\s*/g, `$1 <break time="${CONSTANTS.PAUSE_AFTER_ANSWER_CHOICE_MS}ms"/> `);
+    // ENHANCED: Wrap the choice letter in <say-as interpret-as="characters"> to ensure correct pronunciation
+    ssmlText = ssmlText.replace(/(\b)([A-Da-d])([.)])\s*/g, (match, boundary, letter, punctuation) => {
+      const upperLetter = letter.toUpperCase();
+      return `${boundary}<say-as interpret-as="characters">${upperLetter}</say-as>${punctuation} <break time="${CONSTANTS.PAUSE_AFTER_ANSWER_CHOICE_MS}ms"/> `;
+    });
 
     // Step 6: Wrap in SSML speak tags
     const result = `<speak>${ssmlText}</speak>`;
@@ -3378,6 +3403,9 @@ function getUserByEmail(email) {
       const adminEmail = row[2] ? row[2].toString().toLowerCase().trim() : '';
       if (adminEmail === cleanEmail) {
         const teacherRole = row[4] ? row[4].toString().trim() : CONSTANTS.ROLE_TEACHER;
+        const betaFeaturesRaw = row[CONSTANTS.COL_TEACHERS_BETA_FEATURES] ? row[CONSTANTS.COL_TEACHERS_BETA_FEATURES].toString().trim() : '';
+        const betaFeatures = betaFeaturesRaw.split(',').map(f => f.trim()).filter(f => f);
+
         let userType = CONSTANTS.ROLE_TOKEN_TEACHER;
         if (teacherRole === CONSTANTS.ROLE_SUPER_ADMIN) {
           userType = CONSTANTS.ROLE_TOKEN_SUPER_ADMIN;
@@ -3393,7 +3421,8 @@ function getUserByEmail(email) {
           displayName: teacherRole, // Keep display name separately if needed
           name: `${row[0]} ${row[1]}`.trim(),
           lastName: row[1] ? row[1].toString().trim() : '',
-          email: cleanEmail
+          email: cleanEmail,
+          betaFeatures: betaFeatures
         };
         break;
       }
@@ -3476,6 +3505,100 @@ function getStudentsByCaseManager(caseManagerEmail) {
   }
 }
 
+
+/**
+ * Retrieves mappings of emails that have access to specific beta features.
+ * Only accessible to Super Admins.
+ * @param {string} sessionToken Super Admin session token
+ * @returns {Object} { success: true, mappings: { featureId: [emails] } } or { error: "..." }
+ */
+function getBetaFeatureMappings(sessionToken) {
+  try {
+    const tokenData = validateSuperAdminToken(sessionToken);
+    if (!tokenData) return { error: 'Unauthorized. Super Admin access required.' };
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
+    if (!sheet) return { error: 'Teachers sheet not found.' };
+
+    const data = sheet.getDataRange().getValues();
+    const mappings = {
+      'Student Submissions': []
+    };
+
+    for (let i = 1; i < data.length; i++) {
+      const email = data[i][2] ? data[i][2].toString().toLowerCase().trim() : '';
+      const featuresRaw = data[i][CONSTANTS.COL_TEACHERS_BETA_FEATURES] ? data[i][CONSTANTS.COL_TEACHERS_BETA_FEATURES].toString().trim() : '';
+      const features = featuresRaw.split(',').map(f => f.trim()).filter(f => f);
+
+      if (email) {
+        features.forEach(f => {
+          if (!mappings[f]) mappings[f] = [];
+          mappings[f].push(email);
+        });
+      }
+    }
+
+    return { success: true, mappings: mappings };
+  } catch (e) {
+    Logger.log(`Error in getBetaFeatureMappings: ${e.toString()}`);
+    return { error: e.toString() };
+  }
+}
+
+/**
+ * Updates beta feature access for users in the Teachers sheet.
+ * Only accessible to Super Admins.
+ * @param {string} sessionToken Super Admin session token
+ * @param {Object} mappings { featureId: [emails] }
+ * @returns {Object} { success: true } or { error: "..." }
+ */
+function updateBetaFeatureMappings(sessionToken, mappings) {
+  try {
+    const tokenData = validateSuperAdminToken(sessionToken);
+    if (!tokenData) return { error: 'Unauthorized. Super Admin access required.' };
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
+    if (!sheet) return { error: 'Teachers sheet not found.' };
+
+    const range = sheet.getDataRange();
+    const data = range.getValues();
+    
+    // Create a per-user map for new features
+    const userFeatureMap = {};
+    for (const featureId in mappings) {
+      const emails = mappings[featureId];
+      emails.forEach(email => {
+        const cleanEmail = email.toLowerCase().trim();
+        if (!userFeatureMap[cleanEmail]) userFeatureMap[cleanEmail] = new Set();
+        userFeatureMap[cleanEmail].add(featureId);
+      });
+    }
+
+    // Update the data array
+    for (let i = 1; i < data.length; i++) {
+      const email = data[i][2] ? data[i][2].toString().toLowerCase().trim() : '';
+      if (email) {
+        const features = Array.from(userFeatureMap[email] || []);
+        data[i][CONSTANTS.COL_TEACHERS_BETA_FEATURES] = features.join(', ');
+      }
+    }
+
+    // Save back to sheet
+    range.setValues(data);
+    
+    // Clear user cache to ensure roles are re-fetched
+    const cache = CacheService.getUserCache();
+    for (let i = 1; i < data.length; i++) {
+       const email = data[i][2] ? data[i][2].toString().toLowerCase().trim() : '';
+       if (email) cache.remove('user_info_' + email);
+    }
+
+    return { success: true };
+  } catch (e) {
+    Logger.log(`Error in updateBetaFeatureMappings: ${e.toString()}`);
+    return { error: e.toString() };
+  }
+}
 
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
@@ -3897,13 +4020,17 @@ function getStudentAssessmentsForEmail(email) {
             const file = DriveApp.getFileById(fileId);
             const fileName = file.getName();
 
+            const isBetaUser = user && user.betaFeatures && user.betaFeatures.includes('Student Submissions');
+
             matchingAssessments.push({
               assessmentName: fileName,
               className: className,
               instructor: instructor,
               assessmentUrl: pdfUrl,
               readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
-              submissionEnabled: CONSTANTS.SUBMISSION_FEATURE_ENABLED && row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
+              submissionEnabled: CONSTANTS.SUBMISSION_FEATURE_ENABLED && 
+                                row[CONSTANTS.COL.SUBMISSION_ENABLED] === true && 
+                                isBetaUser,
               requiresPassword: !!(row[CONSTANTS.COL.PASSWORD] && row[CONSTANTS.COL.PASSWORD].toString().trim()),
               rowIndex: i
             });

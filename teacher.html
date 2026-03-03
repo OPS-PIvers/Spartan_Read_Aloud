@@ -781,6 +781,10 @@
       <span>Spartan Assessment Portal</span>
     </div>
     <div class="app-user">
+      <button id="settings-btn" onclick="openBetaSettings()" class="logout-btn" style="margin-right: 8px; display: none;">
+        <span class="material-icons" style="font-size: 14px;">settings</span>
+        Settings
+      </button>
       <button onclick="openPreview()" class="logout-btn" style="margin-right: 8px;">
         <span class="material-icons" style="font-size: 14px;">visibility</span>
         Preview
@@ -792,6 +796,55 @@
       </button>
     </div>
   </header>
+
+  <!-- BETA SETTINGS MODAL -->
+  <div id="beta-settings-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center;">
+    <div class="modal-card" style="max-width: 850px; width: 95%;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="material-icons" style="vertical-align: middle; margin-right: 8px; color: var(--primary-blue);">settings</span>
+          Beta Feature Management
+        </div>
+        <button class="action-btn" onclick="closeBetaSettings()"><span class="material-icons">close</span></button>
+      </div>
+      <div class="modal-body" style="padding: 0;">
+        <div class="table-responsive">
+          <table class="table" style="margin-bottom: 0;">
+            <thead>
+              <tr>
+                <th style="width: 25%;">Feature Name</th>
+                <th style="width: 35%;">Description</th>
+                <th style="width: 40%;">Authorized Emails</th>
+              </tr>
+            </thead>
+            <tbody id="beta-features-body">
+              <tr>
+                <td style="font-weight: 600; color: var(--primary-dark);">Student Submissions</td>
+                <td style="font-size: 12px; color: var(--gray-700);">Allows students to submit answers via a sidebar during assessment.</td>
+                <td>
+                  <div id="beta-emails-container-submissions" class="email-chips-container" 
+                       onclick="focusEmailInput(this)" 
+                       style="background: white; border: 1px solid var(--gray-300); padding: 4px; border-radius: 4px; min-height: 42px; max-height: 150px; overflow-y: auto;">
+                    <input type="text" id="beta-emails-input-submissions" class="email-chips-input" placeholder="Add email..."
+                      onkeydown="handleBetaEmailInput(event, 'Student Submissions')"
+                      onpaste="handleBetaEmailPaste(event, 'Student Submissions')"
+                      onblur="addBetaEmailChip(this, 'Student Submissions')">
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeBetaSettings()">Cancel</button>
+        <button class="btn btn-primary" id="save-beta-btn" onclick="saveBetaSettings()">
+          <span class="material-icons" style="font-size: 18px;">save</span>
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- MAIN CONTENT GRID -->
   <div id="main-content" class="main-content" style="display:none;">
@@ -938,11 +991,20 @@
 
     <!-- 3. ASSESSMENT TABLE -->
     <section class="card">
-      <div class="card-header">
-        <h2 class="card-title">
+      <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
+        <h2 class="card-title" style="margin: 0; flex-grow: 1;">
           <span class="material-icons" style="color: var(--primary-blue);">dns</span>
           Assessments Database
         </h2>
+        
+        <!-- Search Filter -->
+        <div class="search-container" style="position: relative; width: 100%; max-width: 320px;">
+          <span class="material-icons" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--gray-500); font-size: 18px;">search</span>
+          <input type="text" id="table-search" placeholder="Filter assessments..." 
+            style="width: 100%; padding: 8px 12px 8px 36px; border-radius: var(--radius-sm); border: 1px solid var(--gray-300); font-family: inherit; font-size: 14px; transition: all 0.2s;"
+            oninput="renderTable()">
+        </div>
+
         <button class="action-btn" onclick="refreshData()" title="Refresh Data">
           <span class="material-icons">refresh</span>
         </button>
@@ -1265,8 +1327,135 @@
       assessmentList = response.assessments || [];
       currentUserRole = response.userRole || currentUserRole;
       
+      const settingsBtn = document.getElementById('settings-btn');
+      if (settingsBtn) {
+        settingsBtn.style.display = (currentUserRole === 'super_admin') ? 'inline-flex' : 'none';
+      }
+
       updateStats();
       renderTable();
+    }
+
+    // --- BETA SETTINGS MANAGEMENT ---
+    let betaFeatureMappings = {};
+
+    function openBetaSettings() {
+      const modal = document.getElementById('beta-settings-modal');
+      const container = document.getElementById('beta-emails-container-submissions');
+      
+      // Clear current chips
+      const chips = container.querySelectorAll('.email-chip');
+      chips.forEach(chip => chip.remove());
+      
+      // Fetch from backend
+      document.getElementById('save-beta-btn').disabled = true;
+      google.script.run
+        .withSuccessHandler(response => {
+           document.getElementById('save-beta-btn').disabled = false;
+           if (response.error) {
+             showToast('Failed to load beta settings: ' + response.error, 'error');
+             return;
+           }
+           betaFeatureMappings = response.mappings || {};
+           
+           // Render chips for Student Submissions
+           const emails = betaFeatureMappings['Student Submissions'] || [];
+           const input = document.getElementById('beta-emails-input-submissions');
+           emails.forEach(email => {
+              const chip = createEmailChip(email, 'Student Submissions');
+              container.insertBefore(chip, input);
+           });
+           
+           modal.style.display = 'flex';
+        })
+        .getBetaFeatureMappings(adminToken);
+    }
+
+    function closeBetaSettings() {
+      document.getElementById('beta-settings-modal').style.display = 'none';
+    }
+
+    function handleBetaEmailInput(event, featureId) {
+      if (event.key === 'Enter' || event.key === 'Tab' || event.key === ',') {
+        event.preventDefault();
+        const value = event.target.value.trim();
+        if (value) {
+          addBetaEmailChip(event.target, featureId);
+        }
+      }
+    }
+
+    function handleBetaEmailPaste(event, featureId) {
+      event.preventDefault();
+      const pasteData = (event.clipboardData || window.clipboardData).getData('text');
+      const emails = pasteData.split(/[,\n\s]+/).map(e => e.trim()).filter(e => e);
+      emails.forEach(email => {
+        const tempInput = { value: email, isMock: true };
+        addBetaEmailChip(tempInput, featureId, event.target);
+      });
+      event.target.value = '';
+    }
+
+    function addBetaEmailChip(input, featureId, targetInput = null) {
+      const value = (input.value || '').trim();
+      if (!value) return;
+
+      const container = (targetInput || input).parentElement;
+      const actualInput = targetInput || input;
+      
+      // Simple email validation
+      if (!value.includes('@')) {
+        actualInput.value = '';
+        return;
+      }
+
+      const chip = createEmailChip(value, featureId);
+      container.insertBefore(chip, actualInput);
+      actualInput.value = '';
+      
+      if (!betaFeatureMappings[featureId]) betaFeatureMappings[featureId] = [];
+      if (!betaFeatureMappings[featureId].includes(value)) {
+        betaFeatureMappings[featureId].push(value);
+      }
+    }
+
+    function createEmailChip(email, featureId) {
+      const chip = document.createElement('div');
+      chip.className = 'email-chip';
+      chip.innerHTML = `
+        <span>${escapeHtml(email)}</span>
+        <span class="email-chip-remove" onclick="removeBetaEmailChip(this, '${featureId}')">×</span>
+      `;
+      return chip;
+    }
+
+    function removeBetaEmailChip(removeBtn, featureId) {
+      const chip = removeBtn.parentElement;
+      const email = chip.querySelector('span').textContent;
+      chip.remove();
+      
+      if (betaFeatureMappings[featureId]) {
+        betaFeatureMappings[featureId] = betaFeatureMappings[featureId].filter(e => e !== email);
+      }
+    }
+
+    function saveBetaSettings() {
+      const btn = document.getElementById('save-beta-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-icons animate-spin" style="font-size:18px">refresh</span> Saving...';
+
+      google.script.run
+        .withSuccessHandler(response => {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-icons" style="font-size:18px;">save</span> Save Changes';
+          if (response.success) {
+            showToast('Beta feature settings updated successfully');
+            closeBetaSettings();
+          } else {
+            showToast('Error saving settings: ' + response.error, 'error');
+          }
+        })
+        .updateBetaFeatureMappings(adminToken, betaFeatureMappings);
     }
 
     function updateStats() {
@@ -1283,6 +1472,8 @@
       const tbody = document.getElementById('table-body');
       const emptyState = document.getElementById('empty-state');
       const addSection = document.getElementById('add-assessment-section');
+      const searchInput = document.getElementById('table-search');
+      const filterText = (searchInput ? searchInput.value : '').toLowerCase().trim();
 
       // Visibility based on role
       addSection.style.display = ['super_admin', 'admin', 'teacher', 'sp_ed'].includes(currentUserRole) ? 'block' : 'none';
@@ -1297,15 +1488,35 @@
       const thSubmissions = document.getElementById('th-submissions');
       if (thSubmissions) thSubmissions.style.display = canSeeSubmissions ? 'table-cell' : 'none';
 
-      if (assessmentList.length === 0) {
+      // Filtering Logic
+      const searchTerms = filterText.split(/\s+/).filter(t => t.length > 0);
+      const filteredList = assessmentList.filter(assessment => {
+        if (searchTerms.length === 0) return true;
+        
+        const searchStr = [
+          assessment.assessmentName || '',
+          assessment.instructor || '',
+          assessment.className || '',
+          assessment.fileName || ''
+        ].join(' ').toLowerCase();
+        
+        return searchTerms.every(term => searchStr.includes(term));
+      });
+
+      if (filteredList.length === 0) {
         tbody.innerHTML = '';
         emptyState.style.display = 'block';
+        if (filterText) {
+          emptyState.querySelector('p').textContent = 'No assessments matching your search were found.';
+        } else {
+          emptyState.querySelector('p').textContent = 'No assessments found.';
+        }
         return;
       }
 
       emptyState.style.display = 'none';
       
-      tbody.innerHTML = assessmentList.map(item => {
+      tbody.innerHTML = filteredList.map(item => {
         let statusBadge = '';
         if (item.isComplete) {
           statusBadge = `<span class="badge badge-ready"><span class="badge-dot"></span>Ready</span>`;

@@ -4,6 +4,7 @@ const CONSTANTS = {
   PDF_SOURCE_FOLDER_NAME: "Assessment PDFs",
   TEACHERS_SHEET_NAME: "Teachers",
   SUBMISSIONS_SHEET_NAME: "Submissions", // NEW: Sheet for storing raw submission data
+  COL_TEACHERS_BETA_FEATURES: 5, // Column F (0-based index 5)
 
   // --- Batch Processing ---
   BATCH_API_ENABLED: false, // KEEP FALSE until Google confirms TTS batch support
