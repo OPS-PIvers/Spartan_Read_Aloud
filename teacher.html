@@ -1293,9 +1293,19 @@
     }
 
     // --- DATA HANDLING ---
-    function refreshData() {
+    let isDataTruncated = false;
+    let totalAssessmentsCount = 0;
+    let totalReadyCount = 0;
+    let totalProcessingCount = 0;
+
+    function refreshData(fetchAll = false) {
       const tbody = document.getElementById('table-body');
       
+      // If fetching all, show a specific loading toast
+      if (fetchAll) {
+        showToast('Searching full assessment history...', 'info');
+      }
+
       // Show Skeleton Rows
       const skeletonRow = `
         <tr>
@@ -1312,7 +1322,7 @@
       google.script.run
         .withSuccessHandler(onDataLoaded)
         .withFailureHandler(err => alert('Failed to load data: ' + err))
-        .getAllAssessments(adminToken);
+        .getAllAssessments(adminToken, fetchAll);
     }
 
     function onDataLoaded(response) {
@@ -1325,6 +1335,10 @@
       }
 
       assessmentList = response.assessments || [];
+      isDataTruncated = !!response.isTruncated;
+      totalAssessmentsCount = response.totalCount || assessmentList.length;
+      totalReadyCount = response.readyCount || 0;
+      totalProcessingCount = response.processingCount || 0;
       currentUserRole = response.userRole || currentUserRole;
       
       const settingsBtn = document.getElementById('settings-btn');
@@ -1459,13 +1473,9 @@
     }
 
     function updateStats() {
-      const total = assessmentList.length;
-      const ready = assessmentList.filter(a => a.isComplete).length;
-      const processing = assessmentList.filter(a => a.chunkCount > 0 && !a.isComplete).length;
-
-      document.getElementById('stat-total').textContent = total;
-      document.getElementById('stat-ready').textContent = ready;
-      document.getElementById('stat-processing').textContent = processing;
+      document.getElementById('stat-total').textContent = totalAssessmentsCount;
+      document.getElementById('stat-ready').textContent = totalReadyCount;
+      document.getElementById('stat-processing').textContent = totalProcessingCount;
     }
 
     function renderTable() {
@@ -1494,7 +1504,6 @@
         if (searchTerms.length === 0) return true;
         
         const searchStr = [
-          assessment.assessmentName || '',
           assessment.instructor || '',
           assessment.className || '',
           assessment.fileName || ''
@@ -1507,7 +1516,10 @@
         tbody.innerHTML = '';
         emptyState.style.display = 'block';
         if (filterText) {
-          emptyState.querySelector('p').textContent = 'No assessments matching your search were found.';
+          emptyState.querySelector('p').innerHTML = `
+            No assessments matching "${escapeHtml(filterText)}" found in recent activity.
+            ${isDataTruncated ? `<br><br><button class="btn btn-secondary" onclick="refreshData(true)"><span class="material-icons" style="font-size:16px">search</span> Search Full History (${totalAssessmentsCount} assessments)</button>` : ''}
+          `;
         } else {
           emptyState.querySelector('p').textContent = 'No assessments found.';
         }
@@ -1516,7 +1528,7 @@
 
       emptyState.style.display = 'none';
       
-      tbody.innerHTML = filteredList.map(item => {
+      let tableHtmlContent = filteredList.map(item => {
         let statusBadge = '';
         if (item.isComplete) {
           statusBadge = `<span class="badge badge-ready"><span class="badge-dot"></span>Ready</span>`;
@@ -1621,6 +1633,25 @@
           </tr>
         `;
       }).join('');
+
+      // Add a footer row if truncated
+      if (isDataTruncated) {
+        tableHtmlContent += `
+          <tr>
+            <td colspan="7" style="text-align: center; padding: 24px; background: var(--gray-100);">
+              <div style="color: var(--gray-500); margin-bottom: 12px; font-size: 13px;">
+                Showing most recent 20 assessments. Total history: ${totalAssessmentsCount}
+              </div>
+              <button class="btn btn-secondary" onclick="refreshData(true)">
+                <span class="material-icons" style="font-size:18px">history</span>
+                Search Full History
+              </button>
+            </td>
+          </tr>
+        `;
+      }
+
+      tbody.innerHTML = tableHtmlContent;
 
       // Auto-resize textareas after render
       setTimeout(() => {
@@ -1968,6 +1999,7 @@
             // Update local state to ensure persistence in UI
             const item = assessmentList.find(a => a.rowIndex === rowIndex);
             if (item) {
+              item.fileName = data.assessmentTitle;
               item.className = data.className;
               item.instructor = data.instructor;
               item.password = data.password;

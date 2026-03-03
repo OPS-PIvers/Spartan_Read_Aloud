@@ -2422,7 +2422,14 @@ function validateSuperAdminToken(sessionToken) {
  * @param {string} sessionToken Staff session token
  * @returns {Object} { success: true, assessments: [...], userRole: "..." } or { error: "..." }
  */
-function getAllAssessments(sessionToken) {
+/**
+ * Retrieves all assessments from the spreadsheet, filtered by user role.
+ * Includes performance optimizations: CacheService and local file name storage.
+ * @param {string} sessionToken Staff session token
+ * @param {boolean} fetchAll If true, returns the full history; if false, limits to most recent 20 (for dashboard)
+ * @returns {Object} List of assessments and user role
+ */
+function getAllAssessments(sessionToken, fetchAll = false) {
   try {
     // Verify staff token (teacher, admin, or super_admin)
     const tokenData = validateAdminToken(sessionToken);
@@ -2430,107 +2437,137 @@ function getAllAssessments(sessionToken) {
       return { error: 'Unauthorized. Staff access required.' };
     }
 
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
-    if (!sheet) {
-      return { error: 'Assessment Database sheet not found.' };
+    const cacheVersion = PropertiesService.getScriptProperties().getProperty('CACHE_VERSION_ASSESSMENTS') || '1';
+    const cacheKey = `assessments_v2_${cacheVersion}_${tokenData.email}_${tokenData.role}`;
+    const cache = CacheService.getScriptCache();
+    let cachedData = cache.get(cacheKey);
+
+    let assessments = [];
+    if (cachedData) {
+      try {
+        assessments = JSON.parse(cachedData);
+        Logger.log(`[CACHE] Retrieved ${assessments.length} assessments from cache for ${tokenData.email}`);
+      } catch (e) {
+        Logger.log(`[CACHE] Parse error: ${e.toString()}`);
+        cachedData = null;
+      }
     }
 
-    const data = sheet.getDataRange().getValues();
-    let assessments = [];
-
-    // Skip header row
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      const pdfUrl = row[CONSTANTS.COL.PDF_URL];
-
-      if (!pdfUrl) continue; // Skip empty rows
-
-      let fileName = '';
-      try {
-        const fileId = getFileIdFromUrl(pdfUrl);
-        if (fileId) {
-          fileName = DriveApp.getFileById(fileId).getName();
-        }
-      } catch (e) {
-        fileName = 'Unknown file';
-        Logger.log(`Could not fetch file name for row ${i}: ${e.toString()}`);
+    if (!cachedData) {
+      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
+      if (!sheet) {
+        return { error: 'Assessment Database sheet not found.' };
       }
 
-      assessments.push({
-        rowIndex: i,
-        fileName: fileName,
-        pdfUrl: pdfUrl,
-        chunkCount: row[CONSTANTS.COL.CHUNK_COUNT] || 0,
-        hasAudio: !!row[CONSTANTS.COL.AUDIO_JSON],
-        isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
-        className: row[CONSTANTS.COL.CLASS_NAME] || '',
-        instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
-        password: row[CONSTANTS.COL.PASSWORD] || '',
-        studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || '',
-        readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
-        submissionEnabled: row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
-        submissionDeliveryMode: row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] || 'email',
-        hasSubmissions: !!(row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS] && row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS].length > 2),
-        accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? Utilities.formatDate(new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]), "America/Chicago", "yyyy-MM-dd'T'HH:mm") : ''
-      });
+      const data = sheet.getDataRange().getValues();
+      
+      // Skip header row
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const pdfUrl = row[CONSTANTS.COL.PDF_URL];
+
+        if (!pdfUrl) continue; // Skip empty rows
+
+        // PERFORMANCE: Read filename from local column instead of Drive API
+        let fileName = row[CONSTANTS.COL.FILE_NAME] || '';
+        
+        // Fallback for legacy rows (only run if name is truly missing)
+        if (!fileName) {
+          try {
+            const fileId = getFileIdFromUrl(pdfUrl);
+            if (fileId) {
+              fileName = DriveApp.getFileById(fileId).getName();
+              // Back-fill the sheet so it's faster next time
+              sheet.getRange(i + 1, CONSTANTS.COL.FILE_NAME + 1).setValue(fileName);
+            }
+          } catch (e) {
+            fileName = 'Unknown file';
+          }
+        }
+
+        assessments.push({
+          rowIndex: i,
+          fileName: fileName,
+          pdfUrl: pdfUrl,
+          chunkCount: row[CONSTANTS.COL.CHUNK_COUNT] || 0,
+          hasAudio: !!row[CONSTANTS.COL.AUDIO_JSON],
+          isComplete: row[CONSTANTS.COL.IS_COMPLETE] === true,
+          className: row[CONSTANTS.COL.CLASS_NAME] || '',
+          instructor: row[CONSTANTS.COL.INSTRUCTOR] || '',
+          password: row[CONSTANTS.COL.PASSWORD] || '',
+          studentEmails: row[CONSTANTS.COL.STUDENT_EMAILS] || '',
+          readAloudEnabled: row[CONSTANTS.COL.READ_ALOUD_ENABLED] !== false,
+          submissionEnabled: row[CONSTANTS.COL.SUBMISSION_ENABLED] === true,
+          submissionDeliveryMode: row[CONSTANTS.COL.SUBMISSION_DELIVERY_MODE] || 'email',
+          hasSubmissions: !!(row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS] && row[CONSTANTS.COL.SUBMISSION_TIMESTAMPS].length > 2),
+          accessExpires: row[CONSTANTS.COL.ACCESS_EXPIRES] ? Utilities.formatDate(new Date(row[CONSTANTS.COL.ACCESS_EXPIRES]), "America/Chicago", "yyyy-MM-dd'T'HH:mm") : ''
+        });
+      }
+
+      // Filter assessments for teachers (only show their own)
+      if (tokenData.role === CONSTANTS.ROLE_TOKEN_TEACHER) {
+        const teacherName = (tokenData.name || '').toLowerCase();
+        const teacherEmail = (tokenData.email || '').toLowerCase();
+        assessments = assessments.filter(assessment => {
+          const instructorField = (assessment.instructor || '').toLowerCase();
+          const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
+          if (instructors.length === 0) return false;
+          return instructors.some(instructorPart => 
+            teacherName.includes(instructorPart) || 
+            teacherEmail.includes(instructorPart) ||
+            instructorPart.includes(teacherEmail)
+          );
+        });
+      }
+
+      // Filter assessments for Sp.Ed. users
+      if (tokenData.role === CONSTANTS.ROLE_TOKEN_SPED) {
+        const teacherName = (tokenData.name || '').toLowerCase();
+        const teacherEmail = (tokenData.email || '').toLowerCase();
+        const caseloadStudents = getStudentsByCaseManager(tokenData.email);
+        assessments = assessments.filter(assessment => {
+          const instructorField = (assessment.instructor || '').toLowerCase();
+          const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
+          const isInstructor = instructors.some(inst => 
+            teacherName.includes(inst) || teacherEmail.includes(inst) || inst.includes(teacherEmail)
+          );
+          if (isInstructor) return true;
+          const studentEmailsField = (assessment.studentEmails || '').toLowerCase();
+          return caseloadStudents.some(studentEmail => studentEmailsField.includes(studentEmail));
+        });
+      }
+
+      // Sort assessments by rowIndex descending (most recent first)
+      assessments.sort((a, b) => b.rowIndex - a.rowIndex);
+
+      // Save to cache (limit string size to avoid CacheService errors)
+      try {
+        const jsonStr = JSON.stringify(assessments);
+        if (jsonStr.length < 95000) { // 100KB limit
+          cache.put(cacheKey, jsonStr, 900); // 15 minutes
+        }
+      } catch (cacheError) {
+        Logger.log(`[CACHE] Failed to save to cache: ${cacheError.toString()}`);
+      }
     }
 
-    // Filter assessments for teachers (only show their own)
-    if (tokenData.role === CONSTANTS.ROLE_TOKEN_TEACHER) {
-      const teacherName = (tokenData.name || '').toLowerCase();
-      const teacherEmail = (tokenData.email || '').toLowerCase();
-      Logger.log(`Filtering assessments for teacher: ${teacherName} (${teacherEmail})`);
-
-      assessments = assessments.filter(assessment => {
-        const instructorField = (assessment.instructor || '').toLowerCase();
-        
-        // Split by comma or slash and check if any part matches teacher's name or email
-        const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
-        
-        if (instructors.length === 0) return false;
-        
-        return instructors.some(instructorPart => 
-          teacherName.includes(instructorPart) || 
-          teacherEmail.includes(instructorPart) ||
-          instructorPart.includes(teacherEmail)
-        );
-      });
-
-      Logger.log(`Teacher ${teacherName} has ${assessments.length} assessment(s)`);
+    const totalAvailable = assessments.length;
+    const readyCount = assessments.filter(a => a.isComplete).length;
+    const processingCount = assessments.filter(a => a.chunkCount > 0 && !a.isComplete).length;
+    
+    // Slice if fetchAll is false (recent 20)
+    if (!fetchAll && assessments.length > 20) {
+      assessments = assessments.slice(0, 20);
     }
 
-    // NEW: Filter assessments for Sp.Ed. users (show assessments with their caseload students OR where they are the instructor)
-    if (tokenData.role === CONSTANTS.ROLE_TOKEN_SPED) {
-      const teacherName = (tokenData.name || '').toLowerCase();
-      const teacherEmail = (tokenData.email || '').toLowerCase();
-      const caseloadStudents = getStudentsByCaseManager(tokenData.email);
-      Logger.log(`Filtering assessments for Sp.Ed. (${tokenData.email})`);
-
-      assessments = assessments.filter(assessment => {
-        // 1. Check if they are the instructor
-        const instructorField = (assessment.instructor || '').toLowerCase();
-        const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
-        const isInstructor = instructors.some(inst => 
-          teacherName.includes(inst) || 
-          teacherEmail.includes(inst) ||
-          inst.includes(teacherEmail)
-        );
-        
-        if (isInstructor) return true;
-
-        // 2. Check if any student in the assessment is on the Sp.Ed. caseload
-        const studentEmailsField = (assessment.studentEmails || '').toLowerCase();
-        return caseloadStudents.some(studentEmail => studentEmailsField.includes(studentEmail));
-      });
-
-      Logger.log(`Sp.Ed. user ${tokenData.email} has ${assessments.length} assessment(s)`);
-    }
-
-    Logger.log(`Retrieved ${assessments.length} assessments for ${tokenData.role}`);
     return {
       success: true,
       assessments: assessments,
-      userRole: tokenData.role // Return role so frontend knows what permissions to show
+      totalCount: totalAvailable,
+      readyCount: readyCount,
+      processingCount: processingCount,
+      isTruncated: !fetchAll && totalAvailable > 20,
+      userRole: tokenData.role
     };
 
   } catch (e) {
@@ -2628,13 +2665,15 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
       return { error: 'Unauthorized. You can only update your own assessments.' };
     }
 
-    // Rename file in Drive if title provided
     if (data.assessmentTitle !== undefined) {
+      const fileName = data.assessmentTitle || '';
+      sheet.getRange(actualRow, CONSTANTS.COL.FILE_NAME + 1).setValue(fileName);
+      
       try {
         const fileId = getFileIdFromUrl(rowData[CONSTANTS.COL.PDF_URL]);
         if (fileId) {
           const file = DriveApp.getFileById(fileId);
-          let newName = data.assessmentTitle;
+          let newName = fileName;
           // Maintain extension if it's a PDF
           if (file.getMimeType() === MimeType.PDF && !newName.toLowerCase().endsWith('.pdf')) {
             newName += '.pdf';
@@ -2690,6 +2729,10 @@ function updateAssessmentRow(sessionToken, rowIndex, data) {
     }
 
     SpreadsheetApp.flush();
+    
+    // Invalidate dashboard cache
+    invalidateAssessmentsCache();
+    
     Logger.log(`Updated assessment at row ${rowIndex}`);
 
     return { success: true };
@@ -2750,6 +2793,10 @@ function deleteAssessmentRow(sessionToken, rowIndex) {
 
     sheet.deleteRow(actualRow);
     SpreadsheetApp.flush();
+    
+    // Invalidate dashboard cache
+    invalidateAssessmentsCache();
+    
     Logger.log(`Deleted assessment at row ${rowIndex} by ${tokenData.email}`);
 
     return { success: true };
@@ -2984,7 +3031,7 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     }
 
     // Add new row with file URL and metadata
-    const newRow = new Array(18).fill(''); // 18 columns (0-17)
+    const newRow = new Array(19).fill(''); // 19 columns (0-18)
     newRow[CONSTANTS.COL.PDF_URL] = fileUrl;
     newRow[CONSTANTS.COL.CLASS_NAME] = metadata.className || '';
     newRow[CONSTANTS.COL.INSTRUCTOR] = metadata.instructor || '';
@@ -2992,6 +3039,7 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
     newRow[CONSTANTS.COL.STUDENT_EMAILS] = parseStudentEmails(metadata.studentEmails || '');
     newRow[CONSTANTS.COL.READ_ALOUD_ENABLED] = metadata.readAloudEnabled !== false;
     newRow[CONSTANTS.COL.ACCESS_EXPIRES] = metadata.accessExpires ? new Date(metadata.accessExpires.replace('T', ' ')) : '';
+    newRow[CONSTANTS.COL.FILE_NAME] = metadata.assessmentTitle || ''; // Column 18: Display Name
     
     const canManageSubmissions = CONSTANTS.SUBMISSION_FEATURE_ENABLED && 
       (!CONSTANTS.SUBMISSION_ADMIN_ONLY || CONSTANTS.SUBMISSION_ADMIN_ROLES.includes(tokenData.role));
@@ -3000,6 +3048,9 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
 
     sheet.appendRow(newRow);
     SpreadsheetApp.flush();
+
+    // Invalidate dashboard cache
+    invalidateAssessmentsCache();
 
     const rowIndex = sheet.getLastRow() - 1; // Subtract 1 for header
     Logger.log(`Added new assessment at row ${rowIndex}`);
@@ -3188,6 +3239,9 @@ function reprocessAssessment(sessionToken, rowIndex) {
 
     // Trigger processing
     processNewAssessment(pdfUrl);
+    
+    // Invalidate dashboard cache
+    invalidateAssessmentsCache();
 
     Logger.log(`Reprocessing assessment at row ${rowIndex}`);
     return {
@@ -3218,6 +3272,27 @@ function getOrCreateFolder(folderName) {
   } catch (e) {
     Logger.log(`Error creating folder "${folderName}": ${e.toString()}`);
     return null;
+  }
+}
+
+/**
+ * Invalidates the dashboard assessment cache for ALL users.
+ * Called when an assessment is added, updated, or deleted.
+ */
+function invalidateAssessmentsCache() {
+  const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getScriptLock();
+  
+  try {
+    // Wait for up to 5 seconds for other processes to finish
+    if (lock.tryLock(5000)) {
+      const currentVersion = parseInt(props.getProperty('CACHE_VERSION_ASSESSMENTS') || '1');
+      props.setProperty('CACHE_VERSION_ASSESSMENTS', (currentVersion + 1).toString());
+      Logger.log(`[CACHE] Global assessments cache version incremented to ${currentVersion + 1}`);
+      lock.releaseLock();
+    }
+  } catch (e) {
+    Logger.log(`[CACHE] Warning: Failed to increment cache version: ${e.toString()}`);
   }
 }
 
