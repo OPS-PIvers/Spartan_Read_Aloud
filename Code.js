@@ -4705,16 +4705,16 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     htmlBody += '.title-page h2 { color: #666; font-size: 18px; font-weight: normal; margin-bottom: 15px; }';
     htmlBody += '.stats { font-size: 14px; color: #444; }';
     
-    htmlBody += '.student-section { border-top: 8px solid #eaecf5; padding-top: 15px; margin-bottom: 20px; page-break-inside: avoid; }';
-    htmlBody += '.student-header { border-bottom: 1px solid #2d3f89; padding-bottom: 5px; margin-bottom: 15px; }';
+    htmlBody += '.student-section { border-top: 8px solid #eaecf5; padding-top: 15px; margin-bottom: 10px; page-break-inside: avoid; }';
+    htmlBody += '.student-header { border-bottom: 1px solid #2d3f89; padding-bottom: 5px; margin-bottom: 10px; }';
     htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 18px; }';
     htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 4px; color: #666; font-size: 11px; }';
     
     htmlBody += '.response-table { width: 100%; table-layout: fixed; border-collapse: collapse; border: none; }';
-    htmlBody += '.response-cell { width: 33.3%; vertical-align: top; padding: 5px 10px; box-sizing: border-box; border: none; }';
-    htmlBody += '.question-block { margin-bottom: 12px; padding: 0; border: none; }';
+    htmlBody += '.response-cell { width: 33.3%; vertical-align: top; padding: 2px 10px; box-sizing: border-box; border: none; }';
+    htmlBody += '.question-block { margin-bottom: 4px; padding: 0; border: none; }';
     htmlBody += '.question-label { font-weight: bold; margin-bottom: 4px; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }';
-    htmlBody += '.answer-container { padding: 4px 0 8px 0; border: none; background: transparent; font-size: 12px; }';
+    htmlBody += '.answer-container { padding: 2px 0 4px 0; border: none; background: transparent; font-size: 12px; }';
     htmlBody += '.answer-mc { font-weight: bold; color: #2d3f89; }';
     htmlBody += '.answer-text { line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; color: #333; }';
     htmlBody += '.empty-answer { color: #999; font-style: italic; font-size: 11px; }';
