@@ -4710,14 +4710,14 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 18px; }';
     htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 4px; color: #666; font-size: 11px; }';
     
-    htmlBody += '.response-table { width: 100%; table-layout: fixed; border-collapse: collapse; }';
-    htmlBody += '.response-cell { width: 33.3%; vertical-align: top; padding: 5px; box-sizing: border-box; }';
-    htmlBody += '.question-block { margin-bottom: 10px; border-left: 2px solid #f0f2f5; padding-left: 8px; }';
-    htmlBody += '.question-label { font-weight: bold; margin-bottom: 4px; color: #555; font-size: 12px; }';
-    htmlBody += '.answer-container { padding: 6px; border: 1px solid #e1e4e8; border-radius: 4px; background: #fff; font-size: 11px; }';
-    htmlBody += '.answer-mc { background: #f8f9fb; border-left: 3px solid #2d3f89; font-weight: bold; }';
-    htmlBody += '.answer-text { line-height: 1.3; white-space: pre-wrap; word-wrap: break-word; }';
-    htmlBody += '.empty-answer { color: #999; font-style: italic; }';
+    htmlBody += '.response-table { width: 100%; table-layout: fixed; border-collapse: collapse; border: none; }';
+    htmlBody += '.response-cell { width: 33.3%; vertical-align: top; padding: 5px 10px; box-sizing: border-box; border: none; }';
+    htmlBody += '.question-block { margin-bottom: 12px; padding: 0; border: none; }';
+    htmlBody += '.question-label { font-weight: bold; margin-bottom: 4px; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }';
+    htmlBody += '.answer-container { padding: 4px 0 8px 0; border: none; background: transparent; font-size: 12px; }';
+    htmlBody += '.answer-mc { font-weight: bold; color: #2d3f89; }';
+    htmlBody += '.answer-text { line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; color: #333; }';
+    htmlBody += '.empty-answer { color: #999; font-style: italic; font-size: 11px; }';
     htmlBody += '</style></head><body>';
     
     // Title Page
@@ -4742,15 +4742,20 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
             <div style="clear: both;"></div>
         </div>`;
         
-        // Responses in a 3-column table
+        // Responses in a 3-column table with vertical flow
+        const totalResponses = sub.responses.length;
+        const itemsPerCol = Math.ceil(totalResponses / 3);
+        
         htmlBody += '<table class="response-table">';
         
-        for (let i = 0; i < sub.responses.length; i += 3) {
+        for (let rowIdx = 0; rowIdx < itemsPerCol; rowIdx++) {
             htmlBody += '<tr>';
-            for (let j = 0; j < 3; j++) {
+            for (let colIdx = 0; colIdx < 3; colIdx++) {
                 htmlBody += '<td class="response-cell">';
-                const r = sub.responses[i + j];
-                if (r) {
+                
+                const itemIdx = rowIdx + (colIdx * itemsPerCol);
+                if (itemIdx < totalResponses) {
+                    const r = sub.responses[itemIdx];
                     const answerText = r.answer ? r.answer.toString().trim() : '';
                     const hasAnswer = answerText.length > 0;
                     
