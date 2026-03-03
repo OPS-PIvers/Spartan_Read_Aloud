@@ -4700,21 +4700,23 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     // Generate HTML
     let htmlBody = '<html><head><style>';
     htmlBody += 'body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 0; }';
-    htmlBody += '.title-page { text-align: center; margin-top: 150px; margin-bottom: 100px; border-bottom: 3px solid #2d3f89; padding-bottom: 40px; }';
-    htmlBody += '.title-page h1 { color: #2d3f89; font-size: 36px; margin-bottom: 10px; }';
-    htmlBody += '.title-page h2 { color: #666; font-weight: normal; margin-bottom: 30px; }';
-    htmlBody += '.stats { font-size: 18px; color: #444; }';
+    htmlBody += '.title-page { text-align: center; margin-top: 50px; margin-bottom: 50px; border-bottom: 2px solid #2d3f89; padding-bottom: 20px; }';
+    htmlBody += '.title-page h1 { color: #2d3f89; font-size: 28px; margin-bottom: 5px; }';
+    htmlBody += '.title-page h2 { color: #666; font-size: 18px; font-weight: normal; margin-bottom: 15px; }';
+    htmlBody += '.stats { font-size: 14px; color: #444; }';
     
-    htmlBody += '.student-section { page-break-before: always; border-top: 15px solid #eaecf5; padding-top: 30px; }';
-    htmlBody += '.student-header { border-bottom: 2px solid #2d3f89; padding-bottom: 10px; margin-bottom: 30px; }';
-    htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 22px; }';
-    htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 8px; color: #666; font-size: 14px; }';
+    htmlBody += '.student-section { border-top: 8px solid #eaecf5; padding-top: 15px; margin-bottom: 20px; page-break-inside: avoid; }';
+    htmlBody += '.student-header { border-bottom: 1px solid #2d3f89; padding-bottom: 5px; margin-bottom: 15px; }';
+    htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 18px; }';
+    htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 4px; color: #666; font-size: 11px; }';
     
-    htmlBody += '.question-block { margin-bottom: 25px; page-break-inside: avoid; border-left: 3px solid #f0f2f5; padding-left: 20px; }';
-    htmlBody += '.question-label { font-weight: bold; margin-bottom: 8px; color: #555; font-size: 15px; }';
-    htmlBody += '.answer-container { padding: 12px; border: 1px solid #e1e4e8; border-radius: 6px; background: #fff; }';
-    htmlBody += '.answer-mc { background: #f8f9fb; border-left: 4px solid #2d3f89; font-weight: bold; display: inline-block; padding: 10px 20px; }';
-    htmlBody += '.answer-text { line-height: 1.5; font-size: 14px; white-space: pre-wrap; }';
+    htmlBody += '.response-table { width: 100%; table-layout: fixed; border-collapse: collapse; }';
+    htmlBody += '.response-cell { width: 33.3%; vertical-align: top; padding: 5px; box-sizing: border-box; }';
+    htmlBody += '.question-block { margin-bottom: 10px; border-left: 2px solid #f0f2f5; padding-left: 8px; }';
+    htmlBody += '.question-label { font-weight: bold; margin-bottom: 4px; color: #555; font-size: 12px; }';
+    htmlBody += '.answer-container { padding: 6px; border: 1px solid #e1e4e8; border-radius: 4px; background: #fff; font-size: 11px; }';
+    htmlBody += '.answer-mc { background: #f8f9fb; border-left: 3px solid #2d3f89; font-weight: bold; }';
+    htmlBody += '.answer-text { line-height: 1.3; white-space: pre-wrap; word-wrap: break-word; }';
     htmlBody += '.empty-answer { color: #999; font-style: italic; }';
     htmlBody += '</style></head><body>';
     
@@ -4723,8 +4725,7 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
         <h1>Submission Report</h1>
         <h2>${escapeHtmlBackend(assessmentName)}</h2>
         <div class="stats">
-            <p><strong>Total Submissions:</strong> ${submissions.length}</p>
-            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+            <p><strong>Total Submissions:</strong> ${submissions.length} | <strong>Generated:</strong> ${new Date().toLocaleString()}</p>
         </div>
     </div>`;
     
@@ -4741,25 +4742,38 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
             <div style="clear: both;"></div>
         </div>`;
         
-        // Responses
-        sub.responses.forEach(r => {
-             const answerText = r.answer ? r.answer.toString().trim() : '';
-             const hasAnswer = answerText.length > 0;
-             
-             htmlBody += '<div class="question-block">';
-             htmlBody += `<div class="question-label">${escapeHtmlBackend(r.questionLabel)}</div>`;
-             
-             if (r.questionType === 'mc') {
-                htmlBody += '<div class="answer-container answer-mc">';
-                htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No answer</span>';
-                htmlBody += '</div>';
-             } else {
-                htmlBody += '<div class="answer-container answer-text">';
-                htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No response provided</span>';
-                htmlBody += '</div>';
-             }
-             htmlBody += '</div>';
-        });
+        // Responses in a 3-column table
+        htmlBody += '<table class="response-table">';
+        
+        for (let i = 0; i < sub.responses.length; i += 3) {
+            htmlBody += '<tr>';
+            for (let j = 0; j < 3; j++) {
+                htmlBody += '<td class="response-cell">';
+                const r = sub.responses[i + j];
+                if (r) {
+                    const answerText = r.answer ? r.answer.toString().trim() : '';
+                    const hasAnswer = answerText.length > 0;
+                    
+                    htmlBody += '<div class="question-block">';
+                    htmlBody += `<div class="question-label">${escapeHtmlBackend(r.questionLabel)}</div>`;
+                    
+                    if (r.questionType === 'mc') {
+                        htmlBody += '<div class="answer-container answer-mc">';
+                        htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No answer</span>';
+                        htmlBody += '</div>';
+                    } else {
+                        htmlBody += '<div class="answer-container answer-text">';
+                        htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No response</span>';
+                        htmlBody += '</div>';
+                    }
+                    htmlBody += '</div>';
+                }
+                htmlBody += '</td>';
+            }
+            htmlBody += '</tr>';
+        }
+        
+        htmlBody += '</table>';
         htmlBody += '</div>';
     });
     
