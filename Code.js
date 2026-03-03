@@ -4699,25 +4699,25 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
 
     // Generate HTML
     let htmlBody = '<html><head><style>';
-    htmlBody += 'body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 0; }';
-    htmlBody += '.title-page { text-align: center; margin-top: 50px; margin-bottom: 50px; border-bottom: 2px solid #2d3f89; padding-bottom: 20px; }';
-    htmlBody += '.title-page h1 { color: #2d3f89; font-size: 28px; margin-bottom: 5px; }';
-    htmlBody += '.title-page h2 { color: #666; font-size: 18px; font-weight: normal; margin-bottom: 15px; }';
-    htmlBody += '.stats { font-size: 14px; color: #444; }';
+    htmlBody += 'body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 0; line-height: 1.0; }';
+    htmlBody += '.title-page { text-align: center; margin-top: 30px; margin-bottom: 30px; border-bottom: 2px solid #2d3f89; padding-bottom: 15px; }';
+    htmlBody += '.title-page h1 { color: #2d3f89; font-size: 24px; margin-bottom: 5px; }';
+    htmlBody += '.title-page h2 { color: #666; font-size: 16px; font-weight: normal; margin-bottom: 10px; }';
+    htmlBody += '.stats { font-size: 12px; color: #444; }';
     
-    htmlBody += '.student-section { border-top: 8px solid #eaecf5; padding-top: 15px; margin-bottom: 10px; page-break-inside: avoid; }';
-    htmlBody += '.student-header { border-bottom: 1px solid #2d3f89; padding-bottom: 5px; margin-bottom: 10px; }';
-    htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 18px; }';
-    htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 4px; color: #666; font-size: 11px; }';
+    htmlBody += '.student-section { border-top: 4px solid #eaecf5; padding-top: 10px; margin-bottom: 5px; page-break-inside: avoid; }';
+    htmlBody += '.student-header { border-bottom: 1px solid #2d3f89; padding-bottom: 3px; margin-bottom: 5px; }';
+    htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 16px; }';
+    htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 2px; color: #666; font-size: 10px; }';
     
     htmlBody += '.response-table { width: 100%; table-layout: fixed; border-collapse: collapse; border: none; }';
-    htmlBody += '.response-cell { width: 33.3%; vertical-align: top; padding: 2px 10px; box-sizing: border-box; border: none; }';
-    htmlBody += '.question-block { margin-bottom: 4px; padding: 0; border: none; }';
-    htmlBody += '.question-label { font-weight: bold; margin-bottom: 4px; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }';
-    htmlBody += '.answer-container { padding: 2px 0 4px 0; border: none; background: transparent; font-size: 12px; }';
+    htmlBody += '.response-cell { width: 33.3%; vertical-align: top; padding: 1px 10px 4px 10px; box-sizing: border-box; border: none; }';
+    htmlBody += '.question-block { margin: 0; padding: 0; border: none; }';
+    htmlBody += '.question-label { font-weight: bold; margin-bottom: 2px; color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }';
+    htmlBody += '.answer-container { padding: 0 0 2px 0; border: none; background: transparent; font-size: 11px; }';
     htmlBody += '.answer-mc { font-weight: bold; color: #2d3f89; }';
-    htmlBody += '.answer-text { line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; color: #333; }';
-    htmlBody += '.empty-answer { color: #999; font-style: italic; font-size: 11px; }';
+    htmlBody += '.answer-text { line-height: 1.1; white-space: pre-wrap; word-wrap: break-word; color: #333; }';
+    htmlBody += '.empty-answer { color: #999; font-style: italic; font-size: 10px; }';
     htmlBody += '</style></head><body>';
     
     // Title Page
