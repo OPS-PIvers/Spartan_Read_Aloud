@@ -4744,13 +4744,13 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     // Generate HTML
     let htmlBody = '<html><head><style>';
     htmlBody += 'body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 0; line-height: 1.0; }';
-    htmlBody += '.title-page { text-align: center; margin-top: 30px; margin-bottom: 30px; border-bottom: 2px solid #2d3f89; padding-bottom: 15px; }';
-    htmlBody += '.title-page h1 { color: #2d3f89; font-size: 24px; margin-bottom: 5px; }';
-    htmlBody += '.title-page h2 { color: #666; font-size: 16px; font-weight: normal; margin-bottom: 10px; }';
+    htmlBody += '.title-page { text-align: center; margin-top: 0; margin-bottom: 20px; border-bottom: 2px solid #2d3f89; padding-bottom: 10px; }';
+    htmlBody += '.title-page h1 { color: #2d3f89; font-size: 24px; margin: 0 0 5px 0; }';
+    htmlBody += '.title-page h2 { color: #666; font-size: 16px; font-weight: normal; margin: 0 0 10px 0; }';
     htmlBody += '.stats { font-size: 12px; color: #444; }';
     htmlBody += '.page-break { page-break-after: always; }';
     
-    htmlBody += '.student-section { border-top: 4px solid #eaecf5; padding-top: 20px; margin-bottom: 20px; }';
+    htmlBody += '.student-section { border-top: 4px solid #eaecf5; padding-top: 10px; margin-bottom: 15px; }';
     htmlBody += '.student-header { border-bottom: 1px solid #2d3f89; padding-bottom: 3px; margin-bottom: 5px; }';
     htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 16px; }';
     htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 2px; color: #666; font-size: 10px; }';
@@ -4777,7 +4777,7 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     submissions.forEach((sub, index) => {
         // Add a robust page break before every student except the very first one
         if (index > 0) {
-            htmlBody += '<div style="page-break-before: always; clear: both; height: 1px; overflow: hidden;">&nbsp;</div>';
+            htmlBody += '<div style="page-break-before: always; clear: both; height: 0; overflow: hidden; margin: 0; padding: 0;">&nbsp;</div>';
         }
 
         htmlBody += '<div class="student-section">';
@@ -4883,6 +4883,26 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     }
     
     Logger.log('[REPORT] Converting to PDF...');
+    
+    // Open the document to set margins and clean up top-of-page whitespace
+    const doc = DocumentApp.openById(tempDocMeta.id);
+    const body = doc.getBody();
+    
+    // Set 1-inch (72pt) margins
+    body.setMarginTop(72);
+    body.setMarginBottom(72);
+    body.setMarginLeft(72);
+    body.setMarginRight(72);
+    
+    // Remove any empty paragraphs at the very start (often added by HTML conversion)
+    while (body.getChild(0).getType() === DocumentApp.ElementType.PARAGRAPH && 
+           body.getChild(0).asParagraph().getText().trim() === "" &&
+           body.getNumChildren() > 1) {
+        body.removeChild(body.getChild(0));
+    }
+    
+    doc.saveAndClose();
+    
     const pdfBlob = DriveApp.getFileById(tempDocMeta.id).getAs('application/pdf');
     pdfBlob.setName(`Submissions - ${assessmentName} (${new Date().toISOString().substring(0,10)}).pdf`);
     
