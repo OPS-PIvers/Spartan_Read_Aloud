@@ -884,19 +884,59 @@
       font-family: var(--font-main);
       font-size: 14px;
       color: var(--gray-900);
-      resize: vertical;
       min-height: 40px;
       transition: border-color 0.2s;
       background: var(--bg-surface);
+      overflow-y: auto;
+      word-wrap: break-word;
     }
     .sidebar-text-input:focus {
       outline: none;
       border-color: var(--primary-blue);
       box-shadow: 0 0 0 3px rgba(45,63,137,0.1);
     }
-    .sidebar-text-input.single-line { min-height: 40px; resize: none; }
-    .sidebar-text-input.multi-line { min-height: 80px; }
+    .sidebar-text-input.single-line { min-height: 40px; white-space: nowrap; overflow-x: auto; }
+    .sidebar-text-input.multi-line { min-height: 100px; }
 
+    .rich-text-toolbar {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-300);
+      border-bottom: none;
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      margin-top: 8px;
+    }
+    .rich-text-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--gray-700);
+      transition: all 0.15s;
+    }
+    .rich-text-btn:hover {
+      background: var(--gray-200);
+      color: var(--primary-blue);
+    }
+    .rich-text-btn.active {
+      background: var(--primary-lighter);
+      color: var(--primary-blue);
+      border-color: var(--primary-light);
+    }
+    .rich-text-btn .material-icons { font-size: 18px; }
+
+    /* When toolbar exists, adjust input border */
+    .rich-text-toolbar + .sidebar-text-input {
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+    }
     .url-warning {
       font-size: 11px;
       color: #e74c3c;
@@ -1268,8 +1308,8 @@ function loadDraftAnswers() {
             radio.closest('.mc-option-label').classList.add('selected');
           }
         } else {
-          const textarea = document.querySelector(`.sidebar-text-input[data-chunk="${chunkIdx}"]`);
-          if (textarea) textarea.value = draft.answer;
+          const editable = document.querySelector(`.sidebar-text-input[data-chunk="${chunkIdx}"]`);
+          if (editable) editable.innerHTML = draft.answer;
         }
       }
     });
@@ -2409,8 +2449,14 @@ function buildSidebarFields() {
       // Determine if it looks like a short fill-in-the-blank or longer response
       const isShort = chunk.text.length < 100 && !chunk.text.includes('\n');
       const inputClass = isShort ? 'sidebar-text-input single-line' : 'sidebar-text-input multi-line';
-      const rows = isShort ? 1 : 3;
-      fieldHtml = '<textarea class="' + inputClass + '" data-chunk="' + index + '" rows="' + rows + '" placeholder="Type your answer..."></textarea>';
+      
+      // Toolbar for rich text
+      fieldHtml = '<div class="rich-text-toolbar">' +
+        '<button class="rich-text-btn" title="Bold" onclick="toggleRichText(\'bold\', ' + index + ')"><span class="material-icons">format_bold</span></button>' +
+        '<button class="rich-text-btn" title="Underline" onclick="toggleRichText(\'underline\', ' + index + ')"><span class="material-icons">format_underlined</span></button>' +
+        '</div>';
+        
+      fieldHtml += '<div contenteditable="true" class="' + inputClass + '" data-chunk="' + index + '" placeholder="Type your answer..."></div>';
       fieldHtml += '<div class="url-warning" id="url-warn-' + index + '">Links are not allowed and have been removed.</div>';
     }
 
@@ -2440,11 +2486,12 @@ function buildSidebarFields() {
   });
 
   // Attach event listeners for text inputs with URL warning
-  container.querySelectorAll('.sidebar-text-input').forEach(textarea => {
-    const chunkIdx = parseInt(textarea.dataset.chunk);
+  container.querySelectorAll('.sidebar-text-input').forEach(editable => {
+    const chunkIdx = parseInt(editable.dataset.chunk);
 
-    textarea.addEventListener('input', function() {
-      const hasUrl = containsUrls(this.value);
+    editable.addEventListener('input', function() {
+      // Use textContent for URL detection to avoid matches in HTML tags
+      const hasUrl = containsUrls(this.textContent);
       const warn = document.getElementById('url-warn-' + chunkIdx);
       if (warn) {
         if (hasUrl) {
@@ -2456,37 +2503,51 @@ function buildSidebarFields() {
         }
       }
       const field = submissionFields.find(f => f.chunkIndex === chunkIdx);
-      if (field) field.answer = this.value;
+      if (field) {
+        // Use innerHTML to preserve rich text (<b>, <u>)
+        field.answer = this.innerHTML;
+      }
       
       updateAnswerCount();
       saveDraftAnswers(); // Auto-save
     });
 
-    // Handle paste
-    textarea.addEventListener('paste', function(e) {
-      // Allow paste but check for URLs after a short delay
-      setTimeout(() => {
-        const hasUrl = containsUrls(this.value);
-        const warn = document.getElementById('url-warn-' + chunkIdx);
-        if (warn && hasUrl) {
-          warn.textContent = 'Note: Links are permitted but may be monitored.';
-          warn.style.color = 'var(--gray-500)';
-          warn.classList.add('visible');
-        }
-        
-        const field = submissionFields.find(f => f.chunkIndex === chunkIdx);
-        if (field) field.answer = this.value;
-        
-        updateAnswerCount();
-        saveDraftAnswers();
-      }, 10);
+    // Handle paste to strip complex HTML but keep line breaks and potentially basic formatting
+    editable.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const text = e.clipboardData.getData('text/plain');
+      // Simple insertion for now. For better UX, we could try to keep formatting 
+      // but it's risky with contenteditable. For now, we strip formatting on paste
+      // to ensure we only have what we support.
+      document.execCommand('insertText', false, text);
+      
+      // Update data
+      const field = submissionFields.find(f => f.chunkIndex === chunkIdx);
+      if (field) field.answer = this.innerHTML;
+      updateAnswerCount();
+      saveDraftAnswers();
     });
 
-    // Block drag-and-drop of links
-    textarea.addEventListener('drop', function(e) {
+    // Block drag-and-drop
+    editable.addEventListener('drop', function(e) {
       e.preventDefault();
     });
   });
+}
+
+/**
+ * Toggles rich text formatting for a question.
+ */
+function toggleRichText(command, index) {
+  const editable = document.querySelector(`.sidebar-text-input[data-chunk="${index}"]`);
+  if (editable) {
+    editable.focus();
+    document.execCommand(command, false, null);
+    
+    // Trigger input event to save changes
+    const event = new Event('input', { bubbles: true });
+    editable.dispatchEvent(event);
+  }
 }
 
 /**
@@ -2677,12 +2738,18 @@ function submitAssessment() {
   });
 }
 
-function doSubmit() {
+function doSubmit(retryAttempt = 0) {
   const submitBtn = document.getElementById('submit-btn');
   const progress = document.getElementById('submit-progress');
   submitBtn.disabled = true;
-  submitBtn.innerHTML = '<span class="material-icons animate-spin" style="font-size:18px">refresh</span> Submitting...';
-  progress.textContent = 'Sending to instructor...';
+  
+  if (retryAttempt > 0) {
+    submitBtn.innerHTML = '<span class="material-icons animate-spin" style="font-size:18px">refresh</span> Retrying (Attempt ' + (retryAttempt + 1) + ')...';
+    progress.textContent = 'Server is busy, retrying submission...';
+  } else {
+    submitBtn.innerHTML = '<span class="material-icons animate-spin" style="font-size:18px">refresh</span> Submitting...';
+    progress.textContent = 'Sending to instructor...';
+  }
 
   const responses = submissionFields.map(f => ({
     chunkIndex: f.chunkIndex,
@@ -2690,6 +2757,8 @@ function doSubmit() {
     questionType: f.questionType,
     answer: f.answer
   }));
+
+  const maxRetries = 3;
 
   google.script.run
     .withSuccessHandler(function(result) {
@@ -2703,20 +2772,43 @@ function doSubmit() {
         clearDraftAnswers();
 
         // Disable all input fields
-        document.querySelectorAll('.sidebar-text-input').forEach(el => { el.disabled = true; });
+        document.querySelectorAll('.sidebar-text-input').forEach(el => { 
+          el.contentEditable = "false"; 
+          el.style.background = "var(--gray-50)";
+          el.style.cursor = "not-allowed";
+        });
+        document.querySelectorAll('.rich-text-btn').forEach(btn => {
+          btn.disabled = true;
+          btn.style.opacity = "0.5";
+          btn.style.pointerEvents = "none";
+        });
         document.querySelectorAll('.mc-option-label input[type="radio"]').forEach(el => { el.disabled = true; });
+      } else {
+        // Handle server-side errors that might deserve a retry (like lock timeout)
+        const errorText = (result.error || '').toLowerCase();
+        if (retryAttempt < maxRetries && (errorText.includes('lock') || errorText.includes('timeout') || errorText.includes('busy') || errorText.includes('service error'))) {
+          const delay = Math.pow(2, retryAttempt) * 1000 + (Math.random() * 1000); // Exponential backoff
+          setTimeout(() => doSubmit(retryAttempt + 1), delay);
+        } else {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span class="material-icons" style="font-size:18px">send</span> Submit Assessment';
+          progress.textContent = '';
+          showToast(result.error || 'Submission failed. Please try again.', 'error');
+        }
+      }
+    })
+    .withFailureHandler(function(err) {
+      // Client-side/network failures or Google "Service Error" (limit exceeded)
+      const errorText = (err.message || err || '').toString().toLowerCase();
+      if (retryAttempt < maxRetries && (errorText.includes('timeout') || errorText.includes('service error') || errorText.includes('rate limit') || errorText.includes('simultaneous'))) {
+        const delay = Math.pow(2, retryAttempt) * 1000 + (Math.random() * 1000);
+        setTimeout(() => doSubmit(retryAttempt + 1), delay);
       } else {
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<span class="material-icons" style="font-size:18px">send</span> Submit Assessment';
         progress.textContent = '';
-        showToast(result.error || 'Submission failed. Please try again.', 'error');
+        showToast('Submission failed: ' + err, 'error');
       }
-    })
-    .withFailureHandler(function(err) {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = '<span class="material-icons" style="font-size:18px">send</span> Submit Assessment';
-      progress.textContent = '';
-      showToast('Submission failed: ' + err, 'error');
     })
     .submitAssessmentResponses(sessionToken, currentAssessmentUrl, responses);
 }

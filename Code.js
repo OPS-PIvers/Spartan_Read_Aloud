@@ -4345,8 +4345,8 @@ function getInstructorEmail(instructorName) {
 function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
   const lock = LockService.getScriptLock();
   try {
-    // Wait for up to 30 seconds for the lock to handle high concurrency
-    lock.waitLock(30000);
+    // Wait for up to 120 seconds for the lock to handle high concurrency (e.g. 90 students)
+    lock.waitLock(120000);
 
     // Validate session
     const tokenData = validateSessionToken(sessionToken);
@@ -4478,14 +4478,16 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
       Logger.log('[SUBMIT] Saving to Submissions sheet...');
       const submissionsSheet = getOrCreateSubmissionsSheet();
       const responsesJson = JSON.stringify(responses);
-      const rowData = [
-        new Date(),
-        assessmentUrl,
-        assessmentName,
-        studentEmail,
-        studentName,
-        '' // Placeholder for responses
-      ];
+      
+      // Build row data using constants for column mapping
+      const rowData = [];
+      rowData[CONSTANTS.COL_SUBMISSIONS.TIMESTAMP] = new Date();
+      rowData[CONSTANTS.COL_SUBMISSIONS.ASSESSMENT_URL] = assessmentUrl;
+      rowData[CONSTANTS.COL_SUBMISSIONS.ASSESSMENT_NAME] = assessmentName;
+      rowData[CONSTANTS.COL_SUBMISSIONS.STUDENT_EMAIL] = studentEmail;
+      rowData[CONSTANTS.COL_SUBMISSIONS.STUDENT_NAME] = studentName;
+      rowData[CONSTANTS.COL_SUBMISSIONS.RESPONSES_JSON] = ''; // Placeholder for offloaded data
+      
       submissionsSheet.appendRow(rowData);
       
       // Use setLargeDataInCell for the responses JSON to handle potential 50k char limit
@@ -4499,6 +4501,14 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
       if (submissionDeliveryMode === 'bulk') {
         throw e; // Rethrow to be caught by main catch block
       }
+    }
+
+    // RELEASE LOCK during slow PDF generation and emailing phase to allow other students to submit concurrently
+    try {
+      lock.releaseLock();
+      Logger.log('[SUBMIT] Released lock for slow operations.');
+    } catch (lockErr) {
+      Logger.log('[SUBMIT] Warning: Error releasing lock: ' + lockErr.toString());
     }
 
     const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' });
@@ -4521,7 +4531,7 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
         htmlBody += '.question-label { font-weight: bold; color: #2d3f89; margin-bottom: 10px; font-size: 16px; }';
         htmlBody += '.answer-container { padding: 15px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; min-height: 40px; }';
         htmlBody += '.answer-mc { background: #f5f7fa; border-left: 4px solid #2d3f89; font-weight: bold; font-size: 17px; }';
-        htmlBody += '.answer-text { white-space: pre-wrap; line-height: 1.6; font-size: 15px; }';
+        htmlBody += '.answer-text { line-height: 1.6; font-size: 15px; }';
         htmlBody += '.empty-answer { color: #999; font-style: italic; }';
         htmlBody += '.footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 11px; }';
         htmlBody += '</style></head><body>';
@@ -4553,7 +4563,7 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
             htmlBody += '</div>';
           } else {
             htmlBody += '<div class="answer-container answer-text">';
-            htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No response provided</span>';
+            htmlBody += hasAnswer ? renderSubmissionAnswer(answerText) : '<span class="empty-answer">No response provided</span>';
             htmlBody += '</div>';
           }
           htmlBody += '</div>';
@@ -4627,8 +4637,19 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     // Record submission timestamp
     Logger.log('[SUBMIT] Recording timestamp in spreadsheet...');
     try {
-      const rawTimestamps = data[assessmentRowIndex][CONSTANTS.COL.SUBMISSION_TIMESTAMPS];
-      const currentTimestampsJson = getLargeDataFromCell(rawTimestamps);
+      // Re-acquire lock to ensure safe update of the shared timestamp object in the database
+      try {
+        lock.waitLock(120000);
+        Logger.log('[SUBMIT] Re-acquired lock for final timestamp update.');
+      } catch (lockErr) {
+        Logger.log('[SUBMIT] Warning: Could not re-acquire lock for timestamp: ' + lockErr.toString());
+        // Continue anyway as the primary data is already saved in the Submissions sheet
+      }
+
+      // Re-read current timestamps from sheet as they may have changed during the slow PDF generation phase
+      const timestampsRange = sheet.getRange(assessmentRowIndex + 1, CONSTANTS.COL.SUBMISSION_TIMESTAMPS + 1);
+      const currentTimestampsJson = getLargeDataFromCell(timestampsRange.getValue());
+      
       let submissionTimestamps = {};
       if (currentTimestampsJson && currentTimestampsJson.trim()) {
         try {
@@ -4639,7 +4660,6 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
       }
       submissionTimestamps[studentEmail] = new Date().toISOString();
       
-      const timestampsRange = sheet.getRange(assessmentRowIndex + 1, CONSTANTS.COL.SUBMISSION_TIMESTAMPS + 1);
       setLargeDataInCell(timestampsRange, JSON.stringify(submissionTimestamps), `Timestamps_${assessmentName}`);
       
       Logger.log('[SUBMIT] Timestamp recorded.');
@@ -4679,14 +4699,31 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     
     // Start from row 1 (skip header)
     for (let i = 1; i < data.length; i++) {
-        if (areUrlsSameFile(data[i][1], assessmentUrl)) {
-            submissions.push({
-                timestamp: data[i][0],
-                studentName: data[i][4],
-                studentEmail: data[i][3],
-                responses: JSON.parse(data[i][5])
-            });
-            if (data[i][2]) assessmentName = data[i][2];
+        if (areUrlsSameFile(data[i][CONSTANTS.COL_SUBMISSIONS.ASSESSMENT_URL], assessmentUrl)) {
+            const rawResponses = data[i][CONSTANTS.COL_SUBMISSIONS.RESPONSES_JSON];
+            const responsesJson = getLargeDataFromCell(rawResponses);
+            
+            try {
+              submissions.push({
+                  timestamp: data[i][CONSTANTS.COL_SUBMISSIONS.TIMESTAMP],
+                  studentName: data[i][CONSTANTS.COL_SUBMISSIONS.STUDENT_NAME],
+                  studentEmail: data[i][CONSTANTS.COL_SUBMISSIONS.STUDENT_EMAIL],
+                  responses: JSON.parse(responsesJson || '[]')
+              });
+            } catch (parseErr) {
+              Logger.log(`Error parsing responses for ${data[i][CONSTANTS.COL_SUBMISSIONS.STUDENT_EMAIL]}: ${parseErr.toString()}`);
+              // Push with empty responses so the student is still listed in the report
+              submissions.push({
+                  timestamp: data[i][CONSTANTS.COL_SUBMISSIONS.TIMESTAMP],
+                  studentName: data[i][CONSTANTS.COL_SUBMISSIONS.STUDENT_NAME],
+                  studentEmail: data[i][CONSTANTS.COL_SUBMISSIONS.STUDENT_EMAIL],
+                  responses: [],
+                  error: 'Data corrupted'
+              });
+            }
+            if (data[i][CONSTANTS.COL_SUBMISSIONS.ASSESSMENT_NAME]) {
+              assessmentName = data[i][CONSTANTS.COL_SUBMISSIONS.ASSESSMENT_NAME];
+            }
         }
     }
 
@@ -4705,7 +4742,7 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     htmlBody += '.title-page h2 { color: #666; font-size: 16px; font-weight: normal; margin-bottom: 10px; }';
     htmlBody += '.stats { font-size: 12px; color: #444; }';
     
-    htmlBody += '.student-section { border-top: 4px solid #eaecf5; padding-top: 10px; margin-bottom: 5px; page-break-inside: avoid; }';
+    htmlBody += '.student-section { border-top: 4px solid #eaecf5; padding-top: 20px; margin-bottom: 20px; page-break-before: always; }';
     htmlBody += '.student-header { border-bottom: 1px solid #2d3f89; padding-bottom: 3px; margin-bottom: 5px; }';
     htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 16px; }';
     htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 2px; color: #666; font-size: 10px; }';
@@ -4716,7 +4753,7 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     htmlBody += '.question-label { font-weight: bold; margin-bottom: 2px; color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }';
     htmlBody += '.answer-container { padding: 0 0 2px 0; border: none; background: transparent; font-size: 11px; }';
     htmlBody += '.answer-mc { font-weight: bold; color: #2d3f89; }';
-    htmlBody += '.answer-text { line-height: 1.1; white-space: pre-wrap; word-wrap: break-word; color: #333; }';
+    htmlBody += '.answer-text { line-height: 1.1; word-wrap: break-word; color: #333; }';
     htmlBody += '.empty-answer { color: #999; font-style: italic; font-size: 10px; }';
     htmlBody += '</style></head><body>';
     
@@ -4741,6 +4778,12 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
             </div>
             <div style="clear: both;"></div>
         </div>`;
+        
+        if (sub.error) {
+            htmlBody += `<div style="color: #d32f2f; padding: 10px; border: 1px solid #d32f2f; border-radius: 4px; margin: 10px 0; font-size: 11px; background-color: #fdf5f5;">
+                <strong>⚠️ DATA ERROR:</strong> ${escapeHtmlBackend(sub.error)}. The detailed responses for this student could not be loaded from the database.
+            </div>`;
+        }
         
         // Responses in a 3-column table with vertical flow
         const totalResponses = sub.responses.length;
@@ -4768,7 +4811,7 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
                         htmlBody += '</div>';
                     } else {
                         htmlBody += '<div class="answer-container answer-text">';
-                        htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No response</span>';
+                        htmlBody += hasAnswer ? renderSubmissionAnswer(answerText) : '<span class="empty-answer">No response</span>';
                         htmlBody += '</div>';
                     }
                     htmlBody += '</div>';
@@ -4820,6 +4863,34 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
   }
 }
 
+/**
+ * Safely renders a submission answer, allowing ONLY basic formatting and structural tags.
+ * This prevents XSS while supporting rich text formatting from contenteditable fields.
+ * @param {string} text The raw answer text which may contain HTML
+ * @returns {string} The safe HTML string
+ */
+function renderSubmissionAnswer(text) {
+  if (!text) return '';
+
+  // First escape everything to be safe
+  let escaped = escapeHtmlBackend(text);
+
+  // Then selectively restore ONLY safe tags that were escaped
+  // We handle both lowercase and uppercase, and strip any attributes for security
+  return escaped
+    .replace(/&lt;b&gt;/gi, '<b>')
+    .replace(/&lt;\/b&gt;/gi, '</b>')
+    .replace(/&lt;u&gt;/gi, '<u>')
+    .replace(/&lt;\/u&gt;/gi, '</u>')
+    .replace(/&lt;strong&gt;/gi, '<b>')
+    .replace(/&lt;\/strong&gt;/gi, '</b>')
+    .replace(/&lt;br\s*\/?&gt;/gi, '<br>')
+    .replace(/&lt;div&gt;/gi, '<div>')
+    .replace(/&lt;\/div&gt;/gi, '</div>')
+    .replace(/&lt;p&gt;/gi, '<p>')
+    .replace(/&lt;\/p&gt;/gi, '</p>')
+    .replace(/\n/g, '<br>');
+}
 
 /**
  * Server-side HTML escaping utility for building email/doc HTML.
