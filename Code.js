@@ -4894,6 +4894,14 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     body.setMarginLeft(72);
     body.setMarginRight(72);
     
+    // Remove default paragraph spacing which Google Docs adds during conversion
+    const paragraphs = body.getParagraphs();
+    for (let i = 0; i < paragraphs.length; i++) {
+        paragraphs[i].setSpacingBefore(0);
+        paragraphs[i].setSpacingAfter(0);
+        paragraphs[i].setLineSpacing(1.0);
+    }
+    
     // Add a native page break after the title page (which is at the top)
     // We find the first student header and insert before it
     const searchResult = body.findText("\\[\\[PAGE_BREAK\\]\\]");
