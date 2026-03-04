@@ -4750,7 +4750,7 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     htmlBody += '.stats { font-size: 12px; color: #444; }';
     htmlBody += '.page-break { page-break-after: always; }';
     
-    htmlBody += '.student-section { border-top: 4px solid #eaecf5; padding-top: 10px; margin-bottom: 15px; }';
+    htmlBody += '.student-section { border-top: none; padding-top: 0; margin-bottom: 15px; }';
     htmlBody += '.student-header { border-bottom: 1px solid #2d3f89; padding-bottom: 3px; margin-bottom: 5px; }';
     htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 16px; }';
     htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 2px; color: #666; font-size: 10px; }';
