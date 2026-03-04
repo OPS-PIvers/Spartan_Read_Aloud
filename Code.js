@@ -4748,8 +4748,9 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     htmlBody += '.title-page h1 { color: #2d3f89; font-size: 24px; margin-bottom: 5px; }';
     htmlBody += '.title-page h2 { color: #666; font-size: 16px; font-weight: normal; margin-bottom: 10px; }';
     htmlBody += '.stats { font-size: 12px; color: #444; }';
+    htmlBody += '.page-break { page-break-after: always; }';
     
-    htmlBody += '.student-section { border-top: 4px solid #eaecf5; padding-top: 20px; margin-bottom: 20px; page-break-before: always; }';
+    htmlBody += '.student-section { border-top: 4px solid #eaecf5; padding-top: 20px; margin-bottom: 20px; }';
     htmlBody += '.student-header { border-bottom: 1px solid #2d3f89; padding-bottom: 3px; margin-bottom: 5px; }';
     htmlBody += '.student-header h2 { color: #2d3f89; margin: 0; font-size: 16px; }';
     htmlBody += '.student-meta { display: flex; justify-content: space-between; margin-top: 2px; color: #666; font-size: 10px; }';
@@ -4774,6 +4775,14 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     </div>`;
     
     submissions.forEach((sub, index) => {
+        // Add page break before every student except the very first one (who follows the title page)
+        // Note: The title page also needs a break after it.
+        if (index === 0) {
+            htmlBody += '<div class="page-break"></div>';
+        } else {
+            htmlBody += '<div class="page-break"></div>';
+        }
+
         htmlBody += '<div class="student-section">';
         
         // Student Header
@@ -4818,7 +4827,7 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
                 const items = block.items;
                 const itemsPerCol = Math.ceil(items.length / 3);
                 
-                htmlBody += '<table class="response-table" style="margin-bottom: 10px;">';
+                htmlBody += '<table class="response-table" style="margin-bottom: 25px;">';
                 for (let rowIdx = 0; rowIdx < itemsPerCol; rowIdx++) {
                     htmlBody += '<tr>';
                     for (let colIdx = 0; colIdx < 3; colIdx++) {
@@ -4846,7 +4855,7 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
                 const answerText = r.answer ? r.answer.toString().trim() : '';
                 const hasAnswer = answerText.length > 0;
                 
-                htmlBody += '<div style="width: 100%; margin-bottom: 15px; padding: 0 10px; box-sizing: border-box;">';
+                htmlBody += '<div style="width: 100%; margin-bottom: 25px; padding: 0 10px; box-sizing: border-box;">';
                 htmlBody += `<div class="question-label" style="border-bottom: 1px solid #f0f0f0; padding-bottom: 2px; margin-bottom: 4px;">${escapeHtmlBackend(r.questionLabel)}</div>`;
                 htmlBody += '<div class="answer-container answer-text" style="min-height: 20px; font-size: 11px;">';
                 htmlBody += hasAnswer ? renderSubmissionAnswer(answerText) : '<span class="empty-answer">No response provided</span>';
