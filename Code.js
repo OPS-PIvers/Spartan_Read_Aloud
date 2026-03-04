@@ -4663,6 +4663,10 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
       setLargeDataInCell(timestampsRange, JSON.stringify(submissionTimestamps), `Timestamps_${assessmentName}`);
       
       Logger.log('[SUBMIT] Timestamp recorded.');
+
+      // Invalidate the teacher dashboard cache so they see the "Download PDF" button immediately
+      invalidateAssessmentsCache();
+      
     } catch (e) {
       Logger.log('[SUBMIT] Error recording submission timestamp: ' + e.toString());
     }

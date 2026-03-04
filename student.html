@@ -748,14 +748,14 @@
       position: fixed;
       top: 64px;
       right: 0;
-      bottom: var(--toolbar-height);
+      bottom: 0;
       width: 360px;
       min-width: 280px;
       max-width: 50vw;
       background: var(--bg-surface);
       border-left: 1px solid rgba(0,0,0,0.08);
       box-shadow: -4px 0 20px rgba(0,0,0,0.06);
-      z-index: 90;
+      z-index: 1001; /* Above audio-toolbar */
       display: flex;
       flex-direction: column;
       transform: translateX(100%);
@@ -999,6 +999,96 @@
       .submission-sidebar { width: 100vw; max-width: 100vw; min-width: 100vw; }
       body.sidebar-open .main-container { margin-right: 0; }
       body.sidebar-open .audio-toolbar { right: 0; }
+    }
+
+    /* --- AUDIO TOOLBAR --- */
+    .audio-toolbar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--toolbar-height);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(0,0,0,0.05);
+      box-shadow: var(--shadow-up);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 24px;
+      z-index: 1000;
+    }
+
+    .toolbar-inner {
+      width: 100%;
+      max-width: 1000px;
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .toolbar-info { 
+      display: flex; 
+      align-items: center; 
+      gap: 12px; 
+      min-width: 180px; 
+      flex: 0 1 auto; 
+      overflow: hidden;
+    }
+    .toolbar-controls { 
+      flex: 1 1 auto; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      max-width: 500px; 
+      min-width: 200px;
+    }
+    .toolbar-tools { 
+      display: flex; 
+      align-items: center; 
+      gap: 12px; 
+      min-width: 100px; 
+      flex: 0 1 auto; 
+      justify-content: flex-end;
+    }
+
+    /* Info */
+    .toolbar-artwork {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, var(--primary-light), var(--primary-blue));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      box-shadow: 0 4px 12px rgba(45, 63, 137, 0.2);
+      flex-shrink: 0;
+    }
+    .toolbar-text { overflow: hidden; }
+    .track-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--primary-dark);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .track-subtitle {
+      font-size: 11px;
+      color: var(--gray-500);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    @media (max-width: 900px) {
+      .toolbar-inner { gap: 12px; }
+      .toolbar-info { display: none; }
+    }
+    @media (max-width: 500px) {
+      .toolbar-tools { display: none; }
     }
 
           </style>
@@ -2645,7 +2735,7 @@ function toggleSidebar() {
   if (sidebarOpen) {
     const w = sidebar.offsetWidth + 'px';
     if (mainContainer) mainContainer.style.marginRight = w;
-    if (toolbar) toolbar.style.right = w;
+    if (toolbar && toolbar.style.display !== 'none') toolbar.style.right = w;
     highlightActiveSidebarQuestion(currentChunkIndex);
   } else {
     if (mainContainer) mainContainer.style.marginRight = '';
@@ -2691,10 +2781,12 @@ function setupSidebarResize() {
     sidebar.style.width = newWidth + 'px';
     sidebarWidth = newWidth;
 
-    // Update body margin to match
+    // Update body margin and toolbar to match
     if (sidebarOpen) {
-      document.querySelector('.main-container').style.marginRight = newWidth + 'px';
-      document.querySelector('.audio-toolbar').style.right = newWidth + 'px';
+      const mainContainer = document.querySelector('.main-container');
+      const toolbar = document.querySelector('.audio-toolbar');
+      if (mainContainer) mainContainer.style.marginRight = newWidth + 'px';
+      if (toolbar && toolbar.style.display !== 'none') toolbar.style.right = newWidth + 'px';
     }
   };
 
