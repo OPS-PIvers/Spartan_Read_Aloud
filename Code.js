@@ -4821,13 +4821,13 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
         });
 
         // Render blocks
-        blocks.forEach(block => {
+        blocks.forEach((block, bIdx) => {
             if (block.type === 'mc') {
                 // Render MC group in 3-column table
                 const items = block.items;
                 const itemsPerCol = Math.ceil(items.length / 3);
                 
-                htmlBody += '<table class="response-table" style="margin-bottom: 25px;">';
+                htmlBody += '<table class="response-table">';
                 for (let rowIdx = 0; rowIdx < itemsPerCol; rowIdx++) {
                     htmlBody += '<tr>';
                     for (let colIdx = 0; colIdx < 3; colIdx++) {
@@ -4855,12 +4855,15 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
                 const answerText = r.answer ? r.answer.toString().trim() : '';
                 const hasAnswer = answerText.length > 0;
                 
-                htmlBody += '<div style="width: 100%; margin-bottom: 25px; padding: 0 10px; box-sizing: border-box;">';
+                htmlBody += '<div style="width: 100%; padding: 0 10px; box-sizing: border-box;">';
                 htmlBody += `<div class="question-label" style="border-bottom: 1px solid #f0f0f0; padding-bottom: 2px; margin-bottom: 4px;">${escapeHtmlBackend(r.questionLabel)}</div>`;
                 htmlBody += '<div class="answer-container answer-text" style="min-height: 20px; font-size: 11px;">';
                 htmlBody += hasAnswer ? renderSubmissionAnswer(answerText) : '<span class="empty-answer">No response provided</span>';
                 htmlBody += '</div></div>';
             }
+            
+            // Add a "blank line" spacer between ALL blocks (MC tables or text responses)
+            htmlBody += '<div style="height: 25px; font-size: 1px;">&nbsp;</div>';
         });
         
         htmlBody += '</div>';
