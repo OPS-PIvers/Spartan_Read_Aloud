@@ -4792,43 +4792,68 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
             </div>`;
         }
         
-        // Responses in a 3-column table with vertical flow
-        const totalResponses = sub.responses.length;
-        const itemsPerCol = Math.ceil(totalResponses / 3);
-        
-        htmlBody += '<table class="response-table">';
-        
-        for (let rowIdx = 0; rowIdx < itemsPerCol; rowIdx++) {
-            htmlBody += '<tr>';
-            for (let colIdx = 0; colIdx < 3; colIdx++) {
-                htmlBody += '<td class="response-cell">';
-                
-                const itemIdx = rowIdx + (colIdx * itemsPerCol);
-                if (itemIdx < totalResponses) {
-                    const r = sub.responses[itemIdx];
-                    const answerText = r.answer ? r.answer.toString().trim() : '';
-                    const hasAnswer = answerText.length > 0;
-                    
-                    htmlBody += '<div class="question-block">';
-                    htmlBody += `<div class="question-label">${escapeHtmlBackend(r.questionLabel)}</div>`;
-                    
-                    if (r.questionType === 'mc') {
-                        htmlBody += '<div class="answer-container answer-mc">';
-                        htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No answer</span>';
-                        htmlBody += '</div>';
-                    } else {
-                        htmlBody += '<div class="answer-container answer-text">';
-                        htmlBody += hasAnswer ? renderSubmissionAnswer(answerText) : '<span class="empty-answer">No response</span>';
-                        htmlBody += '</div>';
-                    }
-                    htmlBody += '</div>';
+        // --- HYBRID LAYOUT: Group sequential MC questions into columns, keep Text questions full-width ---
+        const blocks = [];
+        let currentBlock = null;
+
+        sub.responses.forEach(r => {
+            const isMc = r.questionType === 'mc';
+            
+            if (isMc) {
+                if (!currentBlock || currentBlock.type !== 'mc') {
+                    currentBlock = { type: 'mc', items: [] };
+                    blocks.push(currentBlock);
                 }
-                htmlBody += '</td>';
+                currentBlock.items.push(r);
+            } else {
+                blocks.push({ type: 'text', item: r });
+                currentBlock = null;
             }
-            htmlBody += '</tr>';
-        }
+        });
+
+        // Render blocks
+        blocks.forEach(block => {
+            if (block.type === 'mc') {
+                // Render MC group in 3-column table
+                const items = block.items;
+                const itemsPerCol = Math.ceil(items.length / 3);
+                
+                htmlBody += '<table class="response-table" style="margin-bottom: 10px;">';
+                for (let rowIdx = 0; rowIdx < itemsPerCol; rowIdx++) {
+                    htmlBody += '<tr>';
+                    for (let colIdx = 0; colIdx < 3; colIdx++) {
+                        htmlBody += '<td class="response-cell" style="padding-bottom: 8px;">';
+                        const itemIdx = rowIdx + (colIdx * itemsPerCol);
+                        if (itemIdx < items.length) {
+                            const r = items[itemIdx];
+                            const answerText = r.answer ? r.answer.toString().trim() : '';
+                            const hasAnswer = answerText.length > 0;
+                            
+                            htmlBody += '<div class="question-block">';
+                            htmlBody += `<div class="question-label">${escapeHtmlBackend(r.questionLabel)}</div>`;
+                            htmlBody += '<div class="answer-container answer-mc">';
+                            htmlBody += hasAnswer ? escapeHtmlBackend(answerText) : '<span class="empty-answer">No answer</span>';
+                            htmlBody += '</div></div>';
+                        }
+                        htmlBody += '</td>';
+                    }
+                    htmlBody += '</tr>';
+                }
+                htmlBody += '</table>';
+            } else {
+                // Render text response full-width
+                const r = block.item;
+                const answerText = r.answer ? r.answer.toString().trim() : '';
+                const hasAnswer = answerText.length > 0;
+                
+                htmlBody += '<div style="width: 100%; margin-bottom: 15px; padding: 0 10px; box-sizing: border-box;">';
+                htmlBody += `<div class="question-label" style="border-bottom: 1px solid #f0f0f0; padding-bottom: 2px; margin-bottom: 4px;">${escapeHtmlBackend(r.questionLabel)}</div>`;
+                htmlBody += '<div class="answer-container answer-text" style="min-height: 20px; font-size: 11px;">';
+                htmlBody += hasAnswer ? renderSubmissionAnswer(answerText) : '<span class="empty-answer">No response provided</span>';
+                htmlBody += '</div></div>';
+            }
+        });
         
-        htmlBody += '</table>';
         htmlBody += '</div>';
     });
     
