@@ -4775,9 +4775,9 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     </div>`;
     
     submissions.forEach((sub, index) => {
-        // Add a robust page break before every student except the very first one
+        // Add a marker for a native page break before every student except the very first one
         if (index > 0) {
-            htmlBody += '<div style="page-break-before: always; clear: both; height: 0; overflow: hidden; margin: 0; padding: 0;">&nbsp;</div>';
+            htmlBody += '<p>[[PAGE_BREAK]]</p>';
         }
 
         htmlBody += '<div class="student-section">';
@@ -4894,7 +4894,24 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     body.setMarginLeft(72);
     body.setMarginRight(72);
     
-    // Remove any empty paragraphs at the very start (often added by HTML conversion)
+    // Add a native page break after the title page (which is at the top)
+    // We find the first student header and insert before it
+    const searchResult = body.findText("\\[\\[PAGE_BREAK\\]\\]");
+    let currentMatch = searchResult;
+    while (currentMatch) {
+        const element = currentMatch.getElement();
+        const parent = element.getParent();
+        const container = parent.getParent();
+        
+        // Insert page break and remove the marker paragraph
+        const index = container.getChildIndex(parent);
+        container.insertPageBreak(index);
+        container.removeChild(parent);
+        
+        currentMatch = body.findText("\\[\\[PAGE_BREAK\\]\\]", currentMatch);
+    }
+    
+    // Remove any empty paragraphs at the very start
     while (body.getChild(0).getType() === DocumentApp.ElementType.PARAGRAPH && 
            body.getChild(0).asParagraph().getText().trim() === "" &&
            body.getNumChildren() > 1) {
