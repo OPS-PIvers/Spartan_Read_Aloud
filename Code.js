@@ -4775,12 +4775,9 @@ function generateConsolidatedSubmissionsPdf(sessionToken, assessmentUrl) {
     </div>`;
     
     submissions.forEach((sub, index) => {
-        // Add page break before every student except the very first one (who follows the title page)
-        // Note: The title page also needs a break after it.
-        if (index === 0) {
-            htmlBody += '<div class="page-break"></div>';
-        } else {
-            htmlBody += '<div class="page-break"></div>';
+        // Add a robust page break before every student except the very first one
+        if (index > 0) {
+            htmlBody += '<div style="page-break-before: always; clear: both; height: 1px; overflow: hidden;">&nbsp;</div>';
         }
 
         htmlBody += '<div class="student-section">';
