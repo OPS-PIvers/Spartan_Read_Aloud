@@ -4360,7 +4360,10 @@ function submitAssessmentResponses(sessionToken, assessmentUrl, responses) {
     }
 
     const studentEmail = tokenData.email;
-    const studentName = tokenData.name || studentEmail;
+    // Attempt to pull student name from Student Directory (Column A + B)
+    // Fall back to token name (if provided) or student email
+    const directoryName = getStudentNameFromDirectory(studentEmail);
+    const studentName = directoryName || tokenData.name || studentEmail;
 
     // Look up assessment metadata
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Assessment Database');
@@ -4967,6 +4970,40 @@ function runTests(listBasedFileId, tableBasedFileId) {
   testExtractTextFromFile(listBasedFileId);
   testExtractTextFromFile(tableBasedFileId);
   Logger.log('--- FINISHED TEST RUN ---');
+}
+
+/**
+ * Helper: Looks up a student's name from the 'Student Directory' sheet by email.
+ * Directory Structure: A) First Name, B) Last Name, C) Student Email
+ * @param {string} email The student email to search for
+ * @returns {string|null} The combined "First Last" name or null if not found
+ */
+function getStudentNameFromDirectory(email) {
+  if (!email) return null;
+  const cleanEmail = email.toLowerCase().trim();
+  
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const directorySheet = spreadsheet.getSheetByName('Student Directory');
+    if (!directorySheet) return null;
+    
+    const data = directorySheet.getDataRange().getValues();
+    // Start from row 1 to skip headers
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const studentEmail = row[2] ? row[2].toString().toLowerCase().trim() : '';
+      
+      if (studentEmail === cleanEmail) {
+        const firstName = row[0] ? row[0].toString().trim() : '';
+        const lastName = row[1] ? row[1].toString().trim() : '';
+        const fullName = (firstName + ' ' + lastName).trim();
+        return fullName || null;
+      }
+    }
+  } catch (e) {
+    Logger.log('Error looking up student name in directory: ' + e.toString());
+  }
+  return null;
 }
 
 /**
