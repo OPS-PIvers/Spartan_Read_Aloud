@@ -184,11 +184,21 @@ function downloadFromCloudStorage(gcsUri) {
 
 // --- TRIGGER & MENU ---
 
-
-
-
-
 /**
+ * Adds the custom menu to the spreadsheet on open.
+ */
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu(CONSTANTS.MENU_NAME)
+    .addItem(CONSTANTS.MENU_ITEMS.RUN_MANUAL, 'runAllStepsManual')
+    .addSeparator()
+    .addItem(CONSTANTS.MENU_ITEMS.START_BATCH, 'startBatchProcessing')
+    .addItem(CONSTANTS.MENU_ITEMS.CHECK_BATCH, 'checkBatchStatus')
+    .addItem(CONSTANTS.MENU_ITEMS.STOP_BATCH, 'stopBatchProcessing')
+    .addSeparator()
+    .addItem('Sync Teacher Permissions', 'syncExistingAssessmentPermissions')
+    .addToUi();
+}/**
  * Runs all the processing steps in sequence using manual (real-time) mode.
  */
 function runAllStepsManual() {
@@ -2808,6 +2818,27 @@ function deleteAssessmentRow(sessionToken, rowIndex) {
 }
 
 /**
+ * Adds a user as a viewer to a file without sending an email notification.
+ * @param {string} fileId The Drive file ID.
+ * @param {string} emailAddress The email address to grant viewer access to.
+ */
+function addViewerSilently(fileId, emailAddress) {
+  try {
+    Drive.Permissions.create({
+      role: 'reader',
+      type: 'user',
+      emailAddress: emailAddress
+    }, fileId, {
+      sendNotificationEmail: false,
+      supportsAllDrives: true
+    });
+    Logger.log(`Silently added ${emailAddress} as viewer to file ${fileId}`);
+  } catch (e) {
+    Logger.log(`Warning: Failed to add silent viewer permission for ${emailAddress} on file ${fileId}: ${e.toString()}`);
+  }
+}
+
+/**
  * Uploads a PDF or Word file to the Assessment PDFs folder.
  * Admin-only function.
  * @param {string} sessionToken Admin session token
@@ -2819,7 +2850,8 @@ function deleteAssessmentRow(sessionToken, rowIndex) {
 function uploadAssessmentFile(sessionToken, fileName, base64Data, mimeType) {
   try {
     // Verify admin token
-    if (!validateAdminToken(sessionToken)) {
+    const tokenData = validateAdminToken(sessionToken);
+    if (!tokenData) {
       return { error: 'Unauthorized. Admin access required.' };
     }
 
@@ -2894,13 +2926,19 @@ function uploadAssessmentFile(sessionToken, fileName, base64Data, mimeType) {
     // Upload final file (PDF or original)
     const uploadedFile = pdfFolder.createFile(blob);
     const fileUrl = uploadedFile.getUrl();
+    const fileId = uploadedFile.getId();
+
+    // Ensure the teacher has viewer access silently
+    if (tokenData && tokenData.email) {
+      addViewerSilently(fileId, tokenData.email);
+    }
 
     Logger.log(`✓ Uploaded file: ${finalFileName} (${fileUrl})`);
 
     const result = {
       success: true,
       fileUrl: fileUrl,
-      fileId: uploadedFile.getId()
+      fileId: fileId
     };
 
     // Include conversion message if Word was converted
@@ -2926,7 +2964,8 @@ function uploadAssessmentFile(sessionToken, fileName, base64Data, mimeType) {
 function handleGoogleDocUrl(sessionToken, docUrl) {
   try {
     // Verify admin token
-    if (!validateAdminToken(sessionToken)) {
+    const tokenData = validateAdminToken(sessionToken);
+    if (!tokenData) {
       return { error: 'Unauthorized. Admin access required.' };
     }
 
@@ -2963,13 +3002,19 @@ function handleGoogleDocUrl(sessionToken, docUrl) {
       // Upload the PDF blob
       const uploadedFile = pdfFolder.createFile(pdfBlob);
       const fileUrl = uploadedFile.getUrl();
+      const newFileId = uploadedFile.getId();
+
+      // Ensure the teacher has viewer access silently
+      if (tokenData && tokenData.email) {
+        addViewerSilently(newFileId, tokenData.email);
+      }
 
       Logger.log(`✓ Google Doc converted and uploaded as PDF: ${uploadedFile.getName()} (${fileUrl})`);
 
       return {
         success: true,
         fileUrl: fileUrl,
-        fileId: uploadedFile.getId(),
+        fileId: newFileId,
         isCopy: false, // It's a new PDF, not a copy of the original Doc
         message: 'Google Doc converted to PDF for optimal text extraction.'
       };
@@ -3062,6 +3107,11 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
       Logger.log(`Processing error (non-fatal): ${processError.toString()}`);
     }
 
+    // Ensure the teacher has viewer access silently as a fallback
+    if (tokenData && tokenData.email && fileId) {
+      addViewerSilently(fileId, tokenData.email);
+    }
+
     return {
       success: true,
       rowIndex: rowIndex,
@@ -3071,6 +3121,104 @@ function addNewAssessment(sessionToken, fileUrl, metadata) {
   } catch (e) {
     Logger.log(`Error in addNewAssessment: ${e.toString()}`);
     return { error: 'Failed to add assessment: ' + e.toString() };
+  }
+}
+
+/**
+ * Retroactively adds teacher viewer access to all existing assessments.
+ * Iterates through all assessments, finds instructors, and grants silent viewer access.
+ * Can be run from the "Spartan Assessment Portal" menu in the spreadsheet.
+ */
+function syncExistingAssessmentPermissions() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dbSheet = ss.getSheetByName('Assessment Database');
+  const teacherSheet = ss.getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
+  
+  if (!dbSheet || !teacherSheet) {
+    const errorMsg = 'Required sheets ("Assessment Database" or "Teachers") not found.';
+    Logger.log(errorMsg);
+    if (typeof SpreadsheetApp !== 'undefined') {
+      SpreadsheetApp.getUi().alert(errorMsg);
+    }
+    return;
+  }
+  
+  const teacherData = teacherSheet.getDataRange().getValues();
+  const teacherMap = {}; // Name/Email (lowercase) -> Email (actual)
+  
+  // Skip header row
+  for (let i = 1; i < teacherData.length; i++) {
+    const row = teacherData[i];
+    const firstName = row[0] ? row[0].toString().trim() : '';
+    const lastName = row[1] ? row[1].toString().trim() : '';
+    const fullName = (firstName + ' ' + lastName).trim().toLowerCase();
+    const email = row[2] ? row[2].toString().toLowerCase().trim() : '';
+    
+    if (email) {
+      teacherMap[email] = email;
+      if (fullName) teacherMap[fullName] = email;
+      // Also map just last names if they're likely to be unique enough for the instructor field
+      if (lastName && lastName.length > 2) {
+        teacherMap[lastName.toLowerCase()] = email;
+      }
+    }
+  }
+  
+  const dbData = dbSheet.getDataRange().getValues();
+  let syncCount = 0;
+  let errorCount = 0;
+  let skippedCount = 0;
+  
+  for (let i = 1; i < dbData.length; i++) {
+    const row = dbData[i];
+    const pdfUrl = row[CONSTANTS.COL.PDF_URL];
+    const instructorField = (row[CONSTANTS.COL.INSTRUCTOR] || '').toString().toLowerCase();
+    
+    if (!pdfUrl || !instructorField) {
+      skippedCount++;
+      continue;
+    }
+    
+    const fileId = getFileIdFromUrl(pdfUrl);
+    if (!fileId) {
+      skippedCount++;
+      continue;
+    }
+    
+    // Split instructors by comma or slash
+    const instructors = instructorField.split(/[,\/]/).map(name => name.trim()).filter(name => name);
+    
+    instructors.forEach(instructor => {
+      // Check for email first
+      let email = null;
+      if (instructor.includes('@')) {
+        email = instructor;
+      } else {
+        email = teacherMap[instructor];
+      }
+      
+      if (email) {
+        try {
+          addViewerSilently(fileId, email);
+          syncCount++;
+        } catch (e) {
+          Logger.log(`Error adding permission for ${email} on ${fileId}: ${e.toString()}`);
+          errorCount++;
+        }
+      } else {
+        Logger.log(`Could not find email for instructor: ${instructor}`);
+      }
+    });
+  }
+  
+  const resultMsg = `Finished syncing permissions.\n\n` +
+                   `- Successfully processed: ${syncCount}\n` +
+                   `- Errors: ${errorCount}\n` +
+                   `- Skipped (missing data): ${skippedCount}\n\n` +
+                   `Check logs for details.`;
+  Logger.log(resultMsg);
+  if (typeof SpreadsheetApp !== 'undefined') {
+    SpreadsheetApp.getUi().alert(resultMsg);
   }
 }
 
@@ -3577,6 +3725,169 @@ function getStudentsByCaseManager(caseManagerEmail) {
   } catch (e) {
     Logger.log(`Error in getStudentsByCaseManager: ${e.toString()}`);
     return [];
+  }
+}
+
+/**
+ * Retrieves recent or caseload students for suggestions.
+ * @param {string} sessionToken The user's session token.
+ * @returns {Object} { success: true, students: [{name, email}] }
+ */
+function getRecentStudents(sessionToken) {
+  try {
+    const tokenData = validateAdminToken(sessionToken);
+    if (!tokenData) return { error: 'Unauthorized' };
+
+    const cache = CacheService.getUserCache();
+    const cleanEmail = tokenData.email.toLowerCase().trim();
+    const cacheKey = 'recent_students_' + cleanEmail;
+    
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      try {
+        return { success: true, students: JSON.parse(cached) };
+      } catch (e) {}
+    }
+
+    const studentsMap = new Map(); // email -> name
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. If Sp.Ed. or Admin, add caseload first
+    if (tokenData.role === CONSTANTS.ROLE_TOKEN_SPED || tokenData.role === CONSTANTS.ROLE_TOKEN_ADMIN || tokenData.role === CONSTANTS.ROLE_TOKEN_SUPER_ADMIN) {
+      const dirSheet = spreadsheet.getSheetByName('Student Directory');
+      if (dirSheet) {
+        const dirData = dirSheet.getDataRange().getValues();
+        for (let i = 1; i < dirData.length; i++) {
+          const first = dirData[i][0] ? dirData[i][0].toString().trim() : '';
+          const last = dirData[i][1] ? dirData[i][1].toString().trim() : '';
+          const sEmail = dirData[i][2] ? dirData[i][2].toString().toLowerCase().trim() : '';
+          const cmEmail = dirData[i][3] ? dirData[i][3].toString().toLowerCase().trim() : '';
+
+          if (cmEmail === cleanEmail && sEmail) {
+            const fullName = [first, last].filter(Boolean).join(' ');
+            studentsMap.set(sEmail, fullName || sEmail);
+          }
+        }
+      }
+    }
+
+    // 2. Also check Assessment Database for recent students for this teacher
+    const dbSheet = spreadsheet.getSheetByName('Assessment Database');
+    if (dbSheet) {
+      const dbData = dbSheet.getDataRange().getValues();
+      const teacherName = (tokenData.name || '').toLowerCase();
+      
+      // Iterate backwards to get most recent first
+      for (let i = dbData.length - 1; i >= 1; i--) {
+        const row = dbData[i];
+        const instructor = (row[CONSTANTS.COL.INSTRUCTOR] || '').toString().toLowerCase();
+        
+        // Check if teacher is in instructor list
+        const instructors = instructor.split(/[,\/]/).map(n => n.trim()).filter(n => n);
+        const isInstructor = instructors.some(inst => 
+          teacherName.includes(inst) || cleanEmail.includes(inst) || inst.includes(cleanEmail)
+        );
+
+        if (isInstructor) {
+          const studentEmailsRaw = (row[CONSTANTS.COL.STUDENT_EMAILS] || '').toString();
+          if (studentEmailsRaw) {
+            // Split emails
+            const emails = studentEmailsRaw.split(/[,\s]+/).map(e => e.trim().toLowerCase()).filter(e => e);
+            for (const email of emails) {
+              if (email && !studentsMap.has(email)) {
+                studentsMap.set(email, email); 
+              }
+            }
+          }
+        }
+        
+        // Stop if we have enough students (e.g. 20)
+        if (studentsMap.size >= 20) break;
+      }
+    }
+
+    // Improve the name lookup for recent students by checking Student Directory once.
+    const emailsToLookup = Array.from(studentsMap.entries()).filter(([e, n]) => e === n).map(([e, n]) => e);
+    if (emailsToLookup.length > 0) {
+       const dirSheet = spreadsheet.getSheetByName('Student Directory');
+       if (dirSheet) {
+         const dirData = dirSheet.getDataRange().getValues();
+         for (let i = 1; i < dirData.length; i++) {
+           const sEmail = dirData[i][2] ? dirData[i][2].toString().toLowerCase().trim() : '';
+           if (sEmail && studentsMap.has(sEmail) && studentsMap.get(sEmail) === sEmail) {
+             const first = dirData[i][0] ? dirData[i][0].toString().trim() : '';
+             const last = dirData[i][1] ? dirData[i][1].toString().trim() : '';
+             const fullName = [first, last].filter(Boolean).join(' ');
+             if (fullName) studentsMap.set(sEmail, fullName);
+           }
+         }
+       }
+    }
+
+    const resultList = Array.from(studentsMap.entries()).map(([email, name]) => ({ email, name }));
+    
+    cache.put(cacheKey, JSON.stringify(resultList), 3600); // Cache for 1 hour
+    
+    return { success: true, students: resultList };
+  } catch (e) {
+    Logger.log(`Error in getRecentStudents: ${e.toString()}`);
+    return { error: e.toString() };
+  }
+}
+
+/**
+ * Searches the Student Directory for students matching first/last name.
+ * @param {string} sessionToken The user's session token.
+ * @param {string} firstName Optional first name filter.
+ * @param {string} lastName Required last name filter.
+ */
+function searchStudentDirectory(sessionToken, firstName, lastName) {
+  try {
+    if (!validateAdminToken(sessionToken)) {
+      return { error: 'Unauthorized' };
+    }
+
+    if (!lastName || lastName.trim() === '') {
+      return { error: 'Last name is required' };
+    }
+
+    const searchFirst = (firstName || '').toLowerCase().trim();
+    const searchLast = lastName.toLowerCase().trim();
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const dirSheet = spreadsheet.getSheetByName('Student Directory');
+    
+    if (!dirSheet) {
+      return { error: 'Student Directory sheet not found' };
+    }
+
+    const data = dirSheet.getDataRange().getValues();
+    const results = [];
+
+    // Directory Structure: A) First, B) Last, C) Student Email, D) Case Manager Email
+    for (let i = 1; i < data.length; i++) {
+      const first = data[i][0] ? data[i][0].toString().trim() : '';
+      const last = data[i][1] ? data[i][1].toString().trim() : '';
+      const email = data[i][2] ? data[i][2].toString().toLowerCase().trim() : '';
+
+      if (email && last.toLowerCase().includes(searchLast)) {
+        if (!searchFirst || first.toLowerCase().includes(searchFirst)) {
+          results.push({
+            firstName: first,
+            lastName: last,
+            email: email
+          });
+        }
+      }
+      
+      // Cap results to prevent massive payloads
+      if (results.length >= 50) break;
+    }
+
+    return { success: true, results: results };
+  } catch (e) {
+    Logger.log(`Error in searchStudentDirectory: ${e.toString()}`);
+    return { error: e.toString() };
   }
 }
 

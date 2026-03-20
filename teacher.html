@@ -54,6 +54,16 @@
       --ease: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    /* --- ANIMATIONS --- */
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .animate-spin {
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+
     /* --- GLOBAL STYLES --- */
     * { box-sizing: border-box; outline: none; }
     
@@ -508,6 +518,8 @@
       font-size: 12px;
       font-weight: 500;
       max-width: 200px;
+    }
+    .email-chip span:first-child {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -517,14 +529,15 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 16px;
-      height: 16px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       background: transparent;
       color: var(--primary-blue);
-      font-size: 14px;
+      font-size: 16px;
       line-height: 1;
       transition: background 0.15s;
+      flex-shrink: 0;
     }
     .email-chip-remove:hover {
       background: var(--primary-blue);
@@ -846,6 +859,39 @@
     </div>
   </div>
 
+  <!-- STUDENT LOOKUP MODAL -->
+  <div id="student-lookup-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center;">
+    <div class="modal-card" style="max-width: 500px; width: 95%;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="material-icons" style="vertical-align: middle; margin-right: 8px; color: var(--primary-blue);">search</span>
+          Student Lookup
+        </div>
+        <button class="action-btn" onclick="closeStudentLookupModal()"><span class="material-icons">close</span></button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+          <div class="input-group" style="flex: 1;">
+            <label class="input-label">First Name (Optional)</label>
+            <input type="text" id="lookup-first-name" class="form-control" placeholder="First Name" onkeydown="if(event.key === 'Enter') performStudentLookup()">
+          </div>
+          <div class="input-group" style="flex: 1;">
+            <label class="input-label">Last Name (Required)</label>
+            <input type="text" id="lookup-last-name" class="form-control" placeholder="Last Name" onkeydown="if(event.key === 'Enter') performStudentLookup()">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="performStudentLookup()" style="width: 100%; margin-bottom: 16px;">Search Directory</button>
+        
+        <div id="lookup-results-container" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--gray-300); border-radius: 4px; padding: 8px; display: none;">
+          <!-- Results populated here -->
+        </div>
+        <div id="lookup-loading" style="display: none; text-align: center; padding: 20px;">
+          <span class="material-icons animate-spin" style="color: var(--primary-blue); font-size: 24px;">refresh</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MAIN CONTENT GRID -->
   <div id="main-content" class="main-content" style="display:none;">
     
@@ -937,12 +983,20 @@
             <input type="datetime-local" id="meta-expires" class="form-control">
           </div>
           <div class="input-group">
-            <label class="input-label">Student Emails (Paste list or comma separated) <span style="color: var(--primary-red);">*</span></label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label class="input-label" style="margin-bottom: 0;">Student Emails (Paste list or comma separated) <span style="color: var(--primary-red);">*</span></label>
+              <button class="btn btn-secondary" onclick="openStudentLookupModal()" style="padding: 4px 8px; font-size: 11px; height: auto;">
+                <span class="material-icons" style="font-size: 14px;">search</span> Lookup Student
+              </button>
+            </div>
             <div id="meta-emails-container" class="email-chips-container" data-row="new" onclick="focusEmailInput(this)" style="background: white; border: 1px solid var(--gray-300); padding: 6px 10px; border-radius: 4px; min-height: 42px; max-height: 120px; overflow-y: auto;">
               <input type="text" id="meta-emails-input" class="email-chips-input" placeholder="Add email..."
                 onkeydown="handleEmailInput(event, 'new')"
                 onpaste="handleEmailPaste(event, 'new')"
                 onblur="addEmailChip(this, 'new')">
+            </div>
+            <div id="recent-students-container" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+              <!-- Recent students will be loaded here -->
             </div>
           </div>
 
@@ -1238,6 +1292,7 @@
         .withSuccessHandler(constants => {
           appConstants = constants;
           refreshData();
+          loadRecentStudents();
         })
         .getConstants();
     });
@@ -1543,7 +1598,7 @@
         const emailChipsHtml = emails.map(email => `
           <div class="email-chip">
             <span>${escapeHtml(email)}</span>
-            <span class="email-chip-remove" onclick="removeEmailChip(this, ${item.rowIndex})" title="Remove">×</span>
+            <span class="email-chip-remove" onclick="removeEmailChip(this, '${item.rowIndex}')" title="Remove">×</span>
           </div>
         `).join('');
 
@@ -1566,7 +1621,7 @@
                 ${(item.instructor ? item.instructor.split(/[,\/]/).map(n => n.trim()).filter(n => n) : []).map(name => `
                   <div class="email-chip" style="background: var(--gray-100); color: var(--gray-700);">
                     <span>${escapeHtml(name)}</span>
-                    <span class="email-chip-remove" onclick="removeInstructorChip(this, ${item.rowIndex})" title="Remove">×</span>
+                    <span class="email-chip-remove" onclick="removeInstructorChip(this, '${item.rowIndex}')" title="Remove">×</span>
                   </div>
                 `).join('')}
                 <input type="text" class="email-chips-input" placeholder="Add teacher..."
@@ -2065,7 +2120,7 @@
             chip.style.color = 'var(--gray-700)';
             chip.innerHTML = `
               <span>${escapeHtml(cleanName)}</span>
-              <span class="email-chip-remove" onclick="removeInstructorChip(this, ${rowIndex})" title="Remove">×</span>
+              <span class="email-chip-remove" onclick="removeInstructorChip(this, '${rowIndex}')" title="Remove">×</span>
             `;
             container.insertBefore(chip, input);
             existingNames.add(cleanName.toLowerCase());
@@ -2093,7 +2148,7 @@
           chip.style.color = 'var(--gray-700)';
           chip.innerHTML = `
             <span>${escapeHtml(name)}</span>
-            <span class="email-chip-remove" onclick="removeInstructorChip(this, ${rowIndex})" title="Remove">×</span>
+            <span class="email-chip-remove" onclick="removeInstructorChip(this, '${rowIndex}')" title="Remove">×</span>
           `;
           container.insertBefore(chip, input);
           existingNames.add(name.toLowerCase());
@@ -2204,7 +2259,7 @@
             chip.className = 'email-chip';
             chip.innerHTML = `
               <span>${escapeHtml(cleanEmail)}</span>
-              <span class="email-chip-remove" onclick="removeEmailChip(this, ${rowIndex})" title="Remove">×</span>
+              <span class="email-chip-remove" onclick="removeEmailChip(this, '${rowIndex}')" title="Remove">×</span>
             `;
             container.insertBefore(chip, input);
             existingEmails.add(cleanEmail);
@@ -2245,7 +2300,7 @@
           chip.className = 'email-chip';
           chip.innerHTML = `
             <span>${escapeHtml(cleanEmail)}</span>
-            <span class="email-chip-remove" onclick="removeEmailChip(this, ${rowIndex})" title="Remove">×</span>
+            <span class="email-chip-remove" onclick="removeEmailChip(this, '${rowIndex}')" title="Remove">×</span>
           `;
           container.insertBefore(chip, input);
           existingEmails.add(cleanEmail);
@@ -2297,6 +2352,124 @@
     function escapeHtml(text) {
       if (!text) return '';
       return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // --- STUDENT LOOKUP AND RECENT STUDENTS ---
+
+    function loadRecentStudents() {
+      if (!adminToken) return;
+      google.script.run
+        .withSuccessHandler(res => {
+          if (res && res.success && res.students && res.students.length > 0) {
+            renderRecentStudents(res.students);
+          }
+        })
+        .getRecentStudents(adminToken);
+    }
+
+    function renderRecentStudents(students) {
+      const container = document.getElementById('recent-students-container');
+      if (!container) return;
+      container.innerHTML = '';
+      
+      students.forEach(student => {
+        const chip = document.createElement('div');
+        chip.className = 'email-chip';
+        chip.style.cursor = 'pointer';
+        chip.style.backgroundColor = 'var(--gray-100)';
+        chip.style.border = '1px solid var(--gray-300)';
+        chip.style.color = 'var(--gray-700)';
+        chip.title = student.email;
+        chip.innerHTML = `
+          <span class="material-icons" style="font-size: 12px; margin-right: 4px; color: var(--primary-blue);">add_circle</span>
+          <span>${escapeHtml(student.name || student.email)}</span>
+        `;
+        chip.onclick = () => insertStudentEmail(student.email);
+        container.appendChild(chip);
+      });
+    }
+
+    function insertStudentEmail(email) {
+      const input = document.getElementById('meta-emails-input');
+      if (input) {
+        input.value = email;
+        addEmailChip(input, 'new');
+        showToast('Student added', 'success');
+      }
+    }
+
+    function openStudentLookupModal() {
+      document.getElementById('lookup-first-name').value = '';
+      document.getElementById('lookup-last-name').value = '';
+      document.getElementById('lookup-results-container').style.display = 'none';
+      document.getElementById('lookup-results-container').innerHTML = '';
+      document.getElementById('student-lookup-modal').style.display = 'flex';
+      setTimeout(() => document.getElementById('lookup-last-name').focus(), 100);
+    }
+
+    function closeStudentLookupModal() {
+      document.getElementById('student-lookup-modal').style.display = 'none';
+    }
+
+    function performStudentLookup() {
+      const firstName = document.getElementById('lookup-first-name').value.trim();
+      const lastName = document.getElementById('lookup-last-name').value.trim();
+      
+      if (!lastName) {
+        showToast('Last name is required', 'warning');
+        return;
+      }
+
+      document.getElementById('lookup-loading').style.display = 'block';
+      document.getElementById('lookup-results-container').style.display = 'none';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          document.getElementById('lookup-loading').style.display = 'none';
+          const container = document.getElementById('lookup-results-container');
+          container.style.display = 'block';
+          
+          if (res.error) {
+            container.innerHTML = `<div style="color: var(--primary-red); padding: 8px;">${escapeHtml(res.error)}</div>`;
+            return;
+          }
+
+          if (!res.results || res.results.length === 0) {
+            container.innerHTML = `<div style="color: var(--gray-500); padding: 8px; text-align: center;">No students found matching that name.</div>`;
+            document.getElementById('lookup-first-name').value = '';
+            document.getElementById('lookup-last-name').value = '';
+            return;
+          }
+
+          let html = `<div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px; font-weight: 600; text-transform: uppercase;">Found ${res.results.length} result(s)</div>`;
+          res.results.forEach(student => {
+            html += `
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid var(--gray-200); gap: 12px;">
+                <div style="min-width: 0; flex: 1;">
+                  <div style="font-weight: 600; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${escapeHtml(student.firstName)} ${escapeHtml(student.lastName)}
+                  </div>
+                  <div style="font-size: 11px; color: var(--gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${escapeHtml(student.email)}
+                  </div>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="insertStudentEmail('${escapeHtml(student.email)}')" style="flex-shrink: 0; padding: 4px 8px; font-size: 11px;">
+                  <span class="material-icons" style="font-size: 14px;">add</span> Insert
+                </button>
+              </div>
+            `;
+          });
+          container.innerHTML = html;
+          
+          // Clear input fields for next search
+          document.getElementById('lookup-first-name').value = '';
+          document.getElementById('lookup-last-name').value = '';
+        })
+        .withFailureHandler(err => {
+          document.getElementById('lookup-loading').style.display = 'none';
+          showToast('Search failed: ' + err.message, 'error');
+        })
+        .searchStudentDirectory(adminToken, firstName, lastName);
     }
   </script>
 </body>
