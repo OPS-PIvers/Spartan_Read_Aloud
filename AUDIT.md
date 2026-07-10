@@ -227,7 +227,9 @@ mismatch failure class and cuts OCR/image work ~3×.
    student can no longer mint a super-admin token.
 2. **SEC-3, SEC-4, SEC-5** — lock down the remaining ungated endpoints.
 3. **BE-1** — cache OCR once per run; this fixes the stuck-Processing class and cuts cost ~3×.
-4. **BE-2, BE-3, BE-5** — recovery paths and the pipeline lock.
-5. **SEC-8, SEC-9, SEC-10** — sanitizer, password handling, formula injection.
-6. **FE-1 → FE-4** — playback races, failure handlers, accessibility.
-7. Hygiene (**REPO-1 → REPO-6**) and structure as ongoing cleanup.
+4. **BE-2, BE-3, BE-4, BE-5** — recovery paths, TTS/Drive retry-backoff, and the pipeline lock.
+5. **SEC-6, SEC-7, SEC-8, SEC-9, SEC-10** — token signing, API-key logging, sanitizer, password
+   handling, formula injection.
+6. **FE-1 → FE-5** — playback races, failure handlers, accessibility, and dead-code removal.
+7. **BE-6 → BE-10, FE-6 → FE-11** — backend and frontend medium-severity performance/robustness work.
+8. Hygiene (**REPO-1 → REPO-6**, **BE-11**, **SEC-11**) and structure as ongoing cleanup.
