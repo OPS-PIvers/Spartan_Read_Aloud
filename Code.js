@@ -672,64 +672,6 @@ Batch jobs run at 50% cost savings and typically complete within 24 hours.`;
 }
 
 /**
- * DEBUG FUNCTION: Test batch API payload construction without making actual API calls.
- * Run this from the Apps Script editor to inspect payloads.
- */
-function debugBatchAPIPayload() {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-
-  // Sample JSONL request (what goes in the uploaded file)
-  const testRequest = {
-    key: 'test_chunk_0',
-    request: {
-      contents: [{
-        parts: [{
-          text: 'Read the following text in a clear, neutral, and steady voice: This is a test sentence for debugging.'
-        }]
-      }],
-      generationConfig: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: CONSTANTS.GEMINI_VOICE_NAME }
-          }
-        }
-      }
-    }
-  };
-
-  Logger.log('=== TEST JSONL REQUEST (what goes in the file) ===');
-  Logger.log(JSON.stringify(testRequest, null, 2));
-  Logger.log('');
-
-  // Batch creation payload (what goes to the REST API endpoint)
-  const batchPayload = {
-    batch: {
-      display_name: 'test-batch-job',
-      input_config: {
-        file_name: 'files/test123'  // This would be the uploaded file name
-      }
-    }
-  };
-
-  Logger.log('=== TEST BATCH CREATION PAYLOAD (REST API) ===');
-  Logger.log(JSON.stringify(batchPayload, null, 2));
-  Logger.log('');
-
-  const batchCreateUrl = `${CONSTANTS.GEMINI_API_BASE_URL}models/${CONSTANTS.GEMINI_TTS_MODEL}:batchGenerateContent?key=${apiKey}`;  Logger.log('=== BATCH CREATE URL (REST API) ===');
-  Logger.log(batchCreateUrl);
-  Logger.log('');
-
-  Logger.log('=== CONSTANTS VALUES ===');
-  Logger.log('GEMINI_TTS_MODEL: ' + CONSTANTS.GEMINI_TTS_MODEL);
-  Logger.log('GEMINI_BATCH_API_ENDPOINT: ' + CONSTANTS.GEMINI_BATCH_API_ENDPOINT);
-  Logger.log('GEMINI_VOICE_NAME: ' + CONSTANTS.GEMINI_VOICE_NAME);
-  Logger.log('');
-
-  Logger.log('Debug complete! Check the logs above.');
-}
-
-/**
  * Stops batch processing and cleans up triggers.
  */
 function stopBatchProcessing() {
