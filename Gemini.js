@@ -176,12 +176,23 @@ function generateAudioWithStandardVoice(text, fileName, folder) {
  * @return {GoogleAppsScript.Base.Blob} A blob representing the WAV file.
  */
 function createWavBlob(pcmData) {
+  const headerBytes = createWavHeader(pcmData.length);
+  const wavBytes = headerBytes.concat(pcmData);
+
+  return Utilities.newBlob(wavBytes, MimeType.WAV);
+}
+
+/**
+ * Creates the WAV file header bytes.
+ * @param {number} dataSize The size of the PCM audio data in bytes.
+ * @return {number[]} An array of bytes representing the WAV header.
+ */
+function createWavHeader(dataSize) {
   const sampleRate = CONSTANTS.WAV_SAMPLE_RATE; // Gemini TTS standard sample rate
   const numChannels = CONSTANTS.WAV_NUM_CHANNELS;
   const bitsPerSample = CONSTANTS.WAV_BITS_PER_SAMPLE;
   const byteRate = sampleRate * numChannels * bitsPerSample / 8;
   const blockAlign = numChannels * bitsPerSample / 8;
-  const dataSize = pcmData.length;
   const fileSize = 36 + dataSize;
 
   const buffer = new ArrayBuffer(44);
@@ -206,10 +217,7 @@ function createWavBlob(pcmData) {
   writeString(view, 36, 'data');
   view.setUint32(40, dataSize, true);
 
-  const headerBytes = Array.from(new Uint8Array(buffer));
-  const wavBytes = headerBytes.concat(pcmData);
-
-  return Utilities.newBlob(wavBytes, MimeType.WAV);
+  return Array.from(new Uint8Array(buffer));
 }
 
 /**
@@ -223,4 +231,3 @@ function writeString(view, offset, string) {
     view.setUint8(offset + i, string.charCodeAt(i));
   }
 }
-
