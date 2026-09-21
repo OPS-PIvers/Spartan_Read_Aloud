@@ -14,7 +14,7 @@ Since this is a Google Apps Script project, traditional build commands don't app
 - **Pull changes from Apps Script**: `clasp pull`
 - **Open project in Apps Script editor**: `clasp open`
 - **Deploy as web app**: Use the `/deploy` slash command, which runs `clasp push` followed by `clasp deploy --deploymentId AKfycbwbnej8CBXrgSt7YFbpkAs9uj2f4OYB5518KRjjhP2a6N5RdWNwxVmzUuF54xslyOt6Ww`
-- **Run tests**: `node tests/answer-choice-order.test.js` (no dependencies; loads `Code.js` into a Node VM with Apps Script stubs)
+- **Run tests**: `node tests/answer-choice-order.test.js` (no dependencies; loads `Code.js` into a Node VM with Apps Script stubs). Every `tests/*.test.js` suite also runs in CI via `.github/workflows/tests.yml` on pull requests and on pushes to `main`.
 - **Check what will be pushed**: `clasp status` - `.claspignore` keeps `tests/` and tooling out of the Apps Script project. Apps Script evaluates the top level of every `.js` file it holds, so Node-only code must never be pushed.
 
 The active deployment ID for the web app is: `AKfycbwbnej8CBXrgSt7YFbpkAs9uj2f4OYB5518KRjjhP2a6N5RdWNwxVmzUuF54xslyOt6Ww`
