@@ -4241,6 +4241,106 @@ function getRecentStudents(sessionToken) {
 }
 
 /**
+ * Turns an email into a display name: "paul.ivers@orono.k12.mn.us" -> "Paul Ivers".
+ * Used for case managers who are not listed in the Teachers sheet.
+ * @param {string} email The email address.
+ * @returns {string} A human readable name.
+ */
+function prettifyEmailName(email) {
+  const localPart = (email || '').toString().split('@')[0];
+  const words = localPart.split(/[._\-]+/).filter(w => w);
+  if (words.length === 0) return email;
+  return words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+/**
+ * Retrieves the unique list of case managers for the instructor picker.
+ *
+ * A case manager is any unique email address in column D of the sheets named
+ * in CONSTANTS.CASE_MANAGER_SHEET_NAMES ('Case Managers' and, since it carries
+ * the same value in column D, 'Student Directory'). Both are scanned and the
+ * union is returned, so the picker works whichever of the two a deployment has.
+ *
+ * Display names come from the Teachers sheet when the case manager is also
+ * staff; otherwise the email's local part is prettified.
+ *
+ * @param {string} sessionToken Staff session token.
+ * @param {boolean} [forceRefresh] Skip the cache and re-read the sheets.
+ * @returns {Object} { success: true, caseManagers: [{name, email}] } or { error: "..." }
+ */
+function getCaseManagers(sessionToken, forceRefresh) {
+  try {
+    if (!validateAdminToken(sessionToken)) {
+      return { error: 'Unauthorized' };
+    }
+
+    // The roster is identical for every staff member, so cache it script-wide.
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'case_managers';
+    if (!forceRefresh) {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        try {
+          return { success: true, caseManagers: JSON.parse(cached) };
+        } catch (e) {
+          // Fall through and re-read the sheets.
+        }
+      }
+    }
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const emails = {};
+
+    CONSTANTS.CASE_MANAGER_SHEET_NAMES.forEach(sheetName => {
+      const sheet = spreadsheet.getSheetByName(sheetName);
+      if (!sheet) return;
+
+      const data = sheet.getDataRange().getValues();
+      // Row 0 is the header row in every sheet in this workbook.
+      for (let i = 1; i < data.length; i++) {
+        const raw = data[i][CONSTANTS.COL_CASE_MANAGER_EMAIL];
+        const email = raw ? raw.toString().toLowerCase().trim() : '';
+        // Guard against stray labels: only real addresses become chips.
+        if (email.indexOf('@') > 0) emails[email] = true;
+      }
+    });
+
+    // Name lookup from the Teachers sheet (A: first, B: last, C: email).
+    const names = {};
+    const teacherSheet = spreadsheet.getSheetByName(CONSTANTS.TEACHERS_SHEET_NAME);
+    if (teacherSheet) {
+      const teacherData = teacherSheet.getDataRange().getValues();
+      for (let i = 1; i < teacherData.length; i++) {
+        const row = teacherData[i];
+        const email = row[2] ? row[2].toString().toLowerCase().trim() : '';
+        if (!email) continue;
+        const fullName = [row[0], row[1]]
+          .map(v => (v ? v.toString().trim() : ''))
+          .filter(v => v)
+          .join(' ');
+        if (fullName) names[email] = fullName;
+      }
+    }
+
+    const caseManagers = Object.keys(emails)
+      .map(email => ({ email: email, name: names[email] || prettifyEmailName(email) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    // CacheService rejects values over 100KB; skip the cache for huge rosters
+    // rather than failing the whole call.
+    const payload = JSON.stringify(caseManagers);
+    if (payload.length < 90000) {
+      cache.put(cacheKey, payload, CONSTANTS.CASE_MANAGER_CACHE_SECONDS);
+    }
+
+    return { success: true, caseManagers: caseManagers };
+  } catch (e) {
+    Logger.log(`Error in getCaseManagers: ${e.toString()}`);
+    return { error: e.toString() };
+  }
+}
+
+/**
  * Searches the Student Directory for students matching first/last name.
  * @param {string} sessionToken The user's session token.
  * @param {string} firstName Optional first name filter.

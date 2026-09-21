@@ -14,7 +14,7 @@ Since this is a Google Apps Script project, traditional build commands don't app
 - **Pull changes from Apps Script**: `clasp pull`
 - **Open project in Apps Script editor**: `clasp open`
 - **Deploy as web app**: Use the `/deploy` slash command, which runs `clasp push` followed by `clasp deploy --deploymentId AKfycbwbnej8CBXrgSt7YFbpkAs9uj2f4OYB5518KRjjhP2a6N5RdWNwxVmzUuF54xslyOt6Ww`
-- **Run tests**: `node tests/answer-choice-order.test.js` (no dependencies; loads `Code.js` into a Node VM with Apps Script stubs). Every `tests/*.test.js` suite also runs in CI via `.github/workflows/tests.yml` on pull requests and on pushes to `main`.
+- **Run tests**: `node tests/answer-choice-order.test.js` (or any other `tests/*.test.js` suite) (no dependencies; loads `Code.js` into a Node VM with Apps Script stubs). Every `tests/*.test.js` suite also runs in CI via `.github/workflows/tests.yml` on pull requests and on pushes to `main`.
 - **Check what will be pushed**: `clasp status` - `.claspignore` keeps `tests/` and tooling out of the Apps Script project. Apps Script evaluates the top level of every `.js` file it holds, so Node-only code must never be pushed.
 
 The active deployment ID for the web app is: `AKfycbwbnej8CBXrgSt7YFbpkAs9uj2f4OYB5518KRjjhP2a6N5RdWNwxVmzUuF54xslyOt6Ww`
@@ -216,6 +216,23 @@ The admin dashboard (`teacher.html`) enables staff to:
 - Upload progress indicators
 - Automatic conversion of Word documents to PDF
 
+**Case Manager Picker**:
+- The uploading teacher's email is pre-populated into the Instructor field
+- A **Case Managers** button beside that field opens a searchable, multi-select
+  picker; the picked emails are appended as instructor chips (which is what
+  grants access to the assessment)
+- The same picker is available on each row of the assessments table, so case
+  managers can be added to an existing assessment
+- The roster is every unique email in **column D** of the "Case Managers" sheet;
+  the "Student Directory" sheet holds the same value in column D, so both are
+  scanned and the union is returned (`CONSTANTS.CASE_MANAGER_SHEET_NAMES`)
+- Display names come from the "Teachers" sheet when the case manager is also
+  staff, otherwise the email's local part is prettified ("sam.roe@..." →
+  "Sam Roe")
+- Backed by `getCaseManagers(sessionToken, forceRefresh)` in `Code.js`, cached
+  script-wide for an hour; the picker's Refresh button forces a re-read
+- Regression tests live in `tests/case-manager-picker.test.js`
+
 **Assessment Management**:
 - Set class name and instructor name
 - Generate or specify assessment password
@@ -319,6 +336,10 @@ Assessment Audio Files/
   - Column 10: LAST_PROCESSED_TIME (timestamp)
   - Column 11: PROCESSING_MODE (manual/batch)
 - "Teachers" sheet: Staff authentication with email and role columns
+  (A: first, B: last, C: email, E: role, F: beta features)
+- "Student Directory" sheet: A) First, B) Last, C) Student Email, D) Case Manager Email
+- "Case Managers" sheet (optional): column D holds case manager emails, which
+  feed the instructor picker in the teacher dashboard
 
 ### Recent Improvements
 
