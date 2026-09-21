@@ -14,6 +14,8 @@ Since this is a Google Apps Script project, traditional build commands don't app
 - **Pull changes from Apps Script**: `clasp pull`
 - **Open project in Apps Script editor**: `clasp open`
 - **Deploy as web app**: Use the `/deploy` slash command, which runs `clasp push` followed by `clasp deploy --deploymentId AKfycbwbnej8CBXrgSt7YFbpkAs9uj2f4OYB5518KRjjhP2a6N5RdWNwxVmzUuF54xslyOt6Ww`
+- **Run tests**: `node tests/answer-choice-order.test.js` (no dependencies; loads `Code.js` into a Node VM with Apps Script stubs). Every `tests/*.test.js` suite also runs in CI via `.github/workflows/tests.yml` on pull requests and on pushes to `main`.
+- **Check what will be pushed**: `clasp status` - `.claspignore` keeps `tests/` and tooling out of the Apps Script project. Apps Script evaluates the top level of every `.js` file it holds, so Node-only code must never be pushed.
 
 The active deployment ID for the web app is: `AKfycbwbnej8CBXrgSt7YFbpkAs9uj2f4OYB5518KRjjhP2a6N5RdWNwxVmzUuF54xslyOt6Ww`
 
@@ -56,6 +58,39 @@ The system operates in three sequential steps for assessment processing:
    - Creates descriptive filenames based on text content (first 6 words)
    - Stores audio metadata as JSON in spreadsheet
    - Marks assessment as complete
+
+### Answer Choice Normalization
+
+Test generators (ExamView in particular) lay multiple-choice options out in a
+multi-column table that is filled **column-major** - a, b, c down the left
+column; d, e down the right - but stored **row-major**. Any converter that
+walks the document in reading order therefore produces `a, d, b, e, c`.
+ExamView compounds this by putting the marker (`a.`) in a cell of its own, so
+the marker and its text land in two different blocks, and by prefixing each
+question with an answer blank (`____ 1.`) that hides the question number.
+
+`sanitizeHtml()` normalizes all three, before block IDs are assigned so that
+`sra-block-N` numbering, the rendered document, the highlight sequence and the
+audio chunks all agree:
+
+1. `normalizeAnswerChoiceTables()` - detects answer-choice tables and replaces
+   each one with a single `<p>` per option, sorted alphabetically. A table only
+   qualifies when its markers form a complete, duplicate-free run starting at
+   "a" and every option is short, so real data tables, layout tables and
+   roman-numeral stems (`I.`, `II.`) are left untouched.
+2. `reorderAnswerChoiceBlocks()` - safety net for documents that arrive as flat
+   paragraphs rather than tables (some OCR output carries the same column-major
+   order with no table markup). Reorders each run of adjacent option
+   paragraphs; an already-ordered run is left alone.
+3. `parseHtmlToChunks()` tolerates a leading answer blank when detecting a
+   question start, so every question gets its own audio chunk.
+
+`markAnswerChoicesForSpeech()` (used by `addPausesToText`) marks up choices for
+TTS. It only treats a marker as a choice when it continues an a/b/c... run,
+which handles questions with five or more options and leaves prose
+abbreviations such as "9 a.m." and "e.g." intact.
+
+Regression tests live in `tests/answer-choice-order.test.js`.
 
 ### Batch Processing (Experimental)
 
@@ -306,6 +341,12 @@ Assessment Audio Files/
 - Enhanced Word-to-PDF conversion reliability
 - Better error messages for file upload failures
 - Password display in textarea (not concealed) for easier copying
+
+**Answer Choice Layout Normalization**:
+- Multi-column (ExamView-style) answer tables are linearized into alphabetical order
+- Marker and option text are rejoined into a single block per option
+- Questions prefixed with an answer blank (`____ 1.`) now start their own chunk
+- Answer choices beyond "d" are announced correctly by TTS; prose abbreviations no longer are
 
 **Batch API Integration** (October 2024):
 - Infrastructure prepared for batch processing
