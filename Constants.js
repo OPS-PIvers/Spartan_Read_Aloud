@@ -6,6 +6,16 @@ const CONSTANTS = {
   SUBMISSIONS_SHEET_NAME: "Submissions", // NEW: Sheet for storing raw submission data
   COL_TEACHERS_BETA_FEATURES: 5, // Column F (0-based index 5)
 
+  // --- Case Managers ---
+  // A case manager is any unique email in column D of these sheets. Both are
+  // scanned and the union is returned, so a deployment that keeps the roster
+  // in a dedicated "Case Managers" sheet and one that only has the
+  // "Student Directory" (whose column D is the student's case manager) both
+  // work without configuration.
+  CASE_MANAGER_SHEET_NAMES: ["Case Managers", "Student Directory"],
+  COL_CASE_MANAGER_EMAIL: 3, // Column D (0-based index 3)
+  CASE_MANAGER_CACHE_SECONDS: 3600,
+
   // --- Batch Processing ---
   BATCH_API_ENABLED: false, // KEEP FALSE until Google confirms TTS batch support
   BATCH_CHECK_INTERVAL_MINUTES: 30,

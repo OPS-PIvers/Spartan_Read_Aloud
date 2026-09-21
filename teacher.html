@@ -892,6 +892,43 @@
     </div>
   </div>
 
+  <!-- CASE MANAGER PICKER MODAL -->
+  <div id="case-manager-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center;">
+    <div class="modal-card" style="max-width: 520px; width: 95%;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="material-icons" style="vertical-align: middle; margin-right: 8px; color: var(--primary-blue);">supervisor_account</span>
+          Add Case Managers
+        </div>
+        <button class="action-btn" onclick="closeCaseManagerModal()"><span class="material-icons">close</span></button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 12px; color: var(--gray-500); margin-bottom: 12px;">
+          Case managers are added to the instructor list, which gives them access to this assessment.
+        </div>
+        <input type="text" id="case-manager-search" class="form-control" placeholder="Filter by name or email..."
+          oninput="renderCaseManagerList()" style="margin-bottom: 12px;">
+        <div id="case-manager-loading" style="display: none; text-align: center; padding: 20px;">
+          <span class="material-icons animate-spin" style="color: var(--primary-blue); font-size: 24px;">refresh</span>
+        </div>
+        <div id="case-manager-list" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--gray-300); border-radius: 4px; padding: 4px; display: none;">
+          <!-- Populated by renderCaseManagerList() -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="loadCaseManagers(true)" title="Re-read the Case Managers sheet" style="margin-right: auto;">
+          <span class="material-icons" style="font-size: 16px;">refresh</span>
+          Refresh
+        </button>
+        <button class="btn btn-secondary" onclick="closeCaseManagerModal()">Cancel</button>
+        <button class="btn btn-primary" id="case-manager-add-btn" onclick="addSelectedCaseManagers()">
+          <span class="material-icons" style="font-size: 18px;">add</span>
+          Add Selected
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- MAIN CONTENT GRID -->
   <div id="main-content" class="main-content" style="display:none;">
     
@@ -965,7 +1002,12 @@
             <input type="text" id="meta-title" class="form-control" placeholder="e.g. Unit 1 Test">
           </div>
           <div class="input-group">
-                                <label class="input-label">Instructor Email(s)</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; max-width: 300px; gap: 8px;">
+              <label class="input-label" style="margin-bottom: 0;">Instructor Email(s)</label>
+              <button class="btn btn-secondary" onclick="openCaseManagerModal('new')" style="padding: 4px 8px; font-size: 11px; height: auto; white-space: nowrap;">
+                <span class="material-icons" style="font-size: 14px;">supervisor_account</span> Case Managers
+              </button>
+            </div>
                                 <div id="meta-instructor-container" class="email-chips-container instructor-chips-container" data-row="new" onclick="focusEmailInput(this)" style="background: white; border: 1px solid var(--gray-300); padding: 6px 10px; border-radius: 4px; max-width: 300px;">
                                   <input type="text" id="meta-instructor-input" class="email-chips-input" placeholder="Add email..."                onkeydown="handleInstructorInput(event, 'new')"
                 onpaste="handleInstructorPaste(event, 'new')"
@@ -1616,7 +1658,12 @@
                   <span class="material-icons">more_vert</span>
                 </button>
               </div>
-              <div style="font-size: 10px; color: var(--gray-500); font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Instructors</div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; max-width: 300px; gap: 8px;">
+                <div style="font-size: 10px; color: var(--gray-500); font-weight: 600; text-transform: uppercase;">Instructors</div>
+                <button class="btn btn-secondary" onclick="openCaseManagerModal(${item.rowIndex})" title="Add case managers" style="padding: 2px 6px; font-size: 10px; height: auto; white-space: nowrap;">
+                  <span class="material-icons" style="font-size: 12px;">supervisor_account</span> Case Mgr
+                </button>
+              </div>
               <div class="email-chips-container instructor-chips-container" data-row="${item.rowIndex}" onclick="focusEmailInput(this)" style="max-width: 300px;">
                 ${(item.instructor ? item.instructor.split(/[,\/]/).map(n => n.trim()).filter(n => n) : []).map(name => `
                   <div class="email-chip" style="background: var(--gray-100); color: var(--gray-700);">
@@ -1765,7 +1812,7 @@
         .map(span => span.textContent.trim());
 
       if (emails.length === 0) {
-        if (!confirm('Warning: No student emails provided. If you are not providing student emails, you must ensure the case manager is added to the instructor field. Continue?')) {
+        if (!confirm('Warning: No student emails provided. If you are not providing student emails, you must ensure the case manager is added to the instructor field - use the "Case Managers" button above that field. Continue?')) {
           return;
         }
       }
@@ -2170,11 +2217,142 @@
         .map(span => span.textContent.trim());
 
       if (rowIndex !== 'new') {
-        const item = assessmentList.find(a => a.rowIndex === rowIndex);
+        // Callers pass rowIndex as both a number and a string, so compare loosely.
+        const item = assessmentList.find(a => String(a.rowIndex) === String(rowIndex));
         if (item) {
           item.instructor = names.join(', ');
         }
       }
+    }
+
+    // --- CASE MANAGER PICKER ---
+
+    let caseManagerList = null;      // Cached [{name, email}] from the server
+    let caseManagerTargetRow = 'new'; // Which instructor field the picks go into
+    let caseManagerSelected = [];     // Emails ticked in the open modal
+
+    function openCaseManagerModal(rowIndex) {
+      caseManagerTargetRow = (rowIndex === undefined || rowIndex === null) ? 'new' : rowIndex;
+      caseManagerSelected = [];
+      document.getElementById('case-manager-search').value = '';
+      document.getElementById('case-manager-modal').style.display = 'flex';
+
+      if (caseManagerList) {
+        renderCaseManagerList();
+      } else {
+        loadCaseManagers(false);
+      }
+      setTimeout(() => document.getElementById('case-manager-search').focus(), 100);
+    }
+
+    function closeCaseManagerModal() {
+      document.getElementById('case-manager-modal').style.display = 'none';
+    }
+
+    function loadCaseManagers(forceRefresh) {
+      if (!adminToken) return;
+      const listEl = document.getElementById('case-manager-list');
+      const loadingEl = document.getElementById('case-manager-loading');
+      listEl.style.display = 'none';
+      loadingEl.style.display = 'block';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          loadingEl.style.display = 'none';
+          if (!res || res.error) {
+            listEl.style.display = 'block';
+            listEl.innerHTML = `<div style="color: var(--primary-red); padding: 8px;">${escapeHtml((res && res.error) || 'Could not load case managers.')}</div>`;
+            return;
+          }
+          caseManagerList = res.caseManagers || [];
+          if (forceRefresh) showToast('Case manager list refreshed', 'success');
+          renderCaseManagerList();
+        })
+        .withFailureHandler(err => {
+          loadingEl.style.display = 'none';
+          listEl.style.display = 'block';
+          listEl.innerHTML = `<div style="color: var(--primary-red); padding: 8px;">${escapeHtml(err.message || 'Could not load case managers.')}</div>`;
+        })
+        .getCaseManagers(adminToken, !!forceRefresh);
+    }
+
+    /** Emails already present as chips in the instructor field being edited. */
+    function existingInstructorEmails() {
+      const container = document.querySelector(`.instructor-chips-container[data-row="${caseManagerTargetRow}"]`);
+      if (!container) return [];
+      return Array.from(container.querySelectorAll('.email-chip span:first-child'))
+        .map(span => span.textContent.trim().toLowerCase());
+    }
+
+    function renderCaseManagerList() {
+      const listEl = document.getElementById('case-manager-list');
+      if (!listEl || !caseManagerList) return;
+      listEl.style.display = 'block';
+
+      if (caseManagerList.length === 0) {
+        listEl.innerHTML = `<div style="color: var(--gray-500); padding: 12px; text-align: center;">No case managers found. Check column D of the "Case Managers" sheet.</div>`;
+        return;
+      }
+
+      const filter = document.getElementById('case-manager-search').value.trim().toLowerCase();
+      const alreadyAdded = existingInstructorEmails();
+      const matches = caseManagerList.filter(cm =>
+        !filter || cm.email.indexOf(filter) !== -1 || (cm.name || '').toLowerCase().indexOf(filter) !== -1);
+
+      if (matches.length === 0) {
+        listEl.innerHTML = `<div style="color: var(--gray-500); padding: 12px; text-align: center;">No case managers match "${escapeHtml(filter)}".</div>`;
+        return;
+      }
+
+      listEl.innerHTML = matches.map(cm => {
+        const added = alreadyAdded.indexOf(cm.email) !== -1;
+        const checked = caseManagerSelected.indexOf(cm.email) !== -1;
+        return `
+          <label style="display: flex; align-items: center; gap: 10px; padding: 8px; border-bottom: 1px solid var(--gray-200); cursor: ${added ? 'default' : 'pointer'}; opacity: ${added ? '0.6' : '1'};">
+            <input type="checkbox" class="checkbox-control" value="${escapeHtml(cm.email)}"
+              ${added ? 'disabled' : ''} ${checked ? 'checked' : ''}
+              onchange="toggleCaseManagerSelection(this)">
+            <div style="min-width: 0; flex: 1;">
+              <div style="font-weight: 600; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(cm.name || cm.email)}</div>
+              <div style="font-size: 11px; color: var(--gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(cm.email)}</div>
+            </div>
+            ${added ? '<span style="font-size: 11px; color: var(--success-green); font-weight: 600; flex-shrink: 0;">Added</span>' : ''}
+          </label>
+        `;
+      }).join('');
+    }
+
+    function toggleCaseManagerSelection(checkbox) {
+      const email = checkbox.value;
+      const at = caseManagerSelected.indexOf(email);
+      if (checkbox.checked && at === -1) {
+        caseManagerSelected.push(email);
+      } else if (!checkbox.checked && at !== -1) {
+        caseManagerSelected.splice(at, 1);
+      }
+    }
+
+    function addSelectedCaseManagers() {
+      if (caseManagerSelected.length === 0) {
+        showToast('Select at least one case manager', 'warning');
+        return;
+      }
+
+      const container = document.querySelector(`.instructor-chips-container[data-row="${caseManagerTargetRow}"]`);
+      const input = container ? container.querySelector('.email-chips-input') : null;
+      if (!input) {
+        showToast('Instructor field not found', 'error');
+        return;
+      }
+
+      // addInstructorChip() splits on commas and skips duplicates for us.
+      input.value = caseManagerSelected.join(', ');
+      addInstructorChip(input, caseManagerTargetRow);
+
+      const count = caseManagerSelected.length;
+      const suffix = caseManagerTargetRow === 'new' ? '' : ' - click Save on the row to apply';
+      showToast(`${count} case manager${count === 1 ? '' : 's'} added${suffix}`, 'success');
+      closeCaseManagerModal();
     }
 
     function deleteRow(rowIndex) {
