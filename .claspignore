@@ -1,0 +1,14 @@
+# Files that must never reach the Apps Script project.
+#
+# Apps Script evaluates the top level of every .js file it holds on every
+# execution, so Node-only code (tests, tooling) would break the whole project
+# if it were pushed. `clasp status` lists exactly what `clasp push` will send.
+tests/**
+.github/**
+.claude/**
+.gemini/**
+**/node_modules/**
+**/.git/**
+.clasp.json
+.claspignore
+.gitignore

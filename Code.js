@@ -1804,6 +1804,316 @@ function getListMarker(num, listStyleType) {
   }
 }
 
+// ========================================
+// ANSWER CHOICE LAYOUT NORMALIZATION
+// ========================================
+// Test generators such as ExamView lay multiple-choice options out in a
+// multi-column table that is filled COLUMN-major (a, b, c down the left
+// column; d, e down the right) but stored ROW-major. Every converter that
+// walks the document in reading order - Drive's OCR/Word importers included -
+// therefore yields "a, d, b, e, c". Worse, ExamView puts the marker ("a.") in
+// its own cell, so the marker and its text land in two different blocks and
+// the TTS chunker splits questions mid-option.
+//
+// These helpers detect an answer-choice table, collapse each option back into
+// a single block, and re-emit the options in alphabetical order so the
+// rendered document, the highlight sequence and the audio all agree.
+
+const ANSWER_CHOICE_CONFIG = {
+  MIN_OPTIONS: 3,          // below this a "table of letters" is too ambiguous to touch
+  MAX_OPTIONS: 12,
+  MAX_OPTION_TEXT_LENGTH: 400  // guards against flattening a real data table
+};
+
+/**
+ * Reduces an HTML fragment to comparable plain text.
+ * @param {string} html HTML fragment
+ * @returns {string} Collapsed plain text
+ */
+function answerChoicePlainText(html) {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Parses a leading answer-choice marker ("a.", "B)", "(c)", "d]") off plain text.
+ * @param {string} plainText Plain text of a block or table cell
+ * @returns {{letter: string, marker: string, rest: string}|null} Parsed marker or null
+ */
+function parseAnswerChoiceMarker(plainText) {
+  const text = String(plainText || '');
+  const match = /^(?:\(\s*([a-zA-Z])\s*\)|([a-zA-Z])\s*[.)\]])\s*([\s\S]*)$/.exec(text);
+  if (!match) return null;
+
+  const rest = match[3];
+  return {
+    letter: match[1] || match[2],
+    marker: text.slice(0, text.length - rest.length).trim(),
+    rest: rest.trim()
+  };
+}
+
+/**
+ * Checks that a set of marker letters is a complete, duplicate-free run
+ * starting at "a" (a,b,c / a,b,c,d,e / ...). This is what separates a real
+ * answer block from roman-numeral stems ("I.", "II.") and from prose that
+ * happens to begin with a letter and a period.
+ * @param {string[]} letters Marker letters in document order
+ * @returns {boolean} True if the letters form a valid answer-choice set
+ */
+function isSequentialChoiceLetters(letters) {
+  if (!letters || letters.length < ANSWER_CHOICE_CONFIG.MIN_OPTIONS) return false;
+  if (letters.length > ANSWER_CHOICE_CONFIG.MAX_OPTIONS) return false;
+
+  const sorted = letters.map(l => l.toLowerCase()).sort();
+  if (sorted[0] !== 'a') return false;
+
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].charCodeAt(0) !== sorted[i - 1].charCodeAt(0) + 1) return false;
+  }
+  return true;
+}
+
+/**
+ * Flattens a table cell to inline HTML, dropping block-level wrappers but
+ * keeping inline formatting and images.
+ * @param {string} cellHtml Inner HTML of a <td>/<th>
+ * @returns {string} Inline HTML
+ */
+function inlineAnswerChoiceHtml(cellHtml) {
+  return String(cellHtml || '')
+    .replace(/<\/?(?:p|div|h[1-6]|ul|ol|li|table|tbody|thead|tr|t[dh])\b[^>]*>/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Same as inlineAnswerChoiceHtml, but also removes a leading marker
+ * ("a.", "(b)") while preserving any inline tags that wrap it.
+ * @param {string} cellHtml Inner HTML of a <td>/<th>
+ * @returns {string} Inline HTML without its leading marker
+ */
+function stripAnswerChoiceMarkerFromHtml(cellHtml) {
+  return inlineAnswerChoiceHtml(cellHtml)
+    .replace(/^((?:\s|<[^>]+>)*)(?:\(\s*[a-zA-Z]\s*\)|[a-zA-Z]\s*[.)\]])\s*/, '$1')
+    .trim();
+}
+
+/**
+ * Locates top-level, balanced <table>...</table> regions.
+ * Returns an empty list if the markup is unbalanced, so callers never edit
+ * HTML they cannot parse reliably.
+ * @param {string} html HTML to scan
+ * @returns {Array<{start: number, end: number}>} Table ranges in document order
+ */
+function findBalancedTables(html) {
+  const ranges = [];
+  const tagPattern = /<table\b[^>]*>|<\/table\s*>/gi;
+  let depth = 0;
+  let start = -1;
+  let match;
+
+  while ((match = tagPattern.exec(html)) !== null) {
+    const isClosing = match[0].charAt(1) === '/';
+    if (!isClosing) {
+      if (depth === 0) start = match.index;
+      depth++;
+    } else {
+      if (depth === 0) return [];
+      depth--;
+      if (depth === 0) {
+        ranges.push({ start: start, end: tagPattern.lastIndex });
+        start = -1;
+      }
+    }
+  }
+
+  return depth === 0 ? ranges : [];
+}
+
+/**
+ * Converts one answer-choice table into ordered <p> blocks, one per option.
+ * @param {string} tableHtml The complete <table>...</table> markup
+ * @returns {string|null} Replacement HTML, or null if this is not an answer table
+ */
+function flattenAnswerChoiceTable(tableHtml) {
+  const body = tableHtml.replace(/^<table\b[^>]*>/i, '').replace(/<\/table\s*>$/i, '');
+  if (/<table\b/i.test(body)) return null; // nested table: too risky to rewrite
+
+  // Collect cells in document (row-major) order.
+  const cells = [];
+  const rowPattern = /<tr\b[^>]*>([\s\S]*?)<\/tr\s*>/gi;
+  let rowMatch;
+  while ((rowMatch = rowPattern.exec(body)) !== null) {
+    const cellPattern = /<t([dh])\b[^>]*>([\s\S]*?)<\/t\1\s*>/gi;
+    let cellMatch;
+    while ((cellMatch = cellPattern.exec(rowMatch[1])) !== null) {
+      cells.push(cellMatch[2]);
+    }
+  }
+  if (cells.length === 0) return null;
+
+  // Walk the cells, starting a new option at each marker and treating every
+  // other cell as continuation text for the option that is currently open.
+  const options = [];
+  let current = null;
+
+  for (let i = 0; i < cells.length; i++) {
+    const cellHtml = cells[i];
+    const plain = answerChoicePlainText(cellHtml);
+    const hasImage = /<img\b/i.test(cellHtml);
+    if (!plain && !hasImage) continue; // spacer/empty cell
+
+    const marker = plain ? parseAnswerChoiceMarker(plain) : null;
+    if (marker) {
+      current = { letter: marker.letter, marker: marker.marker, parts: [] };
+      options.push(current);
+      const remainder = stripAnswerChoiceMarkerFromHtml(cellHtml);
+      // A marker-only cell leaves behind empty wrapper tags - drop them so the
+      // option text is not padded with stray whitespace.
+      if (answerChoicePlainText(remainder) || /<img\b/i.test(remainder)) {
+        current.parts.push(remainder);
+      }
+      continue;
+    }
+
+    // Content before any marker means this is not a pure answer block.
+    if (!current) return null;
+    current.parts.push(inlineAnswerChoiceHtml(cellHtml));
+  }
+
+  if (!isSequentialChoiceLetters(options.map(o => o.letter))) return null;
+
+  for (let i = 0; i < options.length; i++) {
+    const contentHtml = options[i].parts.join(' ').trim();
+    const contentText = answerChoicePlainText(contentHtml);
+    // Every option needs content, and a genuine option is short. A long cell
+    // means we are looking at a data table whose first column happens to be
+    // lettered, so leave it alone.
+    if (!contentText && !/<img\b/i.test(contentHtml)) return null;
+    if (contentText.length > ANSWER_CHOICE_CONFIG.MAX_OPTION_TEXT_LENGTH) return null;
+    options[i].html = contentHtml;
+  }
+
+  options.sort((a, b) => a.letter.toLowerCase().charCodeAt(0) - b.letter.toLowerCase().charCodeAt(0));
+
+  return options.map(o => `<p>${o.marker} ${o.html}</p>`).join('');
+}
+
+/**
+ * Replaces every answer-choice table in the document with ordered <p> options.
+ * Non-answer tables (data tables, layout tables) are left untouched.
+ * @param {string} html HTML to normalize
+ * @returns {string} HTML with answer-choice tables linearized
+ */
+function normalizeAnswerChoiceTables(html) {
+  if (!html || !/<table\b/i.test(html)) return html;
+
+  const ranges = findBalancedTables(html);
+  if (ranges.length === 0) return html;
+
+  let result = '';
+  let cursor = 0;
+  let flattened = 0;
+
+  for (let i = 0; i < ranges.length; i++) {
+    const replacement = flattenAnswerChoiceTable(html.slice(ranges[i].start, ranges[i].end));
+    if (replacement === null) continue;
+    result += html.slice(cursor, ranges[i].start) + replacement;
+    cursor = ranges[i].end;
+    flattened++;
+  }
+
+  if (flattened === 0) return html;
+  result += html.slice(cursor);
+
+  Logger.log(`✓ Linearized ${flattened} answer-choice table(s) into alphabetical order`);
+  return result;
+}
+
+/**
+ * Safety net for documents that arrive as flat paragraphs rather than tables
+ * (some OCR results emit the same column-major reading order without any
+ * table markup). Reorders each run of consecutive answer-choice paragraphs
+ * into alphabetical order; a run that is already ordered is left as-is.
+ * @param {string} html HTML whose options are already one-per-paragraph
+ * @returns {string} HTML with answer-choice runs in alphabetical order
+ */
+function reorderAnswerChoiceBlocks(html) {
+  if (!html) return html;
+
+  const blocks = [];
+  const blockPattern = /<p\b[^>]*>[\s\S]*?<\/p\s*>/gi;
+  let match;
+
+  while ((match = blockPattern.exec(html)) !== null) {
+    const marker = parseAnswerChoiceMarker(answerChoicePlainText(match[0]));
+    blocks.push({
+      html: match[0],
+      start: match.index,
+      end: blockPattern.lastIndex,
+      // A marker with no text of its own belongs to a table-style layout that
+      // flattenAnswerChoiceTable handles; reordering it here would separate it
+      // from its text.
+      letter: marker && marker.rest ? marker.letter : null
+    });
+  }
+
+  const edits = [];
+  let i = 0;
+
+  while (i < blocks.length) {
+    if (!blocks[i].letter) { i++; continue; }
+
+    // Extend the run while blocks stay adjacent and letters stay unique, so
+    // two back-to-back questions are treated as two runs, not one.
+    const seen = {};
+    seen[blocks[i].letter.toLowerCase()] = true;
+    let j = i + 1;
+    while (j < blocks.length &&
+           blocks[j].letter &&
+           !seen[blocks[j].letter.toLowerCase()] &&
+           html.slice(blocks[j - 1].end, blocks[j].start).trim() === '') {
+      seen[blocks[j].letter.toLowerCase()] = true;
+      j++;
+    }
+
+    const run = blocks.slice(i, j);
+    if (isSequentialChoiceLetters(run.map(b => b.letter))) {
+      const ordered = run.slice().sort(
+        (a, b) => a.letter.toLowerCase().charCodeAt(0) - b.letter.toLowerCase().charCodeAt(0)
+      );
+      if (ordered.some((block, index) => block !== run[index])) {
+        edits.push({
+          start: run[0].start,
+          end: run[run.length - 1].end,
+          html: ordered.map(b => b.html).join('')
+        });
+      }
+    }
+
+    i = j;
+  }
+
+  if (edits.length === 0) return html;
+
+  let result = '';
+  let cursor = 0;
+  edits.forEach(edit => {
+    result += html.slice(cursor, edit.start) + edit.html;
+    cursor = edit.end;
+  });
+  result += html.slice(cursor);
+
+  Logger.log(`✓ Reordered ${edits.length} out-of-sequence answer-choice run(s)`);
+  return result;
+}
+
 /**
  * Sanitizes and normalizes HTML from any source (PDF, Google Docs, Word) for consistent rendering.
  * Removes styles, scripts, Google artifacts, and normalizes structure to ensure
@@ -1896,6 +2206,11 @@ function sanitizeHtml(html) {
   });
   // --- End Restoration in sanitizeHtml ---
 
+  // Collapse multi-column answer-choice tables (ExamView & friends) into one
+  // ordered paragraph per option. Must run before the paragraph-level answer
+  // processing below, which assumes one option per block.
+  sanitized = normalizeAnswerChoiceTables(sanitized);
+
   // POST-PROCESSING: Ensure answer choices are in separate paragraphs
   // This handles cases where answer choices weren't properly converted from lists
   // or where they appear inline with question text
@@ -1948,8 +2263,10 @@ function sanitizeHtml(html) {
           if (currentPart.trim()) {
             result += '<p>' + currentPart.trim() + '</p>';
           }
-          // Start a new paragraph with the delimiter
-          currentPart = part.trim();
+          // Start a new paragraph with the delimiter. Only leading whitespace
+          // is dropped - trimming the trailing space too would glue the
+          // marker to its text ("a.357.4").
+          currentPart = part.replace(/^\s+/, '');
         } else {
           // If it's not a delimiter, append to current part
           currentPart += part;
@@ -2090,6 +2407,11 @@ function sanitizeHtml(html) {
     return `<${tag}${attrs}>${wrappedParts.join('')}</${tag}>`;
   });
 
+  // Final ordering pass: documents that arrived as flat paragraphs (rather
+  // than tables) can still carry column-major answer order. This must run
+  // before IDs are assigned so sra-block-N numbering follows reading order.
+  sanitized = reorderAnswerChoiceBlocks(sanitized);
+
   // 12. Assign unique IDs to all block elements for precise TTS mapping
   // This enables the frontend to highlight exactly what is being read
   let blockCounter = 0;
@@ -2107,8 +2429,15 @@ function sanitizeHtml(html) {
   // 13. Add question-start class for visual separation
   // Matches: <p id="..." > 1.  or <p id="..." > 1) or <p id="..." > Question 1.
   // Enhanced to match "Question 1.", "Q1.", "Section 1.", etc.
-  sanitized = sanitized.replace(/(<p[^>]*>)(?:\s|&nbsp;)*((?:(?:Question|Q|Section|Part)\s*)?\d+[.)\]]\s+)/gi, '$1<span class="question-marker">$2</span>');
-  sanitized = sanitized.replace(/<p([^>]*id="sra-block-[^"]*"[^>]*)>(?:\s|&nbsp;)*(?=<span class="question-marker">)/gi, '<p$1 class="question-start">');
+  // The leading run may contain inline wrappers and an ExamView answer blank
+  // ("____") before the number; neither should suppress the marker.
+  const questionLeadIn = '(?:<\\/?(?:span|b|i|u|em|strong|font)\\b[^>]*>|\\s|&nbsp;|_)*';
+  sanitized = sanitized.replace(
+    new RegExp(`(<p[^>]*>)(${questionLeadIn})((?:(?:Question|Q|Section|Part)\\s*)?\\d+[.)\\]]\\s+)`, 'gi'),
+    '$1$2<span class="question-marker">$3</span>');
+  sanitized = sanitized.replace(
+    new RegExp(`<p([^>]*id="sra-block-[^"]*"[^>]*)>(${questionLeadIn})(?=<span class="question-marker">)`, 'gi'),
+    '<p$1 class="question-start">$2');
 
   // 14. Add question-text class to paragraphs that end in a question mark
   // This catches questions that don't start with a number (e.g. "What is the capital of France?")
@@ -2188,7 +2517,10 @@ function parseHtmlToChunks(html) {
     // --- Detection Logic ---
     
     // 1. Question Start: "1.", "1)", "Q1", "(1)"
-    const isQuestionStart = /^(?:\(?\d+|Q\d+)[.)\]]/.test(block.text);
+    // ExamView-style generators prefix each question with an answer blank
+    // ("____ 1. ..."); that blank must not hide the question number, or every
+    // question after the first gets merged into the previous chunk.
+    const isQuestionStart = /^[_\s]*(?:\(?\d+|Q\d+)[.)\]]/.test(block.text);
     
     // 2. Answer Option: "a.", "b.", "A)", "(a)", "A. ", etc.
     // Improved regex: handles optional leading space, optional parentheses, single letter, period or closing paren, and trailing space or end of string
@@ -2335,6 +2667,90 @@ function extractTextFromFile(fileId) {
 }
 
 /**
+ * Marks answer-choice letters for speech: a pause before the choice, the
+ * letter spelled out via <say-as>, and a pause after it.
+ *
+ * A marker only counts as an answer choice when it continues a run that
+ * starts at "a" and advances one letter at a time. That keeps prose
+ * abbreviations such as "9 a.m." and "e.g." intact (they never form a run)
+ * and, unlike a fixed a-d pattern, handles questions with five or more
+ * options - which is what ExamView-style tests normally produce.
+ *
+ * @param {string} text XML-escaped chunk text
+ * @returns {string} Text with answer-choice markers marked up for speech
+ */
+function markAnswerChoicesForSpeech(text) {
+  const markerPattern = /(^|\n|[ \t])(\(?)([a-zA-Z])([.)\]])(?=[ \t]|$|\n)/g;
+  const runs = [];
+  let run = [];
+  let expected = 0; // 0 => "a"
+  let match;
+
+  const flushRun = () => {
+    if (run.length >= 2) runs.push(run);
+    run = [];
+  };
+
+  while ((match = markerPattern.exec(text)) !== null) {
+    const prefix = match[1];
+    const letterIndex = match[3].toLowerCase().charCodeAt(0) - 97;
+
+    if (letterIndex !== expected) {
+      flushRun();
+      if (letterIndex !== 0) {
+        expected = 0;
+        continue;
+      }
+      expected = 0;
+    }
+
+    run.push({
+      prefixStart: match.index,
+      markerStart: match.index + prefix.length,
+      markerEnd: markerPattern.lastIndex,
+      atLineStart: prefix !== ' ' && prefix !== '\t',
+      isFirstChar: prefix === '',
+      paren: match[2],
+      letter: match[3],
+      punctuation: match[4]
+    });
+    expected = letterIndex + 1;
+  }
+  flushRun();
+
+  const markers = [];
+  runs.forEach(r => r.forEach(m => markers.push(m)));
+  if (markers.length === 0) return text;
+
+  const beforeBlock = ` <break time="${CONSTANTS.PAUSE_BEFORE_ANSWER_BLOCK_MS}ms"/>`;
+  const beforeInline = ` <break time="${CONSTANTS.PAUSE_BEFORE_INLINE_ANSWER_MS}ms"/> `;
+  const after = ` <break time="${CONSTANTS.PAUSE_AFTER_ANSWER_CHOICE_MS}ms"/> `;
+
+  let result = '';
+  let cursor = 0;
+
+  markers.forEach(m => {
+    result += text.slice(cursor, m.prefixStart);
+    if (m.isFirstChar) {
+      // Nothing to pause after at the very start of the chunk.
+    } else if (m.atLineStart) {
+      result += `${beforeBlock}\n`;
+    } else {
+      result += beforeInline;
+    }
+    result += `${m.paren}<say-as interpret-as="characters">${m.letter.toUpperCase()}</say-as>${m.punctuation}${after}`;
+    cursor = m.markerEnd;
+    // Swallow the spacing the marker was followed by; the break replaces it.
+    while (cursor < text.length && (text.charAt(cursor) === ' ' || text.charAt(cursor) === '\t')) {
+      cursor++;
+    }
+  });
+
+  result += text.slice(cursor);
+  return result;
+}
+
+/**
  * Adds SSML pause markers to text for more natural speech pacing.
  * @param {string} text The plain text to enhance with pauses
  * @returns {string} SSML-formatted text wrapped in <speak> tags, or original text if SSML disabled
@@ -2363,21 +2779,10 @@ function addPausesToText(text) {
     // Step 3: Add pauses after paragraph breaks (double line breaks or more)
     ssmlText = ssmlText.replace(/\n\n+/g, `\n<break time="${CONSTANTS.PAUSE_AFTER_PARAGRAPH_MS}ms"/>\n`);
 
-    // Step 4: Add pause between question and first answer choice
-    // Matches a newline that is immediately followed by "a.", "b)", etc.
-    ssmlText = ssmlText.replace(/\n(?=[a-dA-D][.)])/g, ` <break time="${CONSTANTS.PAUSE_BEFORE_ANSWER_BLOCK_MS}ms"/>\n`);
-
-    // Step 4b: Add pause before inline answer choices (e.g. "a. Paris b. Madrid")
-    // Use word boundary to ensure we only match standalone choice markers
-    ssmlText = ssmlText.replace(/(^|[^\n])[ \t]+(?=\b[a-dA-D][.)])/g, `$1 <break time="${CONSTANTS.PAUSE_BEFORE_INLINE_ANSWER_MS}ms"/> `);
-
-    // Step 5: Add pauses after answer choices (A., B., C., D. or a), b), c), d))
-    // Matches: "A." or "A)" (uppercase or lowercase, periods or parentheses), with optional whitespace
-    // ENHANCED: Wrap the choice letter in <say-as interpret-as="characters"> to ensure correct pronunciation
-    ssmlText = ssmlText.replace(/(\b)([A-Da-d])([.)])\s*/g, (match, boundary, letter, punctuation) => {
-      const upperLetter = letter.toUpperCase();
-      return `${boundary}<say-as interpret-as="characters">${upperLetter}</say-as>${punctuation} <break time="${CONSTANTS.PAUSE_AFTER_ANSWER_CHOICE_MS}ms"/> `;
-    });
+    // Steps 4-5: Announce answer choices (pause before, spell the letter,
+    // pause after). Sequence-aware so it covers however many options a
+    // question has, and leaves prose abbreviations alone.
+    ssmlText = markAnswerChoicesForSpeech(ssmlText);
 
     // Step 6: Wrap in SSML speak tags
     const result = `<speak>${ssmlText}</speak>`;
